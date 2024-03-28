@@ -77,7 +77,7 @@ def xywhn2xywh(bbox, size):
     return list(map(int, box))
 
 
-def parseXmlFilse(image_path, anno_path, json_path, dst_img_dir):
+def parseXmlFilse(image_path, anno_path, json_path, dst_img_dir=None):
     coco_data = dict()
     coco_data['images'] = []
     coco_data['annotations'] = []
@@ -108,8 +108,9 @@ def parseXmlFilse(image_path, anno_path, json_path, dst_img_dir):
         if file.split(os.sep)[-1][:-4] in images_index:
             index = images_index[file.split(os.sep)[-1][:-4]]
             img_path = images[index]
-            dst_img_path = img_path.replace(image_dir, dst_img_dir)
-            shutil.copy(img_path, dst_img_path)
+            if dst_img_dir is not None:
+                dst_img_path = img_path.replace(image_dir, dst_img_dir)
+                shutil.copy(img_path, dst_img_path)
             img = cv2.imread(img_path)
             shape = img.shape
             filename = images[index].split(os.sep)[-1]
@@ -184,5 +185,9 @@ if __name__ == '__main__':
     image_dir = r'E:\data\2023_defect\yolo_fomat_c5\yolo_fomat_c5\images\val'
     label_dir = r'E:\data\2023_defect\yolo_fomat_c5\yolo_fomat_c5\labels\val'
     json_path = r'E:\data\2023_defect\yolo_fomat_c5\yolo_fomat_c5\instance_val.json'
-    dst_img_dir = r'E:\data\2023_defect\yolo_fomat_c5\yolo_fomat_c5\imgs'
-    parseXmlFilse(image_dir, label_dir, json_path, dst_img_dir)
+    parseXmlFilse(image_dir, label_dir, json_path)
+
+    image_dir = r'E:\data\2023_defect\yolo_fomat_c5\yolo_fomat_c5\images\train'
+    label_dir = r'E:\data\2023_defect\yolo_fomat_c5\yolo_fomat_c5\labels\train'
+    json_path = r'E:\data\2023_defect\yolo_fomat_c5\yolo_fomat_c5\instance_train.json'
+    parseXmlFilse(image_dir, label_dir, json_path)
