@@ -10,7 +10,7 @@ ROOT_PATH = r'E:\data\2024_defect\2024_defect_det'
 
 error_set = {
     'ConcreteCracksDetection':['data repeat'], # with hole category
-    'Dam_data.v14i.coco': ['with hole category, mixed with peeling and spalling'], # with hole category, mixed with peeling and spalling
+    'Dam_data.v14i.coco': ['hole category mixed with peeling and spalling'], # with hole category, mixed with peeling and spalling
     'defectdetection': ['low resolution', 'Contamination is confusing'],
     'Defects.v7-last-one.coco': ['cropped data'],
     'detr_crack_dataset.v1i.coco': ['too much crack'],
@@ -186,9 +186,12 @@ def dataset_vis(root_dir):
     dir_list.remove('00data_fuse')
     for data_name in dir_list:
         data_dir = os.path.join(root_dir, data_name)
-        val_dir = os.path.join(data_dir, 'valid')
-        val_vis_dir = os.path.join(data_dir, 'val_vis')
-        anno_vis(os.path.join(val_dir, '_annotations.coco.json'), img_dir=val_dir, vis_dir=val_vis_dir)
+        # val_dir = os.path.join(data_dir, 'valid')
+        # val_vis_dir = os.path.join(data_dir, 'val_vis')
+        # anno_vis(os.path.join(val_dir, '_annotations.coco.json'), img_dir=val_dir, vis_dir=val_vis_dir)
+        train_dir = os.path.join(data_dir, 'train')
+        train_vis_dir = os.path.join(data_dir, 'train_vis')
+        anno_vis(os.path.join(train_dir, '_annotations.coco.json'), img_dir=train_dir, vis_dir=train_vis_dir)
 
 if __name__ == '__main__':
     pass
@@ -198,8 +201,8 @@ if __name__ == '__main__':
 
     data_dir = r'E:\data\2024_defect\2024_defect_det'
     save_path = r'E:\data\2024_defect\2024_defect_det\00data_fuse\sta.csv'
-    dataset_sta(data_dir, save_path)
-    # dataset_vis(data_dir)
+    # dataset_sta(data_dir, save_path)
+    dataset_vis(data_dir)
     # val_dir = r'E:\data\2024_defect\2024_defect_det\walldefect\train'
     # val_vis_dir = r'E:\data\2024_defect\2024_defect_det\walldefect\val_vis_select'
     # anno_vis(os.path.join(val_dir, '_annotations.coco.json'), img_dir=val_dir, vis_dir=val_vis_dir, cat_ids=[2])

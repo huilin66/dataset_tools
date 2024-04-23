@@ -62,7 +62,15 @@ if __name__ == '__main__':
     #            tp_dir=r'E:\data\0318_fireservice\data0327\tp',
     #            slice_w=1920, slice_h=1920, overlap_w=0.5, overlap_h=0.5)
 
-    get_dataset(input_csv=r'E:\data\0318_fireservice\data0327\train.txt',
-                output_csv=r'E:\data\0318_fireservice\data0327slice\train.txt',)
-    get_dataset(input_csv=r'E:\data\0318_fireservice\data0327\val.txt',
-                output_csv=r'E:\data\0318_fireservice\data0327slice\val.txt',)
+    # get_dataset(input_csv=r'E:\data\0318_fireservice\data0327\train.txt',
+    #             output_csv=r'E:\data\0318_fireservice\data0327slice\train.txt',)
+    # get_dataset(input_csv=r'E:\data\0318_fireservice\data0327\val.txt',
+    #             output_csv=r'E:\data\0318_fireservice\data0327slice\val.txt',)
+
+
+    yolo_slice(input_img_dir=r'E:\data\0417_signboard\data0417\yolo\images',
+               input_txt_dir=r'E:\data\0417_signboard\data0417\yolo\labels',
+               output_img_dir=r'E:\data\0417_signboard\data0417\yolo\images_slice',
+               output_txt_dir=r'E:\data\0417_signboard\data0417\yolo\labels_slice',
+               tp_dir=r'E:\data\0417_signboard\data0417\tp',
+               slice_w=1920, slice_h=1920, overlap_w=0.5, overlap_h=0.5)

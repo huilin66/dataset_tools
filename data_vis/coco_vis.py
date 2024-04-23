@@ -17,7 +17,7 @@ def visualization_bbox(json_path, img_dir, dst_dir):
     if not os.path.exists(dst_dir):
         os.makedirs(dst_dir)
     with open(json_path) as annos:
-        annotation_json = json.load(annos)
+        annotation_json = gt_dirad(annos)
 
 
     for image_record in tqdm(annotation_json['images']):
