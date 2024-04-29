@@ -3,6 +3,8 @@ import pandas as pd
 from skimage import io
 import imageio
 from tqdm import tqdm
+import warnings
+warnings.filterwarnings('ignore')
 
 def convert_xyxy2yolo(size, box):
     dw = 1. / (size[0])
@@ -39,14 +41,14 @@ def get_yolo(img_dir, gt_path, gt_output_dir, img_output_dir):
                            [int(row['x1']), int(row['y1']), int(row['x2']), int(row['y2'])])
         if file_name not in box_dict.keys():
             box_dict[file_name] = []
-        box_dict[file_name].append(yolo_box+[int(row['cat_id'])])
+        box_dict[file_name].append([int(row['cat_id'])]+yolo_box)
 
     for k,vs in tqdm(box_dict.items()):
         file_name = k
-        df_gt_s = pd.DataFrame(None, columns=['x1', 'y1', 'x2', 'y2', 'cat_id'])
+        df_gt_s = pd.DataFrame(None, columns=['cat_id', 'x1', 'y1', 'x2', 'y2'])
         for v in vs:
             df_gt_s.loc[len(df_gt_s)] = v
-        df_gt_s.to_csv(os.path.join(gt_output_dir, file_name.replace('.ppm', '.txt')))
+        df_gt_s.to_csv(os.path.join(gt_output_dir, file_name.replace('.ppm', '.txt')), header=None, index=None, sep=' ')
         img = imageio.imread(os.path.join(img_dir, file_name))
         io.imsave(os.path.join(img_output_dir, file_name.replace('.ppm', '.png')), img)
 
