@@ -127,7 +127,7 @@ def yolo_data_vis(img_folder, label_folder, output_folder, crop_dir=None, seg=Fa
                     else:
                         img, img_crop = xywh2xyxy(x, w, h, img, crop=True)
                         cat = cats[int(x[0])]
-                        save_path = os.path.join(crop_dir, cat, os.path.basename(image_path).replace('.jpg', '_%d.jpg'%idx))
+                        save_path = os.path.join(crop_dir, cat, os.path.basename(image_path).replace('.jpg', '_%d.jpg'%idx).replace('.png', '_%d.jpg'%idx))
                         cv2.imwrite(save_path, img_crop)
                 else:
                     if crop_dir is None:
@@ -135,7 +135,7 @@ def yolo_data_vis(img_folder, label_folder, output_folder, crop_dir=None, seg=Fa
                     else:
                         img, img_crop = xywh2poly(x, w, h, img, crop=True)
                         cat = cats[int(x[0])]
-                        save_path = os.path.join(crop_dir, cat, os.path.basename(image_path).replace('.jpg', '_%d.jpg'%idx))
+                        save_path = os.path.join(crop_dir, cat, os.path.basename(image_path).replace('.jpg', '_%d.jpg'%idx).replace('.png', '_%d.jpg'%idx))
                         cv2.imwrite(save_path, img_crop)
             save_path = image_path.replace(img_folder, output_folder)
             cv2.imwrite(save_path, img)
@@ -143,7 +143,9 @@ def yolo_data_vis(img_folder, label_folder, output_folder, crop_dir=None, seg=Fa
 if __name__ == '__main__':
     pass
     # root_dir = r'E:\data\0318_fireservice\data0327slice'
-    root_dir = r'E:\data\0417_signboard\data0417\yolo'
+    # root_dir = r'E:\data\0417_signboard\data0417\yolo'
+    # root_dir = r'E:\data\0417_signboard\data0417\demo'
+    root_dir = r'E:\demo0426'
     img_folder = os.path.join(root_dir, 'images')
     label_folder = os.path.join(root_dir, 'labels')
     output_folder = os.path.join(root_dir, 'images_vis')
