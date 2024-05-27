@@ -13,6 +13,7 @@ from collections import OrderedDict
 import json
 import cv2
 import PIL.Image
+import pandas as pd
 
 from sklearn.model_selection import train_test_split
 from labelme import utils
@@ -20,11 +21,12 @@ from labelme import utils
 
 class Labelme2YOLO(object):
 
-    def __init__(self, json_dir, save_path, to_seg=False):
+    def __init__(self, json_dir, save_path, to_seg=False, multi_task=False):
         self._json_dir = json_dir
 
         self._label_id_map = self._get_label_id_map(self._json_dir)
         self._to_seg = to_seg
+        self._multi_task = multi_task
 
         i = 'YOLODataset'
         i += '_seg/' if to_seg else '/'
@@ -232,10 +234,24 @@ class Labelme2YOLO(object):
 
         if self._to_seg:
             retval = [label_id]
-            for i in shape['points']:
-                i[0] = round(float(i[0]) / img_w, 6)
-                i[1] = round(float(i[1]) / img_h, 6)
-                retval.extend(i)
+            if shape['shape_type'] == 'rectangle' and not self._multi_task:
+                x1, y1 = shape['points'][0]
+                x2, y2 = shape['points'][1]
+                new_points = [[x1, y1], [x1, y2], [x2, y2], [x2, y1]]
+                for i in new_points:
+                    i[0] = round(float(i[0]) / img_w, 6)
+                    i[1] = round(float(i[1]) / img_h, 6)
+                    retval.extend(i)
+            if shape['shape_type'] == 'rectangle' and self._multi_task:
+                for i in shape['points']:
+                    i[0] = round(float(i[0]) / img_w, 6)
+                    i[1] = round(float(i[1]) / img_h, 6)
+                    retval.extend(i)
+            else:
+                for i in shape['points']:
+                    i[0] = round(float(i[0]) / img_w, 6)
+                    i[1] = round(float(i[1]) / img_h, 6)
+                    retval.extend(i)
             return retval
 
         def __get_object_desc(obj_port_list):
@@ -296,6 +312,10 @@ class Labelme2YOLO(object):
             names_str = names_str.rstrip(', ')
             yaml_file.write('names: [%s]' % names_str)
 
+    def save_class(self, save_path):
+        class_list = list(self._label_id_map.keys())
+        df = pd.DataFrame(class_list, columns=['category'])
+        df.to_csv(save_path, index=False, header=False)
 
 if __name__ == '__main__':
     pass
@@ -324,7 +344,45 @@ if __name__ == '__main__':
     # convertor.convert(val_size=0.0)
 
 
-    json_dir = r'E:\data\0417_signboard\data0420\labelme'
-    save_dir = r'E:\data\0417_signboard\data0420\yolo'
+    # json_dir = r'E:\data\0417_signboard\data0420\labelme'
+    # save_dir = r'E:\data\0417_signboard\data0420\yolo'
+    # convertor = Labelme2YOLO(json_dir, save_dir, to_seg=True)
+    # convertor.convert_all()
+
+    # json_dir = r'E:\data\0417_signboard\data0507\norm\rgb'
+    # save_dir = r'E:\data\0417_signboard\data0507\yolo'
+    # convertor = Labelme2YOLO(json_dir, save_dir, to_seg=True)
+    # convertor.convert_all()
+    # convertor.save_class(r'E:\data\0417_signboard\data0507\yolo\class.txt')
+
+    # json_dir = r'E:\data\0417_signboard\data0514\norm\rgb'
+    # save_dir = r'E:\data\0417_signboard\data0514\yolo'
+    # convertor = Labelme2YOLO(json_dir, save_dir, to_seg=True)
+    # convertor._label_id_map = OrderedDict({'surface':0, 'frame':1})
+    # print(convertor._label_id_map)
+    # convertor.convert_all()
+    # convertor.save_class(r'E:\data\0417_signboard\data0514\yolo\class.txt')
+
+    # json_dir = r'E:\data\0417_signboard\data0521_m\norm\rgb_detection1'
+    # save_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection1'
+    # convertor = Labelme2YOLO(json_dir, save_dir, to_seg=True)
+    # convertor._label_id_map = OrderedDict({'surface':0, 'frame':1, 'normal':2, 'incomplete':3})
+    # convertor.convert_all()
+    # convertor.save_class(r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection1\class.txt')
+
+    json_dir = r'E:\data\0417_signboard\data0521_m\norm\rgb_detection2'
+    save_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection2'
     convertor = Labelme2YOLO(json_dir, save_dir, to_seg=True)
+    convertor._label_id_map = OrderedDict({'surface':0,
+                                           'frame':1,
+                                           'normal':2,
+                                           'obstructed':3,
+                                           'missing': 4,
+                                           'incomplete2': 5,
+                                           'peeling2': 6,
+                                           'fade': 7,
+                                           'deformed': 8,
+                                           'corroded2': 9,
+                                           })
     convertor.convert_all()
+    convertor.save_class(r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection2\class.txt')

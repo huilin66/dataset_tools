@@ -11,6 +11,20 @@ from tqdm import tqdm
 #     6: 4,
 # }
 
+# id_merge_dict = {
+#     0: 0,
+#     1: 1,
+#     2: 2,
+#     3: 3,
+#     4: 4,
+#     5: 5,
+#     6: 6,
+#     7: 2,
+#     8: 1,
+#     9: 2,
+# }
+
+
 id_merge_dict = {
     0: 0,
     1: 1,
@@ -19,9 +33,10 @@ id_merge_dict = {
     4: 4,
     5: 5,
     6: 6,
-    7: 2,
-    8: 1,
-    9: 2,
+    7: 7,
+    8: 8,
+    9: 9,
+    10: 9,
 }
 # name_merge_dict = {
 #     'Automatic Sprinkler': 'Automatic Sprinkler',
@@ -51,5 +66,7 @@ if __name__ == '__main__':
     pass
     # labels_dir = r'E:\data\0318_fireservice\data0327\labels7'
     # yolo_idmerge(labels_dir, id_merge_dict)
-    labels_dir = r'E:\data\0318_fireservice\data0327slice\labels7'
+    # labels_dir = r'E:\data\0318_fireservice\data0327slice\labels7'
+    # yolo_idmerge(labels_dir, id_merge_dict)
+    labels_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection2\labels'
     yolo_idmerge(labels_dir, id_merge_dict)
