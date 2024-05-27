@@ -40,8 +40,16 @@ Fire Alarm Bell white
 # }
 
 cats = {
-    0: 'boardin',
-    1: 'boardout',
+    0: 'surface',
+    1: 'frame',
+    2: 'normal',
+    3: 'obstructed',
+    4: 'missing',
+    5: 'incomplete2',
+    6: 'peeling2',
+    7: 'fade',
+    8: 'deformed',
+    9: 'corroded2',
 }
 
 colormap = [(0, 255, 0),
@@ -145,7 +153,7 @@ if __name__ == '__main__':
     # root_dir = r'E:\data\0318_fireservice\data0327slice'
     # root_dir = r'E:\data\0417_signboard\data0417\yolo'
     # root_dir = r'E:\data\0417_signboard\data0417\demo'
-    root_dir = r'E:\demo0426'
+    root_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection2'
     img_folder = os.path.join(root_dir, 'images')
     label_folder = os.path.join(root_dir, 'labels')
     output_folder = os.path.join(root_dir, 'images_vis')
