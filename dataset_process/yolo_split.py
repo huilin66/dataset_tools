@@ -57,6 +57,7 @@ def random_select(img_dir, dst_dir, train_ratio=0.9, random_seed=1010, full_path
     file_list = os.listdir(img_dir)
     if full_path:
         file_list = [os.path.join(img_dir, filename) for filename in file_list]
+        # file_list = [os.path.join(os.path.basename(img_dir), filename) for filename in file_list]
     np.random.seed(random_seed)
     np.random.shuffle(file_list)
     train_num = int(len(file_list)*train_ratio)
@@ -101,5 +102,12 @@ if __name__ == '__main__':
     # get_class(class_dict, r'E:\data\0416_trafficsign\GTSDB\classes.txt')
 
 
-    random_select(r'E:\data\0417_signboard\data0521_m\yolo\images',
-                  r'E:\data\0417_signboard\data0521_m\yolo')
+    # random_select(r'E:\data\0417_signboard\data0521_m\yolo\images',
+    #               r'E:\data\0417_signboard\data0521_m\yolo')
+
+    # random_select(r'E:\data\1123_thermal\thermal data\datasets\moisture\images',
+    #               r'E:\data\1123_thermal\thermal data\datasets\moisture')
+
+
+    random_select(r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection4\images',
+                  r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection4')

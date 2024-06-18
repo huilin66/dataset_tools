@@ -255,9 +255,54 @@ if __name__ == '__main__':
     #           img_dir_dst=r'E:\data\0111_testdata\data_labeled4254\yolo6s640_wt1\images\all',
     #           txt_path=r'E:\data\0111_testdata\data_labeled4254\yolo6s640_wt1\val.txt',
     #           )
-    coco2yolo(json_file=r'E:\data\2024_defect\2024_defect_det\ConcreteCracksDetection\valid\_annotations.coco.json',
-              labels_dir=r'E:\data\2024_defect\2024_defect_det\ConcreteCracksDetection\yolo\labels',
-              img_dir_src= r'E:\data\2024_defect\2024_defect_det\ConcreteCracksDetection\valid',
-              img_dir_dst=r'E:\data\2024_defect\2024_defect_det\ConcreteCracksDetection\yolo\images',
-              txt_path=r'E:\data\2024_defect\2024_defect_det\ConcreteCracksDetection\yolo\val.txt',
+    # coco2yolo(json_file=r'E:\data\2024_defect\2024_defect_det\ConcreteCracksDetection\valid\_annotations.coco.json',
+    #           labels_dir=r'E:\data\2024_defect\2024_defect_det\ConcreteCracksDetection\yolo\labels',
+    #           img_dir_src= r'E:\data\2024_defect\2024_defect_det\ConcreteCracksDetection\valid',
+    #           img_dir_dst=r'E:\data\2024_defect\2024_defect_det\ConcreteCracksDetection\yolo\images',
+    #           txt_path=r'E:\data\2024_defect\2024_defect_det\ConcreteCracksDetection\yolo\val.txt',
+    #           )
+
+
+    # coco2yolo(json_file=r'E:\data\0111_testdata\data_labeled4254\coco5_w\annotations\instance_train.json',
+    #           labels_dir=r'E:\data\0111_testdata\data_labeled4254\yolo5_w\labels',
+    #           img_dir_src= r'E:\data\0111_testdata\data_labeled4254\coco5_w\images_train',
+    #           img_dir_dst=r'E:\data\0111_testdata\data_labeled4254\yolo5_w\images',
+    #           txt_path=r'E:\data\0111_testdata\data_labeled4254\yolo5_w\train.txt',
+    #           )
+    #
+    # coco2yolo(json_file=r'E:\data\0111_testdata\data_labeled4254\coco5_w\annotations\instance_val.json',
+    #           labels_dir=r'E:\data\0111_testdata\data_labeled4254\yolo5_w\labels',
+    #           img_dir_src= r'E:\data\0111_testdata\data_labeled4254\coco5_w\images_val',
+    #           img_dir_dst=r'E:\data\0111_testdata\data_labeled4254\yolo5_w\images',
+    #           txt_path=r'E:\data\0111_testdata\data_labeled4254\yolo5_w\val.txt',
+    #           )
+
+
+    # coco2yolo(json_file=r'E:\data\0111_testdata\data_labeled4254\coco6s1280_w\annotations\instance_train.json',
+    #           labels_dir=r'E:\data\0111_testdata\data_labeled4254\yolo6s1280_w\labels',
+    #           img_dir_src= r'E:\data\0111_testdata\data_labeled4254\coco6s1280_w\images_train',
+    #           img_dir_dst=r'E:\data\0111_testdata\data_labeled4254\yolo6s1280_w\images',
+    #           txt_path=r'E:\data\0111_testdata\data_labeled4254\yolo6s1280_w\train.txt',
+    #           )
+    #
+    # coco2yolo(json_file=r'E:\data\0111_testdata\data_labeled4254\coco6s1280_w\annotations\instance_val.json',
+    #           labels_dir=r'E:\data\0111_testdata\data_labeled4254\yolo6s1280_w\labels',
+    #           img_dir_src= r'E:\data\0111_testdata\data_labeled4254\coco6s1280_w\images_val',
+    #           img_dir_dst=r'E:\data\0111_testdata\data_labeled4254\yolo6s1280_w\images',
+    #           txt_path=r'E:\data\0111_testdata\data_labeled4254\yolo6s1280_w\val.txt',
+    #           )
+
+
+    coco2yolo(json_file=r'E:\data\0111_testdata\data_labeled4254\coco6r1280_w\annotations\instance_train.json',
+              labels_dir=r'E:\data\0111_testdata\data_labeled4254\yolo6r1280_w\labels',
+              img_dir_src= r'E:\data\0111_testdata\data_labeled4254\coco6r1280_w\images_train',
+              img_dir_dst=r'E:\data\0111_testdata\data_labeled4254\yolo6r1280_w\images',
+              txt_path=r'E:\data\0111_testdata\data_labeled4254\yolo6r1280_w\train.txt',
+              )
+
+    coco2yolo(json_file=r'E:\data\0111_testdata\data_labeled4254\coco6r1280_w\annotations\instance_val.json',
+              labels_dir=r'E:\data\0111_testdata\data_labeled4254\yolo6r1280_w\labels',
+              img_dir_src= r'E:\data\0111_testdata\data_labeled4254\coco6r1280_w\images_val',
+              img_dir_dst=r'E:\data\0111_testdata\data_labeled4254\yolo6r1280_w\images',
+              txt_path=r'E:\data\0111_testdata\data_labeled4254\yolo6r1280_w\val.txt',
               )
