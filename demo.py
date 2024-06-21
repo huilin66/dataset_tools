@@ -1,12 +1,21 @@
-# import torch
-# weight_path = r'E:\repository\yolov9-seg2\ckpt\yolov9-c-seg.pt'
-# # data = torch.load()
-# data = torch.load(weight_path, map_location='cpu')
-# print(data)
+import torch
+import torch.nn.functional as F
 
-import os
-# file_list = os.listdir(r'E:\data\0417_signboard\data0521_m\yolo_rgbtc_correct\offset_down')
-# for file in file_list:
-#     print('"%s",'%file )
+# 假设 pred_attributes 和 gt_attributes 是模型的预测值和真实标签
+pred_attributes = torch.tensor([0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,]).reshape(1,-1).float()
+torch.manual_seed(1111)
+gt_attributes = torch.randint(0, 2, (1, 14)).float()  # 示例真实标签
+print(pred_attributes)
+print(gt_attributes)
 
-print(os.path.exists(r'E:\data\0111_testdata\demo_data\polyu_t_vis_crop\DJI_0469_JPG.rf.b58289a6aa49f36dc4c7fa97b0fa2f6a\DJI_0469_JPG.rf.b58289a6aa49f36dc4c7fa97b0fa2f6a_220_170_254_190.png'))
+# 设置正例样本的权重，使得模型更加关注正例样本
+pos_weight = torch.tensor([10.0])  # 这里设置了权重为 10，可以根据需要调整
+
+# 计算加权二元交叉熵损失
+loss = F.binary_cross_entropy_with_logits(
+    input=pred_attributes,
+    target=gt_attributes,
+    pos_weight=pos_weight
+)
+
+print(f"Loss: {loss.item()}")

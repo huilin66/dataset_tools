@@ -91,5 +91,8 @@ if __name__ == '__main__':
     #            copy_dir=r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection3\labels_att')
 
 
-    seg_filter(input_dir=r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection4\labels',
-               copy_dir=r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection4\labels')
+    # seg_filter(input_dir=r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection4\labels',
+    #            copy_dir=r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection4\labels')
+
+    attribute_remove(input_dir=r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection4_det\labels',
+               copy_dir=r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection4_det\labels')
