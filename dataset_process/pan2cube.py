@@ -14,7 +14,7 @@ def p2c(panorama_path, save_dir, erot=None):
     if erot is not None:
         cube_dice = erot.rotate(cube_dice)
 
-    cubemap = py360convert.e2c(cube_dice, face_w=960, cube_format = 'list')
+    cubemap = py360convert.e2c(cube_dice, face_w=2048, cube_format = 'list')
     for i,cube in enumerate(cubemap):
         if i == 5:
             continue
@@ -40,17 +40,24 @@ def data_group(input_dir, output_dir):
 
 if __name__ == '__main__':
     pass
-    panorama_dir = r'E:\data\0417_signboard\data_yj\imgs_board'
+    # panorama_dir = r'E:\data\0417_signboard\data_yj\imgs_board'
     # panorama_dir = r'E:\data\0417_signboard\data0417\yolo\images'
     # panorama_path = r'E:\data\0417_signboard\data0420\yolo\images\1702263237.8748906.png'
-    save_dir = r'E:\data\0417_signboard\data_yj\imgs_board_cube'
-    save_dir_group = r'E:\data\0417_signboard\data_yj\imgs_board_cube_group2'
+    # save_dir = r'E:\data\0417_signboard\data_yj\imgs_board_cube'
+    # save_dir_group = r'E:\data\0417_signboard\data_yj\imgs_board_cube_group2'
+    panorama_dir = r'E:\data\0417_signboard\VMMS\ladybug\4\panoramic'
+    save_dir = r'E:\data\0417_signboard\VMMS\ladybug\4\cube'
+    save_dir_group = r'E:\data\0417_signboard\VMMS\ladybug\4\cube_group'
+
+    os.makedirs(save_dir, exist_ok=True)
+    os.makedirs(save_dir_group, exist_ok=True)
 
     # equirectRot = EquirectRotate(1920, 3840, (0, 0, 20))
     equirectRot = None
 
-    for file_name in tqdm(os.listdir(panorama_dir)[::4]):
+    for file_name in tqdm(os.listdir(panorama_dir)[::]):
         panorama_path = os.path.join(panorama_dir, file_name)
         p2c(panorama_path, save_dir, equirectRot)
 
     data_group(save_dir, save_dir_group)
+

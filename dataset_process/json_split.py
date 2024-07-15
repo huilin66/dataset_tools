@@ -107,7 +107,10 @@ def get_args():
     return args
 
 if __name__ == '__main__':
-    args = get_args()
-    js_split(args.json_all_path,args.json_train_path,args.json_val_path, args.val_split_rate,  args.val_split_num, args.keep_val_inTrain)
+    # args = get_args()
+    # js_split(args.json_all_path,args.json_train_path,args.json_val_path, args.val_split_rate,  args.val_split_num, args.keep_val_inTrain)
 
-
+    js_split(js_all_path=r'E:\data\0417_signboard\data0521_m\coco_rgb_detection5_det\instance_all.json',
+             js_train_path=r'E:\data\0417_signboard\data0521_m\coco_rgb_detection5_det\instance_train.json',
+             js_val_path=r'E:\data\0417_signboard\data0521_m\coco_rgb_detection5_det\instance_val.json',
+             val_split_rate=0.9)

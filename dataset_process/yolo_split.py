@@ -50,8 +50,9 @@ import pandas as pd
 # }
 
 class_dict = {
-    0 : 'surface',
-    1 : 'frame',
+    0 : 'background',
+    1 : 'wall_signboard',
+    2: 'projecting_signboard',
 }
 def random_select(img_dir, dst_dir, train_ratio=0.9, random_seed=1010, full_path=True):
     file_list = os.listdir(img_dir)
@@ -70,6 +71,8 @@ def random_select(img_dir, dst_dir, train_ratio=0.9, random_seed=1010, full_path
     df_val = pd.DataFrame({'filename': val_list})
     df_train.to_csv(os.path.join(dst_dir, 'train.txt'), header=None, index=None)
     df_val.to_csv(os.path.join(dst_dir, 'val.txt'), header=None, index=None)
+    print('%d save to %s,\n%d save to %s!'%(len(train_list), os.path.join(dst_dir, 'train.txt'),
+                                           len(val_list), os.path.join(dst_dir, 'val.txt')))
 
 def gap_select(img_dir, dst_dir, train_ratio=0.9, full_path=True):
     file_list = os.listdir(img_dir)
@@ -109,5 +112,11 @@ if __name__ == '__main__':
     #               r'E:\data\1123_thermal\thermal data\datasets\moisture')
 
 
-    random_select(r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection4\images',
-                  r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection4')
+    # random_select(r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5\images',
+    #               r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5', train_ratio=0.907)
+
+    # random_select(r'E:\data\0417_signboard\data0521_m\yolo_rgb_segmentation1\images',
+    #               r'E:\data\0417_signboard\data0521_m\yolo_rgb_segmentation1', train_ratio=0.9)
+
+    # random_select(r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_f\images',
+    #               r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_f', train_ratio=0.9)
