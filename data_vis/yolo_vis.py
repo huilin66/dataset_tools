@@ -60,7 +60,14 @@ Fire Alarm Bell white
 #     3: 'windows',
 # }
 
-colormap = [(0, 255, 0),
+colormap = [
+            # (255, 42, 4),
+            # (79, 68, 255),
+            # (255, 0, 189),
+            (4, 42, 255,),
+            (151, 157, 255),
+            (31, 112, 255),
+            (0, 255, 0),
             (255, 0, 0),
             (0, 0, 255),
             (0, 255, 255),
@@ -73,31 +80,111 @@ colormap = [(0, 255, 0),
             ]  # 色盘，可根据类别添加新颜色
 
 cats = {
-    0: 'surface',
-    1: 'frame',
-    2: 'signboard',
+    0: 'background',
+    1: 'wall_signboard',
+    2: 'projecting_signboard',
 }
+# cats = {
+#     0: 'background',
+#     1: 'signboard',
+# }
+
+# cats = {
+#     0: 'background',
+#     1: 'wall_surface',
+#     2: 'projecting_surface',
+#     3: 'frame',
+# }
+
+# def text_label(img, box, label="", color=(128, 128, 128), txt_color=(255, 255, 255), margin=5, tf=1, sf=2/3):
+#     """
+#     Draws a label with a background rectangle centered within a given bounding box.
+#
+#     Args:
+#         box (tuple): The bounding box coordinates (x1, y1, x2, y2).
+#         label (str): The text label to be displayed.
+#         color (tuple, optional): The background color of the rectangle (R, G, B).
+#         txt_color (tuple, optional): The color of the text (R, G, B).
+#         margin (int, optional): The margin between the text and the rectangle border.
+#     """
+#
+#     # Calculate the center of the bounding box
+#     x_center, y_center = int((box[0] + box[2]) / 2), int((box[1] + box[3]) / 2)
+#     # Get the size of the text
+#     text_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, sf - 0.1, tf)[0]
+#     # Calculate the top-left corner of the text (to center it)
+#     text_x = x_center - text_size[0] // 2
+#     text_y = y_center + text_size[1] // 2
+#     # Calculate the coordinates of the background rectangle
+#     rect_x1 = text_x - margin
+#     rect_y1 = text_y - text_size[1] - margin
+#     rect_x2 = text_x + text_size[0] + margin
+#     rect_y2 = text_y + margin
+#     # Draw the background rectangle
+#     cv2.rectangle(img, (rect_x1, rect_y1), (rect_x2, rect_y2), color, -1)
+#     # Draw the text on top of the rectangle
+#     cv2.putText(
+#         img,
+#         label,
+#         (text_x, text_y),
+#         cv2.FONT_HERSHEY_SIMPLEX,
+#         sf - 0.1,
+#         txt_color,
+#         tf,
+#         lineType=cv2.LINE_AA,
+#     )
+
 
 # 坐标转换
 def xywh2xyxy(x, w1, h1, img, crop=True, attributes=None, filter_no=False):
     label, x, y, w, h = x
+
+
+    tf = 1
+    sf = 2 / 3
+    margin=1
+
+    alpha = 0.5
+
+
     x_t = x * w1
     y_t = y * h1
     w_t = w * w1
     h_t = h * h1
+
+
+
     top_left_x = x_t - w_t / 2
     top_left_y = y_t - h_t / 2
     bottom_right_x = x_t + w_t / 2
     bottom_right_y = y_t + h_t / 2
+
+    x_center = (top_left_x+bottom_right_x)/2
+    y_center = (top_left_y+bottom_right_y)/2
     if crop:
         img_crop = img[int(top_left_y):int(bottom_right_y), int(top_left_x):int(bottom_right_x)].copy()
     else:
         img_crop = None
     cv2.rectangle(img, (int(top_left_x), int(top_left_y)), (int(bottom_right_x), int(bottom_right_y)), colormap[int(label)], 2)
-    cv2.putText(img, cats[int(label)], (int(top_left_x), int(top_left_y)+7), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 0), 1)
+
+    text_size = cv2.getTextSize(cats[int(label)], cv2.FONT_HERSHEY_SIMPLEX, sf - 0.1, tf)[0]
+
+    # Draw the background rectangle
+    cv2.rectangle(img,
+                  (int(top_left_x), int(top_left_y)+10),
+                  (int(top_left_x)+text_size[0]-15, int(top_left_y)+7-text_size[1]+3),
+                  color=colormap[int(label)], thickness=-1)
+    cv2.putText(img, cats[int(label)], (int(top_left_x), int(top_left_y)+7), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+
+
+
     if attributes is not None:
         count = 0
+        count2 = 0
         attribute_strs = []
+        box = [int(top_left_x), int(top_left_y)]
+
+        br_poss = []
         for idx, (k, v) in enumerate(attributes.items()):
             text = f'{k}-{v}'
             if filter_no:
@@ -105,9 +192,37 @@ def xywh2xyxy(x, w1, h1, img, crop=True, attributes=None, filter_no=False):
                     continue
             count += 1
             color = (255, 0, 0) if v is not False else (0, 0, 0)
-            cv2.putText(img, text, (int(top_left_x), int(top_left_y) + 12+10*count), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
-            # print((int(top_left_x), int(top_left_y)+7), '-->',  (int(top_left_x), int(top_left_y) + 6*(count+2)), ':', count, 6*(count+2))
+            # text_size = cv2.putText(img, text, (int(top_left_x), int(top_left_y) + 12+10*count), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)[0]
+            cv2.putText(img, text, (int(top_left_x), int(top_left_y) + 12 + 10 * count), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+            (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
             attribute_strs.append(text)
+            br_poss.append([int(top_left_x)+text_width-15, int(top_left_y) + 12+10*count])
+
+        if len(br_poss)>0:
+            br_poss = np.array(br_poss)
+            tl_pos = [int(top_left_x), int(top_left_y)+10]
+            br_pos = [np.max(br_poss, axis=0)[0], br_poss[-1][1]]
+            box = tl_pos + br_pos
+            p1, p2 = (int(box[0]), int(box[1])), (int(box[2])+15, int(box[3]+2))
+            cv2.rectangle(img, p1, p2, (255, 255, 255))
+            overlay = img.copy()
+            cv2.rectangle(overlay, p1, p2, (255, 255, 255), -1)
+            cv2.addWeighted(overlay, alpha, img, 1 - alpha, 0, img)
+
+            br_poss = []
+            for idx, (k, v) in enumerate(attributes.items()):
+                text = f'{k}-{v}'
+                if filter_no:
+                    if not v:
+                        continue
+                count2 += 1
+                color = (255, 0, 0) if v is not False else (0, 0, 0)
+                # text_size = cv2.putText(img, text, (int(top_left_x), int(top_left_y) + 12+10*count), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)[0]
+                cv2.putText(img, text, (int(top_left_x), int(top_left_y) + 12 + 10 * count2), cv2.FONT_HERSHEY_SIMPLEX,
+                            0.5, color, 1)
+                (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                attribute_strs.append(text)
+                br_poss.append([int(top_left_x) + text_width - 15, int(top_left_y) + 12 + 10 * count2])
     else:
         attribute_strs = None
     return img, img_crop, attribute_strs
@@ -160,9 +275,9 @@ def yolo_data_vis(img_folder, label_folder, output_folder, crop_dir=None, seg=Fa
             for idx, x in enumerate(lb):
                 if not seg:
                     if crop_dir is None:
-                        img, _ = xywh2xyxy(x, w, h, img)
+                        img, _, _ = xywh2xyxy(x, w, h, img)
                     else:
-                        img, img_crop = xywh2xyxy(x, w, h, img, crop=True)
+                        img, img_crop, _ = xywh2xyxy(x, w, h, img, crop=True)
                         cat = cats[int(x[0])]
                         save_path = os.path.join(crop_dir, cat, os.path.basename(image_path).replace('.jpg', '_%d.jpg'%idx).replace('.png', '_%d.jpg'%idx))
                         cv2.imwrite(save_path, img_crop)
@@ -258,18 +373,27 @@ def yolo_mdet_vis(img_folder, label_folder, output_folder, crop_dir=None, attrib
                         cv2.imwrite(save_path, img_crop)
             save_path = image_path.replace(img_folder, output_folder)
             cv2.imwrite(save_path, img)
+
+
+
+
+
 if __name__ == '__main__':
     pass
     # root_dir = r'E:\data\0318_fireservice\data0327slice'
     # root_dir = r'E:\data\0417_signboard\data0417\yolo'
     # root_dir = r'E:\data\0417_signboard\data0417\demo'
     # root_dir = r'E:\data\1123_thermal\thermal data\datasets\moisture\det'
-    root_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection4'
+    # root_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection6'
+    # root_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection6_det'
+    # root_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_segmentation1'
+    root_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_10'
     img_folder = os.path.join(root_dir, 'images')
     label_folder = os.path.join(root_dir, 'labels')
     output_folder = os.path.join(root_dir, 'images_vis')
     crop_folder = os.path.join(root_dir, 'images_crop')
     attribute_file = os.path.join(root_dir, 'attribute.yaml')
-    # yolo_data_vis(img_folder, label_folder, output_folder, crop_dir=crop_folder, seg=False)
 
     yolo_mdet_vis(img_folder, label_folder, output_folder, crop_dir=crop_folder, attribute_file=attribute_file, filter_no=True)
+    # yolo_data_vis(img_folder, label_folder, output_folder, crop_dir=crop_folder, seg=False)
+    # yolo_data_vis(img_folder, label_folder, output_folder, crop_dir=crop_folder, seg=True)

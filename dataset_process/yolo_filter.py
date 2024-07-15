@@ -1,7 +1,7 @@
 import os
 import os.path as osp
 import shutil
-
+import pandas as pd
 from tqdm import tqdm
 
 def seg_filter(input_dir, copy_dir):
@@ -83,6 +83,36 @@ def seg_remove(input_dir, copy_dir):
         with open(input_file, 'w') as file:
             file.writelines(filtered_lines)
 
+
+def att_negative_remove(input_dir, output_dir, att_len=14):
+    input_img_dir = osp.join(osp.dirname(input_dir), 'images')
+    output_img_dir = osp.join(osp.dirname(output_dir), 'images')
+    os.makedirs(output_dir, exist_ok=True)
+    os.makedirs(output_img_dir, exist_ok=True)
+
+    input_list = os.listdir(input_dir)
+    for input_name in tqdm(input_list):
+        input_path = os.path.join(input_dir, input_name)
+        output_path = os.path.join(output_dir, input_name)
+        df = pd.read_csv(input_path, header=None, index_col=None, sep=' ')
+
+        if att_len==14:
+            selected_nums = list(range(2, 2+att_len))
+            selected_nums.remove(5)
+        else:
+            selected_nums = list(range(2, 2+att_len))
+        selected_columns = df[selected_nums]
+        sum_of_selected_columns = selected_columns.sum()
+        is_sum_zero = sum_of_selected_columns.sum() == 0
+
+        if is_sum_zero:
+            continue
+        else:
+            input_img_path = osp.join(input_img_dir, input_name.replace('.txt', '.png'))
+            output_img_path = osp.join(output_img_dir, input_name.replace('.txt', '.png'))
+            shutil.copy(input_path, output_path)
+            shutil.copy(input_img_path, output_img_path)
+
 if __name__ == '__main__':
     pass
     # seg_filter(input_dir=r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection3\labels',
@@ -94,5 +124,14 @@ if __name__ == '__main__':
     # seg_filter(input_dir=r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection4\labels',
     #            copy_dir=r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection4\labels')
 
-    attribute_remove(input_dir=r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection4_det\labels',
-               copy_dir=r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection4_det\labels')
+    # attribute_remove(input_dir=r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection6\labels',
+    #            copy_dir=r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection6_det\labels')
+
+
+    # input_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5\labels'
+    # output_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_f\labels'
+    # att_negative_remove(input_dir, output_dir)
+
+    input_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_10\labels'
+    output_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_10f\labels'
+    att_negative_remove(input_dir, output_dir, att_len=10)

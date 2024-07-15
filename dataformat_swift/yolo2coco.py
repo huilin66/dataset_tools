@@ -93,7 +93,7 @@ def parseXmlFilse(image_path, anno_path, json_path, dst_img_dir=None):
     assert os.path.exists(anno_path), "ERROR {} dose not exists".format(anno_path)
 
     category_set = []
-    with open(os.path.join(os.path.dirname(os.path.dirname(anno_path)), 'classes.txt'), 'r') as f:
+    with open(os.path.join(os.path.dirname(anno_path), 'class.txt'), 'r') as f:
         for i in f.readlines():
             category_set.append(i.strip())
     category_id = dict((k, v) for k, v in enumerate(category_set))
@@ -182,12 +182,18 @@ if __name__ == '__main__':
     # parseXmlFilse(image_dir, label_dir, json_path, dst_img_dir)
 
 
-    image_dir = r'E:\data\2023_defect\yolo_fomat_c5\yolo_fomat_c5\images\val'
-    label_dir = r'E:\data\2023_defect\yolo_fomat_c5\yolo_fomat_c5\labels\val'
-    json_path = r'E:\data\2023_defect\yolo_fomat_c5\yolo_fomat_c5\instance_val.json'
-    parseXmlFilse(image_dir, label_dir, json_path)
+    # image_dir = r'E:\data\2023_defect\yolo_fomat_c5\yolo_fomat_c5\images\val'
+    # label_dir = r'E:\data\2023_defect\yolo_fomat_c5\yolo_fomat_c5\labels\val'
+    # json_path = r'E:\data\2023_defect\yolo_fomat_c5\yolo_fomat_c5\instance_val.json'
+    # parseXmlFilse(image_dir, label_dir, json_path)
+    #
+    # image_dir = r'E:\data\2023_defect\yolo_fomat_c5\yolo_fomat_c5\images\train'
+    # label_dir = r'E:\data\2023_defect\yolo_fomat_c5\yolo_fomat_c5\labels\train'
+    # json_path = r'E:\data\2023_defect\yolo_fomat_c5\yolo_fomat_c5\instance_train.json'
+    # parseXmlFilse(image_dir, label_dir, json_path)
 
-    image_dir = r'E:\data\2023_defect\yolo_fomat_c5\yolo_fomat_c5\images\train'
-    label_dir = r'E:\data\2023_defect\yolo_fomat_c5\yolo_fomat_c5\labels\train'
-    json_path = r'E:\data\2023_defect\yolo_fomat_c5\yolo_fomat_c5\instance_train.json'
+
+    image_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\images'
+    label_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\labels'
+    json_path = r'E:\data\0417_signboard\data0521_m\coco_rgb_detection5_det\instance_all.json'
     parseXmlFilse(image_dir, label_dir, json_path)

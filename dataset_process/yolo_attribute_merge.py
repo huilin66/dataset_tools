@@ -3,31 +3,46 @@ import pandas as pd
 from tqdm import tqdm
 
 
-id_merge_dict = {
+att_merge_dict = {
     0: 0,
     1: 1,
-    2: 2,
+    2: 1,
     3: 3,
     4: 4,
-    5: 5,
+    5: 4,
     6: 6,
     7: 7,
-    8: 8,
+    8: 7,
     9: 9,
     10: 10,
     11: 11,
     12: 12,
     13: 13,
 }
+att_remove_list = [2, 5, 8, 3]
+
+def yolo_att_merge(input_dir, output_dir, merge_dict, remove_list):
+    os.makedirs(output_dir, exist_ok=True)
+    gap_num = 2
+    remove_list = [num+gap_num for num in remove_list]
+    input_list = os.listdir(input_dir)
+    for input_name in tqdm(input_list):
+        input_path = os.path.join(input_dir, input_name)
+        output_path = os.path.join(output_dir, input_name)
+        df = pd.read_csv(input_path, header=None, index_col=None, sep=' ')
+        for k,v in merge_dict.items():
+            if k==v:
+                continue
+            else:
+                df[v+gap_num] = df[v+gap_num] | df[k+gap_num]
+
+        df = df.drop(columns=remove_list)
+        df[1] = len(merge_dict)-len(remove_list)
+        df.to_csv(output_path, header=False, index=False, sep=' ')
 
 
-def yolo_att_merge(gt_dir, merge_dict):
-    gt_list = os.listdir(gt_dir)
-    for gt_name in tqdm(gt_list):
-        gt_path = os.path.join(gt_dir, gt_name)
-        df = pd.read_csv(gt_path, names=['catid', 'x1', 'x2', 'y1', 'y2'], header=None, index_col=None, sep=' ')
-        for idx, row in df.iterrows():
-            src_id = row['catid']
-            dst_id = merge_dict[src_id]
-            df.loc[idx, 'catid'] = dst_id
-        df.to_csv(gt_path, header=None, index=None, sep=' ')
+if __name__ == '__main__':
+    pass
+    input_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5\labels'
+    output_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_10\labels'
+    yolo_att_merge(input_dir, output_dir, att_merge_dict, att_remove_list)

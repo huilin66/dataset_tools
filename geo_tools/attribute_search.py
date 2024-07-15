@@ -1,12 +1,17 @@
-import os, cv2
+import os, cv2, io
 import exifread
+import matplotlib.pyplot as plt
+import pandas as pd
 import requests
 import geopandas as gpd
 from shapely.geometry import Point
 from pyproj import Transformer
 from tqdm import tqdm
-
-
+import fitz
+from PIL import Image
+import numpy as np
+from datetime import datetime, timedelta
+import time
 # 中文名：NAME_TC,
 # 招牌类型：NSEARCH011,
 # 长：NSEARCH031
@@ -41,11 +46,13 @@ def search(shp_path, gps_info):
 
 
     gdf['distance'] = gdf.geometry.distance(point)
-    closest_point = gdf.loc[gdf['distance'].idxmin()]
+    # closest_point = gdf.loc[gdf['distance'].idxmin()]
 
-    name = closest_point['NAME_TC']
-    distance = closest_point['distance']
-    search_url = closest_point['NSEARCH061']
+    closest_points = gdf[gdf['distance'] < 10]
+
+    name = closest_points['NAME_TC'].to_list()
+    distance = closest_points['distance'].to_list()
+    search_url = closest_points['NSEARCH061'].to_list()
 
     return distance, search_url
 
@@ -109,19 +116,35 @@ def download_pdf(url, filename):
     except Exception as e:
         print(f"An error occurred: {e}")
 
-def is_image_in_image(small_image_path, large_image_path):
-    # Read the images from the given file paths
-    small_image = cv2.imread(small_image_path)
-    large_image = cv2.imread(large_image_path)
 
-    # Check if images are read correctly
-    if small_image is None:
-        print(f"Error: Could not read the small image from {small_image_path}")
-        return False
-    if large_image is None:
-        print(f"Error: Could not read the large image from {large_image_path}")
-        return False
+def extract_images_from_pdf(pdf_path):
+    # 打开PDF文件
+    pdf_document = fitz.open(pdf_path)
+    image_arrays = []
 
+    for page_number in range(len(pdf_document)):
+        # 获取页面
+        page = pdf_document.load_page(page_number)
+        # 获取页面上的所有图像
+        images = page.get_images(full=True)
+
+        for img_index, img in enumerate(images):
+            # 提取图像的索引号和图片信息
+            xref = img[0]
+            base_image = pdf_document.extract_image(xref)
+            image_bytes = base_image["image"]
+            image_ext = base_image["ext"]
+
+            # 将图片数据读入 PIL 图像
+            image = Image.open(io.BytesIO(image_bytes))
+            # 将 PIL 图像转换为 NumPy 数组
+            image_array = np.array(image)
+            image_arrays.append(image_array)
+            # plt.imshow(image_array)
+            # plt.show()
+    return image_arrays[0]
+
+def is_image_in_image(small_image, large_image):
     # Convert images to grayscale
     small_image_gray = cv2.cvtColor(small_image, cv2.COLOR_BGR2GRAY)
     large_image_gray = cv2.cvtColor(large_image, cv2.COLOR_BGR2GRAY)
@@ -156,15 +179,95 @@ def imgs_match(img_dir, dst_dir, shp_path):
 
         dst_path = os.path.join(dst_dir, img_name.replace('.jpg', '_dis%.2f.pdf'%distance))
         download_pdf(dst_url, dst_path)
+        large_image = extract_images_from_pdf(dst_path)
 
+        small_image = np.array(Image.open(img_path))
+        result = is_image_in_image(small_image, large_image)
+        print(result)
+
+def ladybug2gps(img_path, time_csv_path, idx, info_csv_path):
+    def dms_to_decimal(dms):
+        degrees, minutes, seconds1, seconds2 = dms.split('.')
+        degrees = int(degrees)
+        minutes = int(minutes)
+        seconds = float(seconds1+'.'+seconds2)
+        return degrees + minutes / 60 + seconds / 3600
+    df_time = pd.read_csv(time_csv_path, header=0, index_col=None)
+    row = df_time.loc[idx*2]
+    time_lady = row.loc[' CAMERA TIME'].replace(' ', '')
+    df_info = pd.read_csv(info_csv_path, header=[0, 1], index_col=None)
+    print(time_lady)
+    time_lady = datetime.strptime(time_lady, '%H:%M:%S.%f')
+
+
+    df_info['time'] = df_info['UTCTime'].apply(lambda x: pd.to_datetime(x, unit='s').dt.strftime('%H:%M:%S.%f'))
+    df_info['time_diff'] = df_info['time'].apply(lambda x: abs(datetime.strptime(x, '%H:%M:%S.%f') - time_lady))
+
+
+    closest_row = df_info.loc[df_info['time_diff'].idxmin()]
+    print(closest_row['time_diff'])
+
+    Latitude = closest_row.loc['Latitude'][0]
+    Longitude = closest_row.loc['Longitude'][0]
+    Latitude = dms_to_decimal(Latitude)
+    Longitude = dms_to_decimal(Longitude)
+
+    gps_info = {}
+    gps_info['latitude'] = Latitude
+    gps_info['longitude'] = Longitude
+    return gps_info
 
 if __name__ == '__main__':
     pass
-    img_dir = r'E:\data\0417_signboard\data0504'
-    dst_dir = r'E:\data\0417_signboard\data0504_match'
-    shp_path = r'E:\data\0417_signboard\database\billboard.shp'
+    # img_dir = r'E:\data\0417_signboard\data0504'
+    # dst_dir = r'E:\data\0417_signboard\data0504_match'
+    # shp_path = r'E:\data\0417_signboard\database\billboard.shp'
+
+
+    # img_path = r'E:\data\0417_signboard\1719366000603.jpg'
+    # gps_info = get_gps_info(img_path)
+    # print(gps_info)
+
 
     # imgs_match(img_dir, dst_dir, shp_path)
 
-    gps_info = get_gps_info(os.path.join(img_dir, 'MVIMG_20240504_142044.jpg'))
+    # gps_info = get_gps_info(os.path.join(img_dir, 'MVIMG_20240504_142044.jpg'))
+    # print(gps_info)
+
+    # data_path = r'E:\data\0417_signboard\VMMS\ladybug\data.csv'
+    # df = pd.read_csv(data_path, sep='')
+    # print(df.info)
+
+    shp_path = r'E:\data\0417_signboard\database\billboard.shp'
+    info_csv_path = r'E:\data\0417_signboard\VMMS\ladybug\data.csv'
+
+    #
+    # # img_path = r'E:\data\0417_signboard\VMMS\ladybug\4\panoramic\ladybug_21505973_20240621_165137_Panoramic_000010_3019_103-3345.jpg'
+    # # time_csv_path = r'E:\data\0417_signboard\VMMS\ladybug\ladybug_frame_gps_info_16.txt'
+    # # dst_dir = r'E:\data\0417_signboard\VMMS\ladybug\4\dst'
+    #
+    # # img_path = r'E:\data\0417_signboard\VMMS\ladybug\3\panoramic\ladybug_21505973_20240621_164818_Panoramic_000005_1141_039-5080.jpg'
+    # # time_csv_path = r'E:\data\0417_signboard\VMMS\ladybug\ladybug_frame_gps_info_124.txt'
+    # # dst_dir = r'E:\data\0417_signboard\VMMS\ladybug\3\dst'
+    #
+    img_path = r'E:\data\0417_signboard\VMMS\ladybug\4\panoramic\ladybug_21505973_20240621_165137_Panoramic_000015_3139_107-3345.jpg'
+    time_csv_path = r'E:\data\0417_signboard\VMMS\ladybug\ladybug_frame_gps_info_16.txt'
+    dst_dir = r'E:\data\0417_signboard\VMMS\ladybug\4\dst'
+    idx = 15
+
+    img_name = os.path.basename(img_path)
+    os.makedirs(dst_dir, exist_ok=True)
+
+
+    gps_info = ladybug2gps(img_path, time_csv_path, idx, info_csv_path)
     print(gps_info)
+    distances, dst_urls = search(shp_path, gps_info)
+
+    for distance, dst_url in zip(distances, dst_urls):
+        dst_path = os.path.join(dst_dir, img_name.replace('.jpg', '_dis%.2f.pdf' % distance))
+        download_pdf(dst_url, dst_path)
+        large_image = extract_images_from_pdf(dst_path)
+
+        small_image = np.array(Image.open(img_path))
+        result = is_image_in_image(small_image, large_image)
+        print(result)
