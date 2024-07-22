@@ -360,7 +360,7 @@ def manual_app():
     pcdbox_vis_path =(r'E:\demo\demo0617\pcdbox\%d_%d_%d_%d_%d.pcd'%
                       (img_id, bbox[0][0], bbox[0][1], bbox[1][0], bbox[1][1]))
 
-    # img_show(panorama_path)
+    img_show(panorama_path)
     # img_box_vis(panorama_path, bbox, box_vis_path)
 
 
@@ -399,7 +399,8 @@ def yolo_app():
     '''
 
     panorama_dir = r'E:\demo\demo0617\img_insta'
-    prediction_dir = r'E:\demo\demo0617\prediction'
+    # prediction_dir = r'E:\demo\demo0617\prediction'
+    prediction_dir = r'E:\demo\demo0617\img_insta_pred_slice_txt'
 
     densemap_path = r'E:\demo\demo0617\ColorizedPointCloud.pcd'
     trajectory_path = r'E:\demo\demo0617\img_insta\insta_2024_06_17_10_29_38.pcd'
@@ -421,6 +422,7 @@ def yolo_app():
 
     img_list = [img_name for img_name in os.listdir(panorama_dir) if img_name.endswith('.jpg')]
     for img_name in tqdm(img_list):
+        print('[%s]running'%img_name)
         img_id = Path(img_name).stem
         panorama_path = os.path.join(panorama_dir, img_name)
         pred_path = os.path.join(prediction_dir, '%s.txt'%img_id)
@@ -472,7 +474,9 @@ def yolo_app():
                 [int(row['bottom_right_x']), int(row['bottom_right_y'])]
                     ]
             bboxes.append(bbox)
-            box_pan2pcd_measure(bbox, pan2pcd_path, vis_path=pcd_box_path)
+            box_pan2pcd_measure(bbox, pan2pcd_path,
+                                vis_path=pcd_box_path.replace('.pcd', '_%d_%d_%d_%d.pcd'%
+                                                              (bbox[0][0], bbox[0][1], bbox[1][0], bbox[1][1])))
 
         img_boxes_vis(pan2pcd_vis_path, bboxes, pcdmap_box_vis_path)
         img_boxes_vis(panorama_path, bboxes, img_box_vis_path)
@@ -485,4 +489,5 @@ def yolo_app():
 
 if __name__ == '__main__':
     pass
+    # manual_app()
     yolo_app()
