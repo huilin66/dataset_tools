@@ -57,5 +57,7 @@ if __name__ == '__main__':
     #               r'E:\data\tp\car_det_train\car_det_train\input_path.csv')
     # dir_shape_sta(r'E:\data\tp\multi_modal_airplane_train\rgb',
     #               r'E:\data\tp\multi_modal_airplane_train\rgb.csv')
-    dir_shape_sta(r'E:\data\tp\multi_modal_airplane_train\sar',
-                  r'E:\data\tp\multi_modal_airplane_train\sar.csv')
+    # dir_shape_sta(r'E:\data\tp\multi_modal_airplane_train\sar',
+    #               r'E:\data\tp\multi_modal_airplane_train\sar.csv')
+    dir_shape_sta(r'E:\data\tp\multi_modal_airplane_train\img',
+                  r'E:\data\tp\multi_modal_airplane_train\img.csv')
