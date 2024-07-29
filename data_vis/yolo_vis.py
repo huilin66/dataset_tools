@@ -79,10 +79,26 @@ colormap = [
             (128, 0, 128),
             ]  # 色盘，可根据类别添加新颜色
 
+# cats = {
+#     0: 'background',
+#     1: 'wall_signboard',
+#     2: 'projecting_signboard',
+# }
 cats = {
-    0: 'background',
-    1: 'wall_signboard',
-    2: 'projecting_signboard',
+    0: 'Boeing737',
+    1: 'Boeing747',
+    2: 'Boeing777',
+    3: 'Boeing787',
+    4: 'C919',
+    5: 'A220',
+    6: 'A321',
+    7: 'A330',
+    8: 'A350',
+    9: 'ARJ21',
+    10: 'other-airplane',
+    11: 'A320/321',
+    12: 'Boeing737-800',
+    13: 'other',
 }
 # cats = {
 #     0: 'background',
@@ -387,13 +403,15 @@ if __name__ == '__main__':
     # root_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection6'
     # root_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection6_det'
     # root_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_segmentation1'
-    root_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_10'
+    # root_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_10'
+    root_dir = r'E:\data\tp\multi_modal_airplane_train\demo'
     img_folder = os.path.join(root_dir, 'images')
     label_folder = os.path.join(root_dir, 'labels')
     output_folder = os.path.join(root_dir, 'images_vis')
     crop_folder = os.path.join(root_dir, 'images_crop')
     attribute_file = os.path.join(root_dir, 'attribute.yaml')
 
-    yolo_mdet_vis(img_folder, label_folder, output_folder, crop_dir=crop_folder, attribute_file=attribute_file, filter_no=True)
-    # yolo_data_vis(img_folder, label_folder, output_folder, crop_dir=crop_folder, seg=False)
+
+    yolo_data_vis(img_folder, label_folder, output_folder, crop_dir=crop_folder, seg=False)
     # yolo_data_vis(img_folder, label_folder, output_folder, crop_dir=crop_folder, seg=True)
+    # yolo_mdet_vis(img_folder, label_folder, output_folder, crop_dir=crop_folder, attribute_file=attribute_file, filter_no=True)

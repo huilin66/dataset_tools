@@ -120,3 +120,6 @@ if __name__ == '__main__':
 
     # random_select(r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_f\images',
     #               r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_f', train_ratio=0.9)
+
+    random_select(r'E:\data\tp\multi_modal_airplane_train\images',
+                  r'E:\data\tp\multi_modal_airplane_train', train_ratio=0.9)
