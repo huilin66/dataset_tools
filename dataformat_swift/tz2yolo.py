@@ -38,28 +38,31 @@ mapping_class = {
     12: 'Boeing737-800',
     13: 'other',
 }
-class_mapping_rgb = {
-    'Boeing737': 0,
-    'Boeing747': 1,
-    'Boeing777': 2,
-    'Boeing787': 3,
-    'C919': 4,
-    'A220': 5,
-    'A321': 6,
-    'A330': 7,
-    'A350': 8,
-    'ARJ21': 9,
-    'other-airplane': 10,
-}
-class_mapping_sar = {
-    'A220': 0,
-    'A330': 1,
-    'A320/321': 2,
-    'Boeing737-800': 3,
-    'Boeing787': 4,
-    'ARJ21': 5,
-    'other': 6,
-}
+
+# class_mapping = {
+#     'Small Car': 0,
+#     'Bus': 1,
+#     'Cargo Truck': 2,
+#     'Dump Truck': 3,
+#     'Van': 4,
+#     'Trailer': 5,
+#     'Tractor': 6,
+#     'Excavator': 7,
+#     'Truck Tractor': 8,
+#     'other-vehicle': 9,
+# }
+# mapping_class = {
+#     0: 'Small Car',
+#     1: 'Bus',
+#     2: 'Cargo Truck',
+#     3: 'Dump Truck',
+#     4: 'Van',
+#     5: 'Trailer',
+#     6: 'Tractor',
+#     7: 'Excavator',
+#     8: 'Truck Tractor',
+#     9: 'other-vehicle',
+# }
 
 def convert_tz_to_yolo(gt_dir, label_dir, img_dir, image_dir, class_mapping):
     def coord_str2num(coord_str):
@@ -126,6 +129,67 @@ def convert_tz_to_yolo(gt_dir, label_dir, img_dir, image_dir, class_mapping):
 
             df.to_csv(label_path, header=False, index=False, sep=' ')
 
+def convert_tz_to_yolo_seg(gt_dir, label_dir, img_dir, image_dir, class_mapping):
+    def coord_str2num(coord_str):
+        strs = coord_str.split(',')
+        num1 = int(strs[0].split('.')[0])
+        num2 = int(strs[1].split('.')[0])
+        return num1, num2
+
+    os.makedirs(label_dir, exist_ok=True)
+    os.makedirs(image_dir, exist_ok=True)
+
+    gt_list = os.listdir(gt_dir)
+    for gt_file in tqdm(gt_list):
+        if gt_file.endswith('.xml'):
+            gt_path = os.path.join(gt_dir, gt_file)
+            img_path = os.path.join(img_dir, gt_file.replace('xml', 'tif'))
+            image_path = os.path.join(image_dir, gt_file.replace('xml', 'png'))
+            label_path = os.path.join(label_dir, gt_file.replace('xml', 'txt'))
+            try:
+                img = io.imread(img_path)
+                width, height = img.shape[1], img.shape[0]
+            except Exception as e:
+                print(e, img_path)
+                continue
+
+            # io.imsave(image_path, img)
+
+            tree = ET.parse(gt_path)
+            root = tree.getroot()
+
+            df = pd.DataFrame(None, columns=['cat_id', 'x1', 'y1', 'x2', 'y2','x3', 'y3','x4', 'y4',])
+
+            # size = root.findall('size')[0]
+            # width = int(size.find('width').text)
+            # height = int(size.find('height').text)
+
+            objects = root.findall('objects')
+            if len(objects) > 0:
+                object_list = objects[0].findall('object')
+                for object in object_list:
+                    class_name = object.find('possibleresult').find('name').text
+                    class_id = class_mapping[class_name]
+
+                    points = object.findall('points')[0]
+                    points_list = points.findall('point')
+                    point_nums = []
+                    for point in points_list:
+                        point_num = coord_str2num(point.text)
+                        point_nums.append(point_num)
+                    point_nums = np.array(point_nums)
+                    x1 = point_nums[0, 0] / width
+                    y1 = point_nums[0, 1] / height
+                    x2 = point_nums[1, 0] / width
+                    y2 = point_nums[1, 1] / height
+                    x3 = point_nums[2, 0] / width
+                    y3 = point_nums[2, 1] / height
+                    x4 = point_nums[3, 0] / width
+                    y4 = point_nums[3, 1] / height
+                    df.loc[len(df)] = [class_id, x1, y1, x2, y2, x3, y3, x4, y4]
+
+            df.to_csv(label_path, header=False, index=False, sep=' ')
+
 def convert_yolo_to_tz(input_dir, output_dir, image_dir, mapping_class):
     def prettify_xml(elem):
         """Return a pretty-printed XML string for the Element."""
@@ -188,7 +252,19 @@ if __name__ == '__main__':
     # image_dir = r'E:\data\tp\multi_modal_airplane_train\image'
     # convert_tz_to_yolo(gt_dir, yolo_label_dir, img_dir, image_dir, class_mapping)
 
-    result_dir = r'E:\data\tp\multi_modal_airplane_train\infer_result\labels'
-    output_dir = r'E:\data\tp\multi_modal_airplane_train\infer_result_final'
-    img_dir = r'E:\data\tp\multi_modal_airplane_train\infer_result'
-    convert_yolo_to_tz(result_dir, output_dir, img_dir, mapping_class)
+    # result_dir = r'E:\data\tp\multi_modal_airplane_train\infer_result\labels'
+    # output_dir = r'E:\data\tp\multi_modal_airplane_train\infer_result_final'
+    # img_dir = r'E:\data\tp\multi_modal_airplane_train\infer_result'
+    # convert_yolo_to_tz(result_dir, output_dir, img_dir, mapping_class)
+
+    # gt_dir = r'E:\data\tp\car_det_train\car_det_train\gt'  # VOC格式标注文件夹
+    # yolo_label_dir = r'E:\data\tp\car_det_train\car_det_train\labels'  # 输出YOLO格式标注文件夹
+    # img_dir = r'E:\data\tp\car_det_train\car_det_train\img'
+    # image_dir = r'E:\data\tp\car_det_train\car_det_train\image'
+    # convert_tz_to_yolo(gt_dir, yolo_label_dir, img_dir, image_dir, class_mapping)
+
+    gt_dir = r'E:\data\tp\multi_modal_airplane_train\gt'
+    yolo_label_dir = r'E:\data\tp\multi_modal_airplane_train\labels_seg'
+    img_dir = r'E:\data\tp\multi_modal_airplane_train\img'
+    image_dir = r'E:\data\tp\multi_modal_airplane_train\image'
+    convert_tz_to_yolo_seg(gt_dir, yolo_label_dir, img_dir, image_dir, class_mapping)
