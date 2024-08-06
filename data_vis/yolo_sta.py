@@ -108,15 +108,15 @@ def get_df_yolo(gt_dir, ref_txt=None, det=True, mdet=False, seg=False):
 
 if __name__ == '__main__':
     pass
-    gt_dir = r"E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_10\labels"
-    val_path = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_10\val.txt'
-
-    df = get_df_yolo(gt_dir, ref_txt=None, mdet=True)
-
-
-    # gt_dir = r"E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\labels"
-    # sta_dir = r"E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\labels_sta"
-    # val_path = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\val.txt'
+    # gt_dir = r"E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_10\labels"
+    # val_path = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_10\val.txt'
     #
-    #
-    # yolo_sta(gt_dir, sta_dir)
+    # df = get_df_yolo(gt_dir, ref_txt=None, mdet=True)
+
+
+    gt_dir = r"E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\labels"
+    sta_dir = r"E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\labels_sta"
+    val_path = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\val.txt'
+
+
+    yolo_sta(gt_dir, sta_dir)
