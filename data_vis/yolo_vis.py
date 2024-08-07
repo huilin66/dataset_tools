@@ -123,28 +123,28 @@ colormap = [
     (11, 255, 162)
 ]
 
-# cats = {
-#     0: 'background',
-#     1: 'wall_signboard',
-#     2: 'projecting_signboard',
-# }
 cats = {
-    0: 'Boeing737',
-    1: 'Boeing747',
-    2: 'Boeing777',
-    3: 'Boeing787',
-    4: 'C919',
-    5: 'A220',
-    6: 'A321',
-    7: 'A330',
-    8: 'A350',
-    9: 'ARJ21',
-    10: 'other-airplane',
-    # 11: 'A320/321',
-    11: 'A320_321',
-    12: 'Boeing737-800',
-    13: 'other',
+    0: 'background',
+    1: 'wall_signboard',
+    2: 'projecting_signboard',
 }
+# cats = {
+#     0: 'Boeing737',
+#     1: 'Boeing747',
+#     2: 'Boeing777',
+#     3: 'Boeing787',
+#     4: 'C919',
+#     5: 'A220',
+#     6: 'A321',
+#     7: 'A330',
+#     8: 'A350',
+#     9: 'ARJ21',
+#     10: 'other-airplane',
+#     # 11: 'A320/321',
+#     11: 'A320_321',
+#     12: 'Boeing737-800',
+#     13: 'other',
+# }
 # cats = {
 #     0: 'background',
 #     1: 'signboard',
@@ -436,6 +436,13 @@ def yolo_mdet_vis(img_folder, label_folder, output_folder, crop_dir=None, attrib
                     else:
                         img, img_crop, attribute_strs = xywh2xyxy(x, w, h, img, crop=True, attributes=attribute, filter_no=filter_no)
                         cat = cats[int(x[0])]
+
+                        save_path = os.path.join(crop_dir, cat, 'all',
+                                                 os.path.basename(image_path).replace('.jpg', '_%d.jpg' % idx).replace(
+                                                     '.png', '_%d.jpg' % idx))
+                        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                        cv2.imwrite(save_path, img_crop)
+
                         for attribute_str in attribute_strs:
                             save_path = os.path.join(crop_dir, cat, attribute_str,
                                                      os.path.basename(image_path).replace('.jpg', '_%d.jpg' % idx).replace(
@@ -471,7 +478,9 @@ if __name__ == '__main__':
     # root_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_segmentation1'
     # root_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_10'
     # root_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_segmentation2'
-    root_dir = r'E:\data\tp\multi_modal_airplane_train\demo'
+    # root_dir = r'E:\data\tp\multi_modal_airplane_train\demo'
+    # root_dir = r'E:\data\0417_signboard\data0806\dataset\yolo_rgb_detection5_10'
+    root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10'
     img_folder = os.path.join(root_dir, 'images')
     label_folder = os.path.join(root_dir, 'labels')
     output_folder = os.path.join(root_dir, 'images_vis')
@@ -480,6 +489,6 @@ if __name__ == '__main__':
 
 
     # yolo_data_vis(img_folder, label_folder, output_folder, crop_dir=crop_folder, seg=False)
-    yolo_data_vis(img_folder, label_folder, output_folder, crop_dir=crop_folder, seg=True)
-    # yolo_mdet_vis(img_folder, label_folder, output_folder, crop_dir=crop_folder, seg=False, attribute_file=attribute_file, filter_no=True)
+    # yolo_data_vis(img_folder, label_folder, output_folder, crop_dir=crop_folder, seg=True)
+    yolo_mdet_vis(img_folder, label_folder, output_folder, crop_dir=crop_folder, seg=False, attribute_file=attribute_file, filter_no=True)
     # yolo_mdet_vis(img_folder, label_folder, output_folder, crop_dir=crop_folder, seg=True, attribute_file=attribute_file, filter_no=True)
