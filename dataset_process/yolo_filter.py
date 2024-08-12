@@ -94,24 +94,21 @@ def att_negative_remove(input_dir, output_dir, att_len=14):
     for input_name in tqdm(input_list):
         input_path = os.path.join(input_dir, input_name)
         output_path = os.path.join(output_dir, input_name)
+        input_img_path = osp.join(input_img_dir, input_name.replace('.txt', '.png'))
+        output_img_path = osp.join(output_img_dir, input_name.replace('.txt', '.png'))
+
         df = pd.read_csv(input_path, header=None, index_col=None, sep=' ')
 
         if att_len==14:
-            selected_nums = list(range(2, 2+att_len))
+            selected_nums = list(range(1, 2+att_len))
             selected_nums.remove(5)
         else:
-            selected_nums = list(range(2, 2+att_len))
+            selected_nums = list(range(1, 2+att_len))
         selected_columns = df[selected_nums]
-        sum_of_selected_columns = selected_columns.sum()
-        is_sum_zero = sum_of_selected_columns.sum() == 0
+        df_det = df.drop(columns=+selected_columns)
 
-        if is_sum_zero:
-            continue
-        else:
-            input_img_path = osp.join(input_img_dir, input_name.replace('.txt', '.png'))
-            output_img_path = osp.join(output_img_dir, input_name.replace('.txt', '.png'))
-            shutil.copy(input_path, output_path)
-            shutil.copy(input_img_path, output_img_path)
+        df_det.to_csv(output_path, header=None, index=None, sep=' ')
+        shutil.copy(input_img_path, output_img_path)
 
 if __name__ == '__main__':
     pass
@@ -132,6 +129,12 @@ if __name__ == '__main__':
     # output_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_f\labels'
     # att_negative_remove(input_dir, output_dir)
 
-    input_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_10\labels'
-    output_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_10f\labels'
-    att_negative_remove(input_dir, output_dir, att_len=10)
+    # input_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_10\labels'
+    # output_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_10f\labels'
+    # att_negative_remove(input_dir, output_dir, att_len=10)
+
+    att_negative_remove(
+        input_dir=r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10\labels',
+        output_dir=r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_det\labels',
+        att_len=10
+    )

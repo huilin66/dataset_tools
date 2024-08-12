@@ -40,9 +40,16 @@ def get_com(gt_dir, attribute_file, save_path, filter_background=False, norm=Fal
 
 
 if __name__ == '__main__':
-    get_com(r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_10\labels',
-            r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_10\attribute.yaml',
-            r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_10\co_occurrence_matrix.csv',
+    pass
+    # get_com(r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_10\labels',
+    #         r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_10\attribute.yaml',
+    #         r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_10\co_occurrence_matrix.csv',
+    #         filter_background=True,
+    #         norm=True
+    #         )
+    get_com(r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10\labels',
+            r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10\attribute.yaml',
+            r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10\co_occurrence_matrix3.csv',
             filter_background=True,
             norm=True
             )
