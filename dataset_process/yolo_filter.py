@@ -133,8 +133,14 @@ if __name__ == '__main__':
     # output_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_10f\labels'
     # att_negative_remove(input_dir, output_dir, att_len=10)
 
+    # att_negative_remove(
+    #     input_dir=r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10\labels',
+    #     output_dir=r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_det\labels',
+    #     att_len=10
+    # )
+
     att_negative_remove(
-        input_dir=r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10\labels',
-        output_dir=r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_det\labels',
+        input_dir=r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels',
+        output_dir=r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c_det\labels',
         att_len=10
     )

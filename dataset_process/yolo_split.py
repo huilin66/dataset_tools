@@ -133,5 +133,7 @@ if __name__ == '__main__':
     # random_select(r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10\images',
     #               r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10', train_ratio=0.9)
 
-    random_select(r'E:\data\tp\sar_det\images',
-                  r'E:\data\tp\sar_det', train_ratio=0.9)
+    # random_select(r'E:\data\tp\sar_det\images',
+    #               r'E:\data\tp\sar_det', train_ratio=0.9)
+    random_select(r'E:\data\0111_testdata\data_new\yolo_src\images',
+                  r'E:\data\0111_testdata\data_new\yolo_src', train_ratio=0.9)

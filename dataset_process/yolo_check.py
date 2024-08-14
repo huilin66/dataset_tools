@@ -30,5 +30,15 @@ def yolo_classmerge(input_dir):
                 continue
             else:
                 print(file_name, numbers)
+
+def check_mdet(label_dir, len=10):
+    label_list = os.listdir(label_dir)
+    for label_name in tqdm(label_list):
+        label_path = os.path.join(label_dir, label_name)
+        print(label_name)
+        df = pd.read_csv(label_path, header=None, index_col=None, sep=' ')
+        print(df.shape)
+
 if __name__ == '__main__':
-    yolo_classmerge(input_dir=r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection6\labels')
+    # yolo_classmerge(input_dir=r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection6\labels')
+    check_mdet(r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels')
