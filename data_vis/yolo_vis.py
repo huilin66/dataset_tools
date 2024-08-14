@@ -1,105 +1,13 @@
 import os
+import shutil
 
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2
 from tqdm import tqdm
 import yaml
+import pandas as pd
 
-'''
-Automatic Sprinkler
-Fire Detectors
-Fire Alarm Bell
-Fire Alarm_break grass
-Fire Hose Reel
-Exit
-Fire Alarm Bell round
-Fire Alarm Bell white
-'''
-
-# cats = {
-#     0: 'Automatic Sprinkler',
-#     1: 'Fire Detectors',
-#     2: 'Fire Alarm Bell',
-#     3: 'Fire Alarm_break grass',
-#     4: 'Fire Hose Reel',
-#     5: 'Exit',
-#     6: 'Fire Alarm Bell round',
-#     7: 'Fire Alarm Bell white',
-#     8: 'Fire Detectors white',
-#     9: 'Fire Alarm Bell flat',
-# }
-
-# cats = {
-#     0: 'background',
-#     1: 'crack',
-#     2: 'mold',
-#     3: 'peeling_paint',
-#     4: 'stairstep_crack',
-#     5: 'water_seepage',
-#     6: 'spall',
-# }
-
-# cats = {
-#     0: 'surface',
-#     1: 'frame',
-#     2: 'normal',
-#     3: 'obstructed',
-#     4: 'missing',
-#     5: 'incomplete2',
-#     6: 'peeling2',
-#     7: 'fade',
-#     8: 'deformed',
-#     9: 'corroded2',
-# }
-
-# cats = {
-#     0: 'lamp',
-#     1: 'moisture',
-#     2: 'vent',
-#     3: 'windows',
-# }
-
-# colormap = [
-#             # (255, 42, 4),
-#             # (79, 68, 255),
-#             # (255, 0, 189),
-#             (4, 42, 255,),
-#             (151, 157, 255),
-#             (31, 112, 255),
-#             (0, 255, 0),
-#             (255, 0, 0),
-#             (0, 0, 255),
-#             (0, 255, 255),
-#             (255, 0, 255),
-#             (255, 255, 0),
-#             (255, 128, 0),
-#             (128, 255, 0),
-#             (128, 128, 0),
-#             (128, 0, 128),
-#             ]  # 色盘，可根据类别添加新颜色
-# colormap  = [
-#     (4, 42, 255),
-#     (11, 219, 235),
-#     (243, 243, 243),
-#     (0, 223, 183),
-#     (17, 31, 104),
-#     (255, 111, 221),
-#     (255, 68, 79),
-#     (204, 237, 0),
-#     (0, 243, 68),
-#     (189, 0, 255),
-#     (0, 180, 255),
-#     (221, 0, 186),
-#     (0, 255, 255),
-#     (38, 192, 0),
-#     (1, 255, 179),
-#     (125, 36, 255),
-#     (123, 0, 104),
-#     (255, 27, 108),
-#     (252, 109, 47),
-#     (162, 255, 11)
-# ]
 colormap = [
     (255, 42, 4),
     (235, 219, 11),
@@ -123,43 +31,51 @@ colormap = [
     (11, 255, 162)
 ]
 
-cats = {
-    0: 'background',
-    1: 'wall_signboard',
-    2: 'projecting_signboard',
-}
-# cats = {
-#     0: 'Boeing737',
-#     1: 'Boeing747',
-#     2: 'Boeing777',
-#     3: 'Boeing787',
-#     4: 'C919',
-#     5: 'A220',
-#     6: 'A321',
-#     7: 'A330',
-#     8: 'A350',
-#     9: 'ARJ21',
-#     10: 'other-airplane',
-#     # 11: 'A320/321',
-#     11: 'A320_321',
-#     12: 'Boeing737-800',
-#     13: 'other',
-# }
-# cats = {
-#     0: 'background',
-#     1: 'signboard',
-# }
+# region class tools
+def get_cats(class_file):
+    df = pd.read_csv(class_file, header=None, index_col=None, names=['category'])
+    cats = df['category'].to_dict()
+    return cats
+# endregion
 
-# cats = {
-#     0: 'background',
-#     1: 'wall_surface',
-#     2: 'projecting_surface',
-#     3: 'frame',
-# }
+# region attribute tools
+def attribute2label(label, attribute_values, attributes, attribute_len):
+    attribute_labels = np.zeros(attribute_len)
+    idx = 0
+    if len(attribute_values)>0:
+        for k,v in attributes[label].items():
+            assert len(v)>1
+            for i in range(1, len(v)):
+                if attribute_values[k]==v[i]:
+                    attribute_labels[idx] = 1
+                idx += 1
+    return attribute_labels
+
+def get_attribute_len(attributes):
+    attribute_len = 0
+    for k, v in attributes.items():
+        attribute_len += len(v)-1
+    return attribute_len
+
+def get_attribute(attribute_dict, gt_attribute):
+    attributes = {}
+    idx = 0
+    attribute_len = get_attribute_len(attribute_dict)
+    assert attribute_len == len(gt_attribute)
+    if isinstance(gt_attribute[0], str):
+        gt_attribute = [int(gt_value) for gt_value in gt_attribute]
+    for k, v in attribute_dict.items():
+        assert len(v) > 1
+        attributes[k] = False
+        for i in range(1, len(v)):
+            if gt_attribute[idx] == 1:
+                attributes[k] = v[i]
+            idx += 1
+    return attributes
+# endregion
 
 
-# 坐标转换
-def xywh2xyxy(x, w1, h1, img, crop=True, attributes=None, filter_no=False, alpha=0.5, tf=1, sf=2/3):
+def xywh2xyxy(x, w1, h1, img, cats, crop=True, attributes=None, filter_no=False, alpha=0.5, tf=1, sf=2/3):
     label, x, y, w, h = x
 
     x_t = x * w1
@@ -233,7 +149,7 @@ def xywh2xyxy(x, w1, h1, img, crop=True, attributes=None, filter_no=False, alpha
         attribute_strs = None
     return img, img_crop, attribute_strs
 
-def xywh2poly(x, w, h, img, crop=True, attributes=None, filter_no=False, alpha=0.5, tf=1, sf=2/3):
+def xywh2poly(x, w, h, img, cats, crop=True, attributes=None, filter_no=False, alpha=0.5, tf=1, sf=2/3):
     label, polypos = int(float(x[0])),x[1:]
     polys = []
     for i in range(0, len(polypos), 2):
@@ -315,41 +231,8 @@ def xywh2poly(x, w, h, img, crop=True, attributes=None, filter_no=False, alpha=0
 
     return img, img_crop, attribute_strs
 
-def attribute2label(label, attribute_values, attributes, attribute_len):
-    attribute_labels = np.zeros(attribute_len)
-    idx = 0
-    if len(attribute_values)>0:
-        for k,v in attributes[label].items():
-            assert len(v)>1
-            for i in range(1, len(v)):
-                if attribute_values[k]==v[i]:
-                    attribute_labels[idx] = 1
-                idx += 1
-    return attribute_labels
-
-def get_attribute_len(attributes):
-    attribute_len = 0
-    for k, v in attributes.items():
-        attribute_len += len(v)-1
-    return attribute_len
-
-def get_attribute(attribute_dict, gt_attribute):
-    attributes = {}
-    idx = 0
-    attribute_len = get_attribute_len(attribute_dict)
-    assert attribute_len == len(gt_attribute)
-    if isinstance(gt_attribute[0], str):
-        gt_attribute = [int(gt_value) for gt_value in gt_attribute]
-    for k, v in attribute_dict.items():
-        assert len(v) > 1
-        attributes[k] = False
-        for i in range(1, len(v)):
-            if gt_attribute[idx] == 1:
-                attributes[k] = v[i]
-            idx += 1
-    return attributes
-
-def yolo_data_vis(img_folder, label_folder, output_folder, crop_dir=None, seg=False):
+def yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=None, seg=False):
+    cats = get_cats(class_file)
     img_list = os.listdir(img_folder)
     img_list.sort()
     label_list = os.listdir(label_folder)
@@ -374,9 +257,9 @@ def yolo_data_vis(img_folder, label_folder, output_folder, crop_dir=None, seg=Fa
             for idx, x in enumerate(lb):
                 if not seg:
                     if crop_dir is None:
-                        img, _, _ = xywh2xyxy(x, w, h, img)
+                        img, _, _ = xywh2xyxy(x, w, h, img, cats=cats)
                     else:
-                        img, img_crop, _ = xywh2xyxy(x, w, h, img, crop=True)
+                        img, img_crop, _ = xywh2xyxy(x, w, h, img, cats=cats, crop=True)
                         cat = cats[int(float(x[0]))]
                         save_path = os.path.join(crop_dir, cat, os.path.basename(image_path).replace('.jpg', '_%d.jpg'%idx).replace('.png', '_%d.jpg'%idx))
                         os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -388,9 +271,9 @@ def yolo_data_vis(img_folder, label_folder, output_folder, crop_dir=None, seg=Fa
                     if len(x) <= 5:
                         continue
                     if crop_dir is None:
-                        img, _, _ = xywh2poly(x, w, h, img)
+                        img, _, _ = xywh2poly(x, w, h, img, cats=cats)
                     else:
-                        img, img_crop, _ = xywh2poly(x, w, h, img, crop=True)
+                        img, img_crop, _ = xywh2poly(x, w, h, img, cats=cats, crop=True)
                         cat = cats[int(float(x[0]))]
                         save_path = os.path.join(crop_dir, cat, os.path.basename(image_path).replace('.jpg', '_%d.jpg'%idx).replace('.png', '_%d.jpg'%idx))
                         os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -401,9 +284,8 @@ def yolo_data_vis(img_folder, label_folder, output_folder, crop_dir=None, seg=Fa
             save_path = image_path.replace(img_folder, output_folder)
             cv2.imwrite(save_path, img)
 
-
-
-def yolo_mdet_vis(img_folder, label_folder, output_folder, crop_dir=None, attribute_file=None, filter_no=False, seg=False):
+def yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=None, attribute_file=None, filter_no=False, seg=False):
+    cats = get_cats(class_file)
     if attribute_file is not None:
         with open(attribute_file, 'r') as file:
             attribute_dict = yaml.safe_load(file)['attributes']
@@ -417,6 +299,7 @@ def yolo_mdet_vis(img_folder, label_folder, output_folder, crop_dir=None, attrib
     # img_list = img_list[:2]
 
     os.makedirs(output_folder, exist_ok=True)
+    print(output_folder)
     if crop_dir is not None and not os.path.exists(crop_dir):
         os.makedirs(crop_dir)
         for cat in cats.values():
@@ -439,9 +322,9 @@ def yolo_mdet_vis(img_folder, label_folder, output_folder, crop_dir=None, attrib
                 x = np.concatenate([x[:1], x[2+attribute_len:]])
                 if not seg:
                     if crop_dir is None:
-                        img, _, _ = xywh2xyxy(x, w, h, img, attributes=attribute, filter_no=filter_no)
+                        img, _, _ = xywh2xyxy(x, w, h, img, cats=cats, attributes=attribute, filter_no=filter_no)
                     else:
-                        img, img_crop, attribute_strs = xywh2xyxy(x, w, h, img, crop=True, attributes=attribute, filter_no=filter_no)
+                        img, img_crop, attribute_strs = xywh2xyxy(x, w, h, img, cats=cats, crop=True, attributes=attribute, filter_no=filter_no)
                         cat = cats[int(x[0])]
 
                         save_path = os.path.join(crop_dir, cat, 'all',
@@ -458,9 +341,9 @@ def yolo_mdet_vis(img_folder, label_folder, output_folder, crop_dir=None, attrib
                             cv2.imwrite(save_path, img_crop)
                 else:
                     if crop_dir is None:
-                        img, _, _ = xywh2poly(x, w, h, img, attributes=attribute, filter_no=filter_no)
+                        img, _, _ = xywh2poly(x, w, h, img, cats=cats, attributes=attribute, filter_no=filter_no)
                     else:
-                        img, img_crop, attribute_strs = xywh2poly(x, w, h, img, crop=True, attributes=attribute, filter_no=filter_no)
+                        img, img_crop, attribute_strs = xywh2poly(x, w, h, img, cats=cats, crop=True, attributes=attribute, filter_no=filter_no)
                         cat = cats[int(x[0])]
                         save_path = os.path.join(crop_dir, cat, os.path.basename(image_path).replace('.jpg', '_%d.jpg'%idx).replace('.png', '_%d.jpg'%idx))
                         if img_crop.shape[0]>0 and img_crop.shape[1]>0:
@@ -469,9 +352,6 @@ def yolo_mdet_vis(img_folder, label_folder, output_folder, crop_dir=None, attrib
                             print(img_crop.shape, save_path)
             save_path = image_path.replace(img_folder, output_folder)
             cv2.imwrite(save_path, img)
-
-
-
 
 
 if __name__ == '__main__':
@@ -488,15 +368,20 @@ if __name__ == '__main__':
     # root_dir = r'E:\data\tp\multi_modal_airplane_train\demo'
     # root_dir = r'E:\data\0417_signboard\data0806\dataset\yolo_rgb_detection5_10'
     # root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10'
-    root_dir = r'E:\data\tp\sar_det'
+    # root_dir = r'E:\data\tp\sar_det'
+    # root_dir = r'E:\data\0111_testdata\data_new\yolo_src'
+    root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c'
     img_folder = os.path.join(root_dir, 'images')
     label_folder = os.path.join(root_dir, 'labels')
     output_folder = os.path.join(root_dir, 'images_vis')
     crop_folder = os.path.join(root_dir, 'images_crop')
     attribute_file = os.path.join(root_dir, 'attribute.yaml')
+    class_file = os.path.join(root_dir, 'class.txt')
 
+    shutil.rmtree(output_folder, ignore_errors=True)
+    shutil.rmtree(crop_folder, ignore_errors=True)
 
-    yolo_data_vis(img_folder, label_folder, output_folder, crop_dir=crop_folder, seg=False)
-    # yolo_data_vis(img_folder, label_folder, output_folder, crop_dir=crop_folder, seg=True)
-    # yolo_mdet_vis(img_folder, label_folder, output_folder, crop_dir=crop_folder, seg=False, attribute_file=attribute_file, filter_no=True)
-    # yolo_mdet_vis(img_folder, label_folder, output_folder, crop_dir=crop_folder, seg=True, attribute_file=attribute_file, filter_no=True)
+    # yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=False)
+    # yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=True)
+    yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=False, attribute_file=attribute_file, filter_no=True)
+    # yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=True, attribute_file=attribute_file, filter_no=True)
