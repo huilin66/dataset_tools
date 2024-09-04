@@ -71,13 +71,13 @@ while True:
               (current_time, register_value1, register_value2, register_value3, register_value4))
 
         # 写入日志文件
-        log_file = open('log1_Noise.txt', 'a')
+        log_file = open('../dataset_process/log1_Noise.txt', 'a')
         log_file.write('%s %s\n' % (current_time, str(register_value1)))
-        log_file = open('log2_HCHO.txt', 'a')
+        log_file = open('../dataset_process/log2_HCHO.txt', 'a')
         log_file.write('%s %s\n' % (current_time, str(register_value2)))
-        log_file = open('log3_TVOC.txt', 'a')
+        log_file = open('../dataset_process/log3_TVOC.txt', 'a')
         log_file.write('%s %s\n' % (current_time, str(register_value3)))
-        log_file = open('log4_NH3.txt', 'a')
+        log_file = open('../dataset_process/log4_NH3.txt', 'a')
         log_file.write('%s %s\n' % (current_time, str(register_value4)))
 
         # 等待1秒
