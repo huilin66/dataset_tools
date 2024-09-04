@@ -47,9 +47,28 @@ if __name__ == '__main__':
     #         filter_background=True,
     #         norm=True
     #         )
-    get_com(r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10\labels',
-            r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10\attribute.yaml',
-            r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10\co_occurrence_matrix3.csv',
+    # get_com(r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10\labels',
+    #         r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10\attribute.yaml',
+    #         r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10\co_occurrence_matrix3.csv',
+    #         filter_background=True,
+    #         norm=True
+    #         )
+
+    get_com(r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels',
+            r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\attribute.yaml',
+            r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\co_occurrence_matrix1.csv',
+            filter_background=False,
+            norm=False
+            )
+    get_com(r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels',
+            r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\attribute.yaml',
+            r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\co_occurrence_matrix2.csv',
+            filter_background=True,
+            norm=False
+            )
+    get_com(r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels',
+            r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\attribute.yaml',
+            r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\co_occurrence_matrix3.csv',
             filter_background=True,
             norm=True
             )

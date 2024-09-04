@@ -27,14 +27,25 @@ def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None):
         print('csv save to', csv_path)
 
 
-        image_count = df_attribute['image'].nunique()
-        count = (df_attribute['attribute sum'] == 0).sum()
+
         print('+'*100)
         no_defect_boxes = df_attribute[df_attribute['attribute sum'] == 0].shape[0]
         defect_boxes = df_attribute[df_attribute['attribute sum'] > 0].shape[0]
         print(f"总box数: {len(df_attribute)}")
         print(f"没有缺陷的box数: {no_defect_boxes}")
         print(f"有缺陷的box数: {defect_boxes}")
+
+        png_defect_num_path = os.path.join(result_dir, 'defects_num.png')
+        plt.figure(figsize=(12, 8))
+        defect_num = df_attribute['attribute sum'].value_counts().sort_index()
+        ax = defect_num.plot(kind='bar', title='defects number per box')
+        for p in ax.patches:
+            ax.annotate(f'{p.get_height()}', (p.get_x() + p.get_width() / 2., p.get_height()),
+                        ha='center', va='center', xytext=(0, 10), textcoords='offset points')
+        plt.xticks(rotation=0)
+        plt.savefig(png_defect_num_path)
+        plt.close()
+
 
         unique_image_count = df_attribute['image'].nunique()
         defect_images = df_attribute.groupby('image')['attribute sum'].sum()
@@ -50,7 +61,7 @@ def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None):
         category_defects = category_defects.T
 
         plt.figure(figsize=(12, 8))
-        category_defects.drop(index=['attribute sum', 'with attribute']).plot(kind='bar')
+        category_defects.drop(index=['attribute sum', 'with attribute']).plot(kind='bar', title='defects distribution')
         plt.xticks(rotation=15)
         plt.savefig(png_att_path)
         plt.close()
@@ -162,17 +173,6 @@ def get_df_yolo(gt_dir, classes, attribute_path=None, ref_txt=None, mdet=False, 
             df_attribute['with attribute'] = df_attribute['attribute sum'].apply(lambda x: 0 if x == 0 else 1)
         else:
             df_attribute = None
-        # if mdet:
-        #     attribute_num = dfs.iat[0, 1]
-        #     cols = list(range(2, 2+attribute_num))
-        #     dfs_attribute = dfs[cols]
-        #     mean_value = dfs_attribute.mean()
-        #     sum_value = dfs_attribute.sum()
-        #     count = (dfs_attribute.sum(axis=1) == 0).sum()
-        #     print(len(gt_list))
-        #     print(len(dfs_attribute), count, len(dfs_attribute)-count)
-        #     print(mean_value)
-        #     print(sum_value)
         return df_box, df_attribute
 
 
@@ -187,9 +187,9 @@ if __name__ == '__main__':
     # )
 
     yolo_sta(
-        gt_dir=r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10\labels",
-        result_dir=r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10\labels_sta",
-        class_path=r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10\class.txt',
-        attribute_path=r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10\attribute.yaml',
+        gt_dir=r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels",
+        result_dir=r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels_sta",
+        class_path=r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\class.txt',
+        attribute_path=r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\attribute.yaml',
         # val_path = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\val.txt',
     )
