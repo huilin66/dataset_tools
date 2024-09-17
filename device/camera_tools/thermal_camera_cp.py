@@ -125,8 +125,8 @@ if __name__ == '__main__':
     pass
     # video_show("rtsp://192.168.1.100:10080/video/b7764dd875ec4a1aa80a88ed0e1a1969")
     # video_show("rtsp://192.168.1.139:8000/video")
-    video_show("rtsp://192.168.1.100/video/pri")
-    # video_show("rtsp://admin:rxcj12345@192.168.1.139/video/pri")
+    # video_show("rtsp://192.168.1.100/video/pri")
+    video_show("rtsp://admin:rxcj12345@192.168.1.139/video/pri")
 
 
     # 视频流 URL

@@ -109,10 +109,12 @@ def xywh2xyxy(x, w1, h1, img, cats, crop=True, attributes=None, filter_no=False,
 
         br_poss = []
         for idx, (k, v) in enumerate(attributes.items()):
-            text = f'{k}-{v}'
             if filter_no:
+                text = f'{k}'
                 if not v:
                     continue
+            else:
+                text = f'{k}-{v}'
             count += 1
             color = (255, 0, 0) if v is not False else (0, 0, 0)
             cv2.putText(img, text, (int(top_left_x), int(top_left_y) + 12 + 10 * count), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
@@ -133,10 +135,12 @@ def xywh2xyxy(x, w1, h1, img, cats, crop=True, attributes=None, filter_no=False,
 
             br_poss = []
             for idx, (k, v) in enumerate(attributes.items()):
-                text = f'{k}-{v}'
                 if filter_no:
+                    text = f'{k}'
                     if not v:
                         continue
+                else:
+                    text = f'{k}-{v}'
                 count2 += 1
                 color = (255, 0, 0) if v is not False else (0, 0, 0)
                 # text_size = cv2.putText(img, text, (int(top_left_x), int(top_left_y) + 12+10*count), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)[0]
@@ -370,7 +374,7 @@ if __name__ == '__main__':
     # root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10'
     # root_dir = r'E:\data\tp\sar_det'
     # root_dir = r'E:\data\0111_testdata\data_new\yolo_src'
-    root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c'
+    root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c_check'
     img_folder = os.path.join(root_dir, 'images')
     label_folder = os.path.join(root_dir, 'labels')
     output_folder = os.path.join(root_dir, 'images_vis')
