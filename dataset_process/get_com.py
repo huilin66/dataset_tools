@@ -37,7 +37,20 @@ def get_com(gt_dir, attribute_file, save_path, filter_background=False, norm=Fal
     df.to_csv(save_path)
     print(co_occurrence_probability_matrix)
 
+def cal_com(com_src_path, com_dst_path):
+    df_com = pd.read_csv(com_src_path, header=0, index_col=0)
+    array_com = df_com.to_numpy()
+    array_com_t = array_com.T
+    dst_com = (array_com + array_com_t) * 0.5
+    df_dst_com = pd.DataFrame(dst_com, index=df_com.index, columns=df_com.columns)
+    df_dst_com.to_csv(com_dst_path)
+    print('save to', com_dst_path)
 
+def get_com_t(com_src_path, com_dst_path):
+    df_com = pd.read_csv(com_src_path, header=0, index_col=0)
+    df_com_t = df_com.T
+    df_com_t.to_csv(com_dst_path)
+    print('save to', com_dst_path)
 
 if __name__ == '__main__':
     pass
@@ -54,21 +67,25 @@ if __name__ == '__main__':
     #         norm=True
     #         )
 
-    get_com(r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels',
-            r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\attribute.yaml',
-            r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\co_occurrence_matrix1.csv',
-            filter_background=False,
-            norm=False
-            )
-    get_com(r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels',
-            r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\attribute.yaml',
-            r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\co_occurrence_matrix2.csv',
-            filter_background=True,
-            norm=False
-            )
-    get_com(r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels',
-            r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\attribute.yaml',
-            r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\co_occurrence_matrix3.csv',
-            filter_background=True,
-            norm=True
-            )
+    # get_com(r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels',
+    #         r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\attribute.yaml',
+    #         r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\co_occurrence_matrix1.csv',
+    #         filter_background=False,
+    #         norm=False
+    #         )
+    # get_com(r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels',
+    #         r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\attribute.yaml',
+    #         r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\co_occurrence_matrix2.csv',
+    #         filter_background=True,
+    #         norm=False
+    #         )
+    # get_com(r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels',
+    #         r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\attribute.yaml',
+    #         r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\co_occurrence_matrix3.csv',
+    #         filter_background=True,
+    #         norm=True
+    #         )
+    get_com_t(r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\co_occurrence_matrix3.csv',
+              r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\co_occurrence_matrix4.csv',)
+    cal_com(r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\co_occurrence_matrix3.csv',
+            r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\co_occurrence_matrix5.csv',)

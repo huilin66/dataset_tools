@@ -118,6 +118,8 @@ if __name__ == '__main__':
     pass
     cat_compare(
         pre_dir_list = [
+            r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\images',
+            r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\images_vis',
             r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\predict\yolo8',
             r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\predict\yolo9',
             r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\predict\yolo10',
