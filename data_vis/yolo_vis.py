@@ -8,6 +8,7 @@ from tqdm import tqdm
 import yaml
 import pandas as pd
 
+red_color_bgr = (0, 0, 255)
 colormap = [
     (255, 42, 4),
     (235, 219, 11),
@@ -75,7 +76,7 @@ def get_attribute(attribute_dict, gt_attribute):
 # endregion
 
 
-def xywh2xyxy(x, w1, h1, img, cats, crop=True, attributes=None, filter_no=False, alpha=0.5, tf=1, sf=2/3):
+def xywh2xyxy(x, w1, h1, img, img_vis, cats, crop=True, attributes=None, filter_no=False, alpha=0.5, tf=1, sf=2/3, crop_keep_shape=False, det_crop=False):
     label, x, y, w, h = x
 
     x_t = x * w1
@@ -88,19 +89,41 @@ def xywh2xyxy(x, w1, h1, img, cats, crop=True, attributes=None, filter_no=False,
     bottom_right_y = y_t + h_t / 2
 
     if crop:
-        img_crop = img[int(top_left_y):int(bottom_right_y), int(top_left_x):int(bottom_right_x)].copy()
+        if det_crop:
+            img_crop = img.copy()
+            cv2.rectangle(img_crop, (int(top_left_x), int(top_left_y)), (int(bottom_right_x), int(bottom_right_y)),
+                          red_color_bgr, 2)
+
+            text_size = cv2.getTextSize(cats[int(label)], cv2.FONT_HERSHEY_SIMPLEX, sf - 0.1, tf)[0]
+            cv2.rectangle(img_crop,
+                          (int(top_left_x), int(top_left_y) + 10),
+                          (int(top_left_x) + text_size[0] - 15, int(top_left_y) + 7 - text_size[1] + 3),
+                          color=red_color_bgr, thickness=-1)
+            cv2.putText(img_crop, cats[int(label)], (int(top_left_x), int(top_left_y) + 7), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5, (0, 0, 0), 1)
+
+        else:
+            if crop_keep_shape:
+                # 创建一个与img相同大小的全黑图像
+                img_crop = np.zeros_like(img)
+
+                # 将指定区域的像素值复制到黑色图像的对应位置
+                img_crop[int(top_left_y):int(bottom_right_y), int(top_left_x):int(bottom_right_x)] = img[int(top_left_y):int(bottom_right_y),int(top_left_x):int(bottom_right_x)].copy()
+
+            else:
+                img_crop = img[int(top_left_y):int(bottom_right_y), int(top_left_x):int(bottom_right_x)].copy()
     else:
         img_crop = None
-    cv2.rectangle(img, (int(top_left_x), int(top_left_y)), (int(bottom_right_x), int(bottom_right_y)), colormap[int(label)], 2)
+    cv2.rectangle(img_vis, (int(top_left_x), int(top_left_y)), (int(bottom_right_x), int(bottom_right_y)), colormap[int(label)], 2)
 
     text_size = cv2.getTextSize(cats[int(label)], cv2.FONT_HERSHEY_SIMPLEX, sf - 0.1, tf)[0]
 
     # Draw the background rectangle
-    cv2.rectangle(img,
+    cv2.rectangle(img_vis,
                   (int(top_left_x), int(top_left_y)+10),
                   (int(top_left_x)+text_size[0]-15, int(top_left_y)+7-text_size[1]+3),
                   color=colormap[int(label)], thickness=-1)
-    cv2.putText(img, cats[int(label)], (int(top_left_x), int(top_left_y)+7), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+    cv2.putText(img_vis, cats[int(label)], (int(top_left_x), int(top_left_y)+7), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
 
     if attributes is not None:
         count = 0
@@ -117,7 +140,7 @@ def xywh2xyxy(x, w1, h1, img, cats, crop=True, attributes=None, filter_no=False,
                 text = f'{k}-{v}'
             count += 1
             color = (255, 0, 0) if v is not False else (0, 0, 0)
-            cv2.putText(img, text, (int(top_left_x), int(top_left_y) + 12 + 10 * count), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+            cv2.putText(img_vis, text, (int(top_left_x), int(top_left_y) + 12 + 10 * count), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
             (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
             attribute_strs.append(text)
             br_poss.append([int(top_left_x)+text_width-15, int(top_left_y) + 12+10*count])
@@ -128,10 +151,10 @@ def xywh2xyxy(x, w1, h1, img, cats, crop=True, attributes=None, filter_no=False,
             br_pos = [np.max(br_poss, axis=0)[0], br_poss[-1][1]]
             box = tl_pos + br_pos
             p1, p2 = (int(box[0]), int(box[1])), (int(box[2])+15, int(box[3]+2))
-            cv2.rectangle(img, p1, p2, (255, 255, 255))
-            overlay = img.copy()
+            cv2.rectangle(img_vis, p1, p2, (255, 255, 255))
+            overlay = img_vis.copy()
             cv2.rectangle(overlay, p1, p2, (255, 255, 255), -1)
-            cv2.addWeighted(overlay, alpha, img, 1 - alpha, 0, img)
+            cv2.addWeighted(overlay, alpha, img_vis, 1 - alpha, 0, img_vis)
 
             br_poss = []
             for idx, (k, v) in enumerate(attributes.items()):
@@ -144,16 +167,16 @@ def xywh2xyxy(x, w1, h1, img, cats, crop=True, attributes=None, filter_no=False,
                 count2 += 1
                 color = (255, 0, 0) if v is not False else (0, 0, 0)
                 # text_size = cv2.putText(img, text, (int(top_left_x), int(top_left_y) + 12+10*count), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)[0]
-                cv2.putText(img, text, (int(top_left_x), int(top_left_y) + 12 + 10 * count2), cv2.FONT_HERSHEY_SIMPLEX,
+                cv2.putText(img_vis, text, (int(top_left_x), int(top_left_y) + 12 + 10 * count2), cv2.FONT_HERSHEY_SIMPLEX,
                             0.5, color, 1)
                 (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
                 attribute_strs.append(text)
                 br_poss.append([int(top_left_x) + text_width - 15, int(top_left_y) + 12 + 10 * count2])
     else:
         attribute_strs = None
-    return img, img_crop, attribute_strs
+    return img_vis, img_crop, attribute_strs
 
-def xywh2poly(x, w, h, img, cats, crop=True, attributes=None, filter_no=False, alpha=0.5, tf=1, sf=2/3):
+def xywh2poly(x, w, h, img, img_vis, cats, crop=True, attributes=None, filter_no=False, alpha=0.5, tf=1, sf=2/3):
     label, polypos = int(float(x[0])),x[1:]
     polys = []
     for i in range(0, len(polypos), 2):
@@ -174,17 +197,17 @@ def xywh2poly(x, w, h, img, cats, crop=True, attributes=None, filter_no=False, a
         img_crop = None
 
 
-    cv2.polylines(img, [polys], isClosed=True, color=colormap[int(label)], thickness=2)
-    mask = img.copy()
+    cv2.polylines(img_vis, [polys], isClosed=True, color=colormap[int(label)], thickness=2)
+    mask = img_vis.copy()
     cv2.fillPoly(mask, [polys], color=colormap[int(label)])
-    cv2.addWeighted(mask, alpha, img, 1 - alpha, 0, img)
+    cv2.addWeighted(mask, alpha, img_vis, 1 - alpha, 0, img_vis)
 
     text_size = cv2.getTextSize(cats[int(label)], cv2.FONT_HERSHEY_SIMPLEX, sf - 0.1, tf)[0]
-    cv2.rectangle(img,
+    cv2.rectangle(img_vis,
                   (int(top_left_x), int(top_left_y)+10),
                   (int(top_left_x)+text_size[0]-15, int(top_left_y)+7-text_size[1]+3),
                   color=colormap[int(label)], thickness=-1)
-    cv2.putText(img, cats[int(label)], (int(top_left_x), int(top_left_y)+7), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+    cv2.putText(img_vis, cats[int(label)], (int(top_left_x), int(top_left_y)+7), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
 
     print(cats[int(label)], int(top_left_y),int(bottom_right_y), int(top_left_x),int(bottom_right_x), int(bottom_right_y)-int(top_left_y), int(bottom_right_x)-int(top_left_x))
     if attributes is not None:
@@ -200,7 +223,7 @@ def xywh2poly(x, w, h, img, cats, crop=True, attributes=None, filter_no=False, a
                     continue
             count += 1
             color = (255, 0, 0) if v is not False else (0, 0, 0)
-            cv2.putText(img, text, (int(top_left_x), int(top_left_y) + 12 + 10 * count), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+            cv2.putText(img_vis, text, (int(top_left_x), int(top_left_y) + 12 + 10 * count), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
             (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
             attribute_strs.append(text)
             br_poss.append([int(top_left_x)+text_width-15, int(top_left_y) + 12+10*count])
@@ -211,10 +234,10 @@ def xywh2poly(x, w, h, img, cats, crop=True, attributes=None, filter_no=False, a
             br_pos = [np.max(br_poss, axis=0)[0], br_poss[-1][1]]
             box = tl_pos + br_pos
             p1, p2 = (int(box[0]), int(box[1])), (int(box[2])+15, int(box[3]+2))
-            cv2.rectangle(img, p1, p2, (255, 255, 255))
-            overlay = img.copy()
+            cv2.rectangle(img_vis, p1, p2, (255, 255, 255))
+            overlay = img_vis.copy()
             cv2.rectangle(overlay, p1, p2, (255, 255, 255), -1)
-            cv2.addWeighted(overlay, alpha, img, 1 - alpha, 0, img)
+            cv2.addWeighted(overlay, alpha, img_vis, 1 - alpha, 0, img_vis)
 
             br_poss = []
             for idx, (k, v) in enumerate(attributes.items()):
@@ -225,7 +248,7 @@ def xywh2poly(x, w, h, img, cats, crop=True, attributes=None, filter_no=False, a
                 count2 += 1
                 color = (255, 0, 0) if v is not False else (0, 0, 0)
                 # text_size = cv2.putText(img, text, (int(top_left_x), int(top_left_y) + 12+10*count), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)[0]
-                cv2.putText(img, text, (int(top_left_x), int(top_left_y) + 12 + 10 * count2), cv2.FONT_HERSHEY_SIMPLEX,
+                cv2.putText(img_vis, text, (int(top_left_x), int(top_left_y) + 12 + 10 * count2), cv2.FONT_HERSHEY_SIMPLEX,
                             0.5, color, 1)
                 (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
                 attribute_strs.append(text)
@@ -233,7 +256,7 @@ def xywh2poly(x, w, h, img, cats, crop=True, attributes=None, filter_no=False, a
     else:
         attribute_strs = None
 
-    return img, img_crop, attribute_strs
+    return img_vis, img_crop, attribute_strs
 
 def yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=None, seg=False):
     cats = get_cats(class_file)
@@ -288,7 +311,7 @@ def yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=
             save_path = image_path.replace(img_folder, output_folder)
             cv2.imwrite(save_path, img)
 
-def yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=None, attribute_file=None, filter_no=False, seg=False):
+def yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=None, attribute_file=None, filter_no=False, seg=False, crop_keep_shape=False, det_crop=True):
     cats = get_cats(class_file)
     if attribute_file is not None:
         with open(attribute_file, 'r') as file:
@@ -299,7 +322,7 @@ def yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=
     img_list.sort()
     label_list = os.listdir(label_folder)
     label_list.sort()
-
+    assert len(img_list) == len(label_list), print('the number of images and labels do not match')
     # img_list = img_list[:2]
 
     os.makedirs(output_folder, exist_ok=True)
@@ -314,6 +337,7 @@ def yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=
         label_path = os.path.join(label_folder, label_list[i])
         img = cv2.imread(image_path)
         h, w = img.shape[:2]
+        img_vis = img.copy()
         with open(label_path, 'r') as f:
             if seg:
                 lb = [x.split() for x in f.read().strip().splitlines()]
@@ -326,9 +350,9 @@ def yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=
                 x = np.concatenate([x[:1], x[2+attribute_len:]])
                 if not seg:
                     if crop_dir is None:
-                        img, _, _ = xywh2xyxy(x, w, h, img, cats=cats, attributes=attribute, filter_no=filter_no)
+                        img_vis, _, _ = xywh2xyxy(x, w, h, img, img_vis, cats=cats, attributes=attribute, filter_no=filter_no)
                     else:
-                        img, img_crop, attribute_strs = xywh2xyxy(x, w, h, img, cats=cats, crop=True, attributes=attribute, filter_no=filter_no)
+                        img_vis, img_crop, attribute_strs = xywh2xyxy(x, w, h, img, img_vis, cats=cats, crop=True, attributes=attribute, filter_no=filter_no, crop_keep_shape=crop_keep_shape, det_crop=det_crop)
                         cat = cats[int(x[0])]
 
                         save_path = os.path.join(crop_dir, cat, 'all',
@@ -345,9 +369,9 @@ def yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=
                             cv2.imwrite(save_path, img_crop)
                 else:
                     if crop_dir is None:
-                        img, _, _ = xywh2poly(x, w, h, img, cats=cats, attributes=attribute, filter_no=filter_no)
+                        img_vis, _, _ = xywh2poly(x, w, h, img, img_vis, cats=cats, attributes=attribute, filter_no=filter_no)
                     else:
-                        img, img_crop, attribute_strs = xywh2poly(x, w, h, img, cats=cats, crop=True, attributes=attribute, filter_no=filter_no)
+                        img_vis, img_crop, attribute_strs = xywh2poly(x, w, h, img, img_vis, cats=cats, crop=True, attributes=attribute, filter_no=filter_no)
                         cat = cats[int(x[0])]
                         save_path = os.path.join(crop_dir, cat, os.path.basename(image_path).replace('.jpg', '_%d.jpg'%idx).replace('.png', '_%d.jpg'%idx))
                         if img_crop.shape[0]>0 and img_crop.shape[1]>0:
@@ -374,11 +398,13 @@ if __name__ == '__main__':
     # root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10'
     # root_dir = r'E:\data\tp\sar_det'
     # root_dir = r'E:\data\0111_testdata\data_new\yolo_src'
-    root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c_check'
+    root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c'
     img_folder = os.path.join(root_dir, 'images')
     label_folder = os.path.join(root_dir, 'labels')
     output_folder = os.path.join(root_dir, 'images_vis')
-    crop_folder = os.path.join(root_dir, 'images_crop')
+    # crop_folder = os.path.join(root_dir, 'images_crop')
+    # crop_folder = os.path.join(root_dir, 'images_crop_keep')
+    crop_folder = os.path.join(root_dir, 'images_crop_det')
     attribute_file = os.path.join(root_dir, 'attribute.yaml')
     class_file = os.path.join(root_dir, 'class.txt')
 
@@ -387,5 +413,5 @@ if __name__ == '__main__':
 
     # yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=False)
     # yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=True)
-    yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=False, attribute_file=attribute_file, filter_no=True)
+    yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=False, attribute_file=attribute_file, filter_no=True, crop_keep_shape=True, det_crop=True)
     # yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=True, attribute_file=attribute_file, filter_no=True)
