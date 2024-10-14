@@ -1,7 +1,9 @@
 import os
+import shutil
+
 import numpy as np
 import pandas as pd
-
+from tqdm import tqdm
 
 # class_dict = {
 #     0 : 'speed limit 20 (prohibitory)',
@@ -93,6 +95,20 @@ def get_class(class_dict, class_path):
     df_train = pd.DataFrame({'cat_name': list(class_dict.values())})
     df_train.to_csv(class_path, header=None, index=None)
 
+
+def copy_split(img_dir, gt_dir, dst_img_dir, dst_gt_dir, ref_path):
+    os.makedirs(dst_img_dir, exist_ok=True)
+    os.makedirs(dst_gt_dir, exist_ok=True)
+    df = pd.read_csv(ref_path, header=None, index_col=None, names=['file_path'])
+    for i, row in tqdm(df.iterrows(), total=len(df)):
+        img_path = row['file_path']
+        gt_path = img_path.replace(img_dir, gt_dir).replace('.jpg', '.txt').replace('.JPG', '.txt')
+        dst_img_path = img_path.replace(img_dir, dst_img_dir)
+        dst_gt_path = gt_path.replace(gt_dir, dst_gt_dir)
+
+        shutil.copyfile(img_path, dst_img_path)
+        shutil.copyfile(gt_path, dst_gt_path)
+
 if __name__ == '__main__':
     pass
     # random_select(r'E:\data\0318_fireservice\data0318\images',
@@ -135,5 +151,13 @@ if __name__ == '__main__':
 
     # random_select(r'E:\data\tp\sar_det\images',
     #               r'E:\data\tp\sar_det', train_ratio=0.9)
-    random_select(r'E:\data\0111_testdata\data_new\yolo_src\images',
-                  r'E:\data\0111_testdata\data_new\yolo_src', train_ratio=0.9)
+    # random_select(r'E:\data\0111_testdata\data_new\yolo_src\images',
+    #               r'E:\data\0111_testdata\data_new\yolo_src', train_ratio=0.9)
+
+    copy_split(
+        r'E:\data\1123_thermal\ExpData\PolyUOutdoor_UAV\images',
+        r'E:\data\1123_thermal\ExpData\PolyUOutdoor_UAV\labels',
+        r'E:\data\1123_thermal\ExpData\PolyUOutdoor_UAV\images_val',
+        r'E:\data\1123_thermal\ExpData\PolyUOutdoor_UAV\labels_val',
+        r'E:\data\1123_thermal\ExpData\PolyUOutdoor_UAV\val.txt',
+    )

@@ -49,6 +49,13 @@ id2action_map = {
     5: 'owners should investigate the source of seepage by liaising with owners of the flat concerned for carrying out repair works as early as possible,',
 }
 
+
+def get_ref_list(csv_path):
+    df = pd.read_csv(csv_path, header=None, index_col=None, names=['path'])
+    file_path_list = df['path'].to_list()
+    file_name_list = [Path(os.path.basename(file_path)).stem for file_path in file_path_list]
+    return file_name_list
+
 def cp_imgs(img_dir, dst_img_dir):
     os.makedirs(dst_img_dir, exist_ok=True)
     for category in categories:
@@ -231,11 +238,6 @@ def get_img_info_mdet(gt_path, img_dir, description=1):
 
 
 def mdet2llava(img_dir, gt_dir, dst_json, train_ratio=1.0, ref_path=None, description=1):
-    def get_ref_list(csv_path):
-        df = pd.read_csv(csv_path, header=None, index_col=None, names=['path'])
-        file_path_list = df['path'].to_list()
-        file_name_list = [Path(os.path.basename(file_path)).stem for file_path in file_path_list]
-        return file_name_list
 
     os.makedirs(img_dir, exist_ok=True)
     js_data = []
@@ -424,6 +426,10 @@ def mdet_val(predict_dir, label_dir):
         df_label = pd.read_csv(predict_path, header=None, index_col=None, sep=' ',)
         df_predict = pd.read_csv(predict_path, header=None, index_col=None, sep=' ',)
 
+def split_trainval(img_dir, img_dir_train, img_dir_val, ref_path):
+    train_list = get_ref_list(ref_path)
+
+    for img_name in tqdm(train_list):
 
 if __name__ == '__main__':
     pass
@@ -458,8 +464,11 @@ if __name__ == '__main__':
     # cp_imgs(src_img_dir, dst_img_dir)
 
     # src_img_dir = os.path.join(root_dir, 'images_crop_keep')
-    # dst_img_dir = os.path.join(dst_dir, 'images_keep')
+    dst_img_dir = os.path.join(dst_dir, 'images_keep')
+    dst_img_dir_train = os.path.join(dst_dir, 'images_keep_train')
+    dst_img_dir_val = os.path.join(dst_dir, 'images_keep_val')
     # cp_imgs(src_img_dir, dst_img_dir)
+    split_trainval(dst_img_dir, dst_img_dir_train, dst_img_dir_val, ref_path=train_csv_path)
 
     # src_img_dir = os.path.join(root_dir, 'images_crop_det')
     # dst_img_dir = os.path.join(dst_dir, 'images_det')
@@ -467,33 +476,33 @@ if __name__ == '__main__':
 
 
 
-    dst_img_dir = os.path.join(root_dir, 'images')
-    dst_json = os.path.join(dst_dir, 'signboard_caption1.json')
-    mdet2llava(dst_img_dir, gt_dir, dst_json, ref_path=train_csv_path, description=1)
-
-    dst_img_dir = os.path.join(root_dir, 'images_keep')
-    dst_json = os.path.join(dst_dir, 'signboard_caption1_keep.json')
-    mdet2llava(dst_img_dir, gt_dir, dst_json, ref_path=train_csv_path, description=1)
-
-    dst_img_dir = os.path.join(root_dir, 'images')
-    dst_json = os.path.join(dst_dir, 'signboard_caption2.json')
-    mdet2llava(dst_img_dir, gt_dir, dst_json, ref_path=train_csv_path, description=2)
-
-    dst_img_dir = os.path.join(root_dir, 'images_keep')
-    dst_json = os.path.join(dst_dir, 'signboard_caption2_keep.json')
-    mdet2llava(dst_img_dir, gt_dir, dst_json, ref_path=train_csv_path, description=2)
-
-    dst_img_dir = os.path.join(root_dir, 'images')
-    dst_json = os.path.join(dst_dir, 'signboard_caption3.json')
-    mdet2llava(dst_img_dir, gt_dir, dst_json, ref_path=train_csv_path, description=3)
-
-    dst_img_dir = os.path.join(root_dir, 'images_keep')
-    dst_json = os.path.join(dst_dir, 'signboard_caption3_keep.json')
-    mdet2llava(dst_img_dir, gt_dir, dst_json, ref_path=train_csv_path, description=3)
-
-    dst_img_dir = os.path.join(root_dir, 'images_det')
-    dst_json = os.path.join(dst_dir, 'signboard_caption3_det.json')
-    mdet2llava(dst_img_dir, gt_dir, dst_json, ref_path=train_csv_path, description=3.5)
+    # dst_img_dir = os.path.join(root_dir, 'images')
+    # dst_json = os.path.join(dst_dir, 'signboard_caption1.json')
+    # mdet2llava(dst_img_dir, gt_dir, dst_json, ref_path=train_csv_path, description=1)
+    #
+    # dst_img_dir = os.path.join(root_dir, 'images_keep')
+    # dst_json = os.path.join(dst_dir, 'signboard_caption1_keep.json')
+    # mdet2llava(dst_img_dir, gt_dir, dst_json, ref_path=train_csv_path, description=1)
+    #
+    # dst_img_dir = os.path.join(root_dir, 'images')
+    # dst_json = os.path.join(dst_dir, 'signboard_caption2.json')
+    # mdet2llava(dst_img_dir, gt_dir, dst_json, ref_path=train_csv_path, description=2)
+    #
+    # dst_img_dir = os.path.join(root_dir, 'images_keep')
+    # dst_json = os.path.join(dst_dir, 'signboard_caption2_keep.json')
+    # mdet2llava(dst_img_dir, gt_dir, dst_json, ref_path=train_csv_path, description=2)
+    #
+    # dst_img_dir = os.path.join(root_dir, 'images')
+    # dst_json = os.path.join(dst_dir, 'signboard_caption3.json')
+    # mdet2llava(dst_img_dir, gt_dir, dst_json, ref_path=train_csv_path, description=3)
+    #
+    # dst_img_dir = os.path.join(root_dir, 'images_keep')
+    # dst_json = os.path.join(dst_dir, 'signboard_caption3_keep.json')
+    # mdet2llava(dst_img_dir, gt_dir, dst_json, ref_path=train_csv_path, description=3)
+    #
+    # dst_img_dir = os.path.join(root_dir, 'images_det')
+    # dst_json = os.path.join(dst_dir, 'signboard_caption3_det.json')
+    # mdet2llava(dst_img_dir, gt_dir, dst_json, ref_path=train_csv_path, description=3.5)
 
 
     # root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c'
@@ -508,3 +517,4 @@ if __name__ == '__main__':
     # mdetresult2llava(img_dir, vis_img_dir, crop_img_dir, predict_dir, class_file, attribute_file, crop_keep_shape=False)
     # crop_img_dir = os.path.join(root_dir, 'images_predict_crop_keep')
     # mdetresult2llava(img_dir, vis_img_dir, crop_img_dir, predict_dir, class_file, attribute_file, crop_keep_shape=True)
+
