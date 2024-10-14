@@ -52,6 +52,19 @@ def get_com_t(com_src_path, com_dst_path):
     df_com_t.to_csv(com_dst_path)
     print('save to', com_dst_path)
 
+def get_cross_norm(com_src_path, com_dst_path):
+    df_com = pd.read_csv(com_src_path, header=0, index_col=0)
+    diagonal_values = np.diag(df_com)
+    sqrt_diagonal = np.sqrt(diagonal_values)
+
+
+    df_normalized = df_com.copy()
+    df_normalized = df_normalized.div(sqrt_diagonal, axis=0)
+    df_normalized = df_normalized.div(sqrt_diagonal, axis=1)
+    df_normalized.to_csv(com_dst_path)
+    print('save to', com_dst_path)
+
+
 if __name__ == '__main__':
     pass
     # get_com(r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_10\labels',
@@ -85,7 +98,10 @@ if __name__ == '__main__':
     #         filter_background=True,
     #         norm=True
     #         )
-    get_com_t(r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\co_occurrence_matrix3.csv',
-              r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\co_occurrence_matrix4.csv',)
-    cal_com(r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\co_occurrence_matrix3.csv',
-            r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\co_occurrence_matrix5.csv',)
+    # get_com_t(r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\co_occurrence_matrix3.csv',
+    #           r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\co_occurrence_matrix4.csv',)
+    # cal_com(r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\co_occurrence_matrix3.csv',
+    #         r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\co_occurrence_matrix5.csv',)
+
+    get_cross_norm(r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\co_occurrence_matrix1.csv',
+                   r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\co_occurrence_matrix6.csv',)
