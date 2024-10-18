@@ -151,9 +151,18 @@ def phase_correlation(imageA, imageB):
 
 # shift = phase_correlation(imageA, imageB)
 # print(f"Detected shift (x, y): {shift}")
-import timm
-# print(timm.list_models())
-# model = timm.create_model('convnext_tiny', pretrained=True)
-# print(model)
-for m in timm.list_models():
-    print(m)
+# import timm
+# # # print(timm.list_models())
+# # model = timm.create_model('convnext_tiny', pretrained=True)
+# # print(model)
+# for m in timm.list_models():
+#     print(m)
+#
+# model = timm.create_model('swin_large_patch4_window12_384', pretrained=True)
+
+from timm.models import create_model
+import utils
+
+model = create_model('repvit_m0_9')
+utils.replace_batchnorm(model)
+

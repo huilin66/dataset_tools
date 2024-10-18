@@ -102,7 +102,7 @@ def copy_split(img_dir, gt_dir, dst_img_dir, dst_gt_dir, ref_path):
     df = pd.read_csv(ref_path, header=None, index_col=None, names=['file_path'])
     for i, row in tqdm(df.iterrows(), total=len(df)):
         img_path = row['file_path']
-        gt_path = img_path.replace(img_dir, gt_dir).replace('.jpg', '.txt').replace('.JPG', '.txt')
+        gt_path = img_path.replace(img_dir, gt_dir).replace('.jpg', '.txt').replace('.JPG', '.txt').replace('.png', '.txt')
         dst_img_path = img_path.replace(img_dir, dst_img_dir)
         dst_gt_path = gt_path.replace(gt_dir, dst_gt_dir)
 
@@ -154,10 +154,18 @@ if __name__ == '__main__':
     # random_select(r'E:\data\0111_testdata\data_new\yolo_src\images',
     #               r'E:\data\0111_testdata\data_new\yolo_src', train_ratio=0.9)
 
+    # copy_split(
+    #     r'E:\data\1123_thermal\ExpData\PolyUOutdoor_UAV\images',
+    #     r'E:\data\1123_thermal\ExpData\PolyUOutdoor_UAV\labels',
+    #     r'E:\data\1123_thermal\ExpData\PolyUOutdoor_UAV\images_val',
+    #     r'E:\data\1123_thermal\ExpData\PolyUOutdoor_UAV\labels_val',
+    #     r'E:\data\1123_thermal\ExpData\PolyUOutdoor_UAV\val.txt',
+    # )
+
     copy_split(
-        r'E:\data\1123_thermal\ExpData\PolyUOutdoor_UAV\images',
-        r'E:\data\1123_thermal\ExpData\PolyUOutdoor_UAV\labels',
-        r'E:\data\1123_thermal\ExpData\PolyUOutdoor_UAV\images_val',
-        r'E:\data\1123_thermal\ExpData\PolyUOutdoor_UAV\labels_val',
-        r'E:\data\1123_thermal\ExpData\PolyUOutdoor_UAV\val.txt',
+        r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\images',
+        r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels',
+        r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\images_val',
+        r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels_val',
+        r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\val.txt',
     )

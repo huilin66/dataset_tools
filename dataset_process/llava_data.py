@@ -10,6 +10,7 @@ from pathlib import Path
 categories = ['background', 'projecting_signboard', 'wall_signboard']
 attributes = ['surface_missing', 'surface_incomplete', 'surface_corroded', 'frame_corroded', 'surface_peeling',
               'surface_fade', 'surface_deformed', 'frame_deformed', 'disconnected', 'added_billboard']
+attributes2 = [attribute.replace('_', ' ') for attribute in attributes]
 attributes_name = ['missing surface', 'incomplete surface', 'corroded surface', 'corroded frame', 'peeling surface',
                    'faded surface', 'deformed surface', 'deformed frame', 'disconnected', 'unauthorized']
 id2cat_map = {
@@ -284,10 +285,10 @@ def prediction_num_check(img_dir, predict_dir):
                 pass  # 不写入任何内容
 
 
-def mdetresult2llava(img_dir, vis_img_dir, crop_img_dir, predict_dir, class_file, attribute_file, crop_keep_shape=False):
+def mdetresult2llava(img_dir, vis_img_dir, crop_img_dir, predict_dir, class_file, attribute_file, crop_keep_shape=False, det_crop=False):
     prediction_num_check(img_dir, predict_dir)
     yolo_mdet_vis(img_dir, predict_dir, vis_img_dir, class_file, crop_dir=crop_img_dir, seg=False,
-                  attribute_file=attribute_file, filter_no=True, crop_keep_shape=crop_keep_shape)
+                  attribute_file=attribute_file, filter_no=True, crop_keep_shape=crop_keep_shape, det_crop=det_crop)
 
     final_img_dir = os.path.join(crop_img_dir, 'final')
     os.makedirs(final_img_dir, exist_ok=True)
@@ -301,20 +302,29 @@ def mdetresult2llava(img_dir, vis_img_dir, crop_img_dir, predict_dir, class_file
             output_path = os.path.join(final_img_dir, img_name)
             shutil.copyfile(input_path, output_path)
 
-def llavaresult2mdet(input_dir, output_dir, ref_predict_dir):
-    pass
-    predict_list = os.listdir(ref_predict_dir)
-    for predict_name in tqdm(predict_list):
-        predict_path = os.path.join(ref_predict_dir, predict_name)
-        output_path = os.path.join(output_dir, predict_name)
-        df = pd.read_csv(predict_path, header=None, index_col=None, sep=' ',
-                         names=['cat_id', len(attributes)] + attributes + ['x_center', 'y_center', 'w_box', 'h_box'])
-        for idx in range(len(df)):
-            input_path = os.path.join(input_dir, predict_name.replace('.txt', '_%d.txt' % idx))
-            df_input = pd.read_csv(input_path, header=None, index_col=0)
-            for category in categories:
-                df.loc[idx, category] = df_input[category]
-        df.to_csv(output_path, header=None, index=None, sep=' ')
+def llavaresult2mdet(input_dir, output_dir, ref_label_dir, attributes):
+    os.makedirs(output_dir, exist_ok=True)
+    label_list = os.listdir(ref_label_dir)
+    for label_name in tqdm(label_list):
+        label_path = os.path.join(ref_label_dir, label_name)
+        output_path = os.path.join(output_dir, label_name)
+        if os.stat(label_path).st_size == 0:
+            pass
+        else:
+            df = pd.read_csv(label_path, header=None, index_col=None, sep=' ',
+                             names=['cat_id', len(attributes)] + attributes + ['x_center', 'y_center', 'w_box', 'h_box'])
+            for idx in range(len(df)):
+                input_path = os.path.join(input_dir, label_name.replace('.txt', '_%d.txt' % idx))
+                if os.stat(input_path).st_size == 0:
+                    for attribute in attributes:
+                        df.loc[idx, attribute] = 0
+                else:
+                    # df_input = pd.read_csv(input_path, header=0, index_col=0)
+                    df_input = pd.read_csv(input_path, index_col='property')
+                    df_input = df_input['value']
+                    for attribute in attributes:
+                        df.loc[idx, attribute] = int(bool(df_input[attribute]))
+            df.to_csv(output_path, header=None, index=None, sep=' ')
 
 
 def mdet_val(predict_dir, label_dir):
@@ -427,9 +437,19 @@ def mdet_val(predict_dir, label_dir):
         df_predict = pd.read_csv(predict_path, header=None, index_col=None, sep=' ',)
 
 def split_trainval(img_dir, img_dir_train, img_dir_val, ref_path):
-    train_list = get_ref_list(ref_path)
+    os.makedirs(img_dir_train, exist_ok=True)
+    os.makedirs(img_dir_val, exist_ok=True)
 
-    for img_name in tqdm(train_list):
+    train_list = get_ref_list(ref_path)
+    file_list = os.listdir(img_dir)
+    for img_name in tqdm(file_list):
+        img_prefix = img_name.split('_')[0]
+        img_path = os.path.join(img_dir, img_name)
+        if img_prefix in train_list:
+            dst_path = os.path.join(img_dir_train, img_name)
+        else:
+            dst_path = os.path.join(img_dir_val, img_name)
+        shutil.copy(img_path, dst_path)
 
 if __name__ == '__main__':
     pass
@@ -454,26 +474,32 @@ if __name__ == '__main__':
 
 
 
-    root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c'
-    dst_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c_llava'
-    gt_dir = os.path.join(root_dir, 'labels')
-    train_csv_path = os.path.join(root_dir, 'train.txt')
+    # root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c'
+    # dst_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c_llava_infer'
+    # # gt_dir = os.path.join(root_dir, 'labels')
+    # infer_dir = os.path.join(root_dir, 'mayolo_infer')
+    # train_csv_path = os.path.join(root_dir, 'train.txt')
 
     # src_img_dir = os.path.join(root_dir, 'images_crop')
     # dst_img_dir = os.path.join(dst_dir, 'images')
+    # dst_img_dir_train = os.path.join(dst_dir, 'images_train')
+    # dst_img_dir_val = os.path.join(dst_dir, 'images_val')
     # cp_imgs(src_img_dir, dst_img_dir)
-
+    # split_trainval(dst_img_dir, dst_img_dir_train, dst_img_dir_val, ref_path=train_csv_path)
+    #
     # src_img_dir = os.path.join(root_dir, 'images_crop_keep')
-    dst_img_dir = os.path.join(dst_dir, 'images_keep')
-    dst_img_dir_train = os.path.join(dst_dir, 'images_keep_train')
-    dst_img_dir_val = os.path.join(dst_dir, 'images_keep_val')
+    # dst_img_dir = os.path.join(dst_dir, 'images_keep')
+    # dst_img_dir_train = os.path.join(dst_dir, 'images_keep_train')
+    # dst_img_dir_val = os.path.join(dst_dir, 'images_keep_val')
     # cp_imgs(src_img_dir, dst_img_dir)
-    split_trainval(dst_img_dir, dst_img_dir_train, dst_img_dir_val, ref_path=train_csv_path)
-
+    # split_trainval(dst_img_dir, dst_img_dir_train, dst_img_dir_val, ref_path=train_csv_path)
+    #
     # src_img_dir = os.path.join(root_dir, 'images_crop_det')
     # dst_img_dir = os.path.join(dst_dir, 'images_det')
+    # dst_img_dir_train = os.path.join(dst_dir, 'images_det_train')
+    # dst_img_dir_val = os.path.join(dst_dir, 'images_det_val')
     # cp_imgs(src_img_dir, dst_img_dir)
-
+    # split_trainval(dst_img_dir, dst_img_dir_train, dst_img_dir_val, ref_path=train_csv_path)
 
 
     # dst_img_dir = os.path.join(root_dir, 'images')
@@ -508,13 +534,36 @@ if __name__ == '__main__':
     # root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c'
     # attribute_file = os.path.join(root_dir, 'attribute.yaml')
     # class_file = os.path.join(root_dir, 'class.txt')
-    # img_dir = os.path.join(root_dir, 'images')
-    # vis_img_dir = os.path.join(root_dir, 'images_predict_vis')
-    # crop_img_dir = os.path.join(root_dir, 'images_predict_crop')
+    # img_dir = os.path.join(root_dir, 'images_val')
+    # vis_img_dir = os.path.join(root_dir, 'images_infer_vis')
     # attribute_file = os.path.join(root_dir, 'attribute.yaml')
     # class_file = os.path.join(root_dir, 'class.txt')
-    # predict_dir = r'E:\repository\ultralytics\runs\mdetect\predict74\labels'
-    # mdetresult2llava(img_dir, vis_img_dir, crop_img_dir, predict_dir, class_file, attribute_file, crop_keep_shape=False)
-    # crop_img_dir = os.path.join(root_dir, 'images_predict_crop_keep')
-    # mdetresult2llava(img_dir, vis_img_dir, crop_img_dir, predict_dir, class_file, attribute_file, crop_keep_shape=True)
+    # predict_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\mayolo_infer'
 
+    # crop_img_dir = os.path.join(root_dir, 'images_infer_crop')
+    # dst_img_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c_llava\images_infer_crop'
+    # mdetresult2llava(img_dir, vis_img_dir, crop_img_dir, predict_dir, class_file, attribute_file)
+    # cp_imgs(crop_img_dir, dst_img_dir)
+    # crop_img_dir = os.path.join(root_dir, 'images_infer_keep')
+    # dst_img_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c_llava\images_infer_keep'
+    # mdetresult2llava(img_dir, vis_img_dir, crop_img_dir, predict_dir, class_file, attribute_file, crop_keep_shape=True)
+    # cp_imgs(crop_img_dir, dst_img_dir)
+    # crop_img_dir = os.path.join(root_dir, 'images_infer_det')
+    # dst_img_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c_llava\images_infer_det'
+    # mdetresult2llava(img_dir, vis_img_dir, crop_img_dir, predict_dir, class_file, attribute_file, crop_keep_shape=True, det_crop=True)
+    # cp_imgs(crop_img_dir, dst_img_dir)
+
+    root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c'
+    infer_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c_llava\images_infer_result'
+    mdet_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c_llava\images_infer_result_mdet'
+    predict_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\mayolo_infer'
+    for infer_name in os.listdir(infer_dir):
+        print(infer_name)
+        infer_path = os.path.join(infer_dir, infer_name)
+        result_path = os.path.join(mdet_dir, infer_name)
+        if '1' in infer_name:
+            llavaresult2mdet(infer_path, result_path, predict_dir, attributes)
+        elif '2' in infer_name:
+            llavaresult2mdet(infer_path, result_path, predict_dir, attributes2)
+        else:
+            llavaresult2mdet(infer_path, result_path, predict_dir, attributes_name)

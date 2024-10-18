@@ -62,6 +62,8 @@ def xyhw_to_xyxypc(yolo_labels, img_width, img_height, conf):
     img_height: 图像的高度
     返回: 转换后的 `class, x1, y1, x2, y2` 格式的标注
     """
+    if yolo_labels.shape[1] == 0:
+        return yolo_labels
     # 创建一个存储转换后的标注的空数组
     xyxy_labels = np.ones((yolo_labels.shape[0], 6))
 
@@ -78,7 +80,7 @@ def xyhw_to_xyxypc(yolo_labels, img_width, img_height, conf):
 
 # endregion
 
-class MeanAveragePrecison:
+class MAP:
     def __init__(self):
         '''
         计算mAP: mAP@0.5; mAP @0.5:0.95; mAP @0.75
@@ -225,7 +227,68 @@ class MeanAveragePrecison:
 
         return mAP50_per_class, mAP50_95_per_class, mAP50_per_class, mAP50_95_per_class
 
-def read_file(file_path, is_prediction=True, conf=0.0):
+class MAP_OA(MAP):
+    def __init__(self):
+        super().__init__()
+        self.ap = []
+
+    def process_batch(self, detections, labels, pred_attributes_result, gt_attributes):
+        '''
+        预测结果匹配(TP/FP统计)
+        :param detections:(array[N,6]) x1,y1,x1,y1,conf,class (原图绝对坐标)
+        :param labels:(array[M,5]) class,x1,y1,x2,y2 (原图绝对坐标)
+        '''
+
+
+        # 每一个预测结果在不同IoU下的预测结果匹配
+        correct = np.zeros((detections.shape[0], self.niou)).astype(bool)
+        if detections is None:
+            self.stats.append((correct, *np.zeros((2, 0)), labels[:, 0]))
+        else:
+            # 计算标签与所有预测结果之间的IoU
+            iou = box_iou(labels[:, 1:], detections[:, :4])
+            # 计算每一个预测结果可能对应的实际标签
+            correct_class = labels[:, 0:1] == detections[:, 5]
+
+            pred_attributes_result = np.where(pred_attributes_result > 0.5, 1, 0)
+            iou = iou * correct_class  # zero out the wrong classes
+            iou50 = iou >= 0.5
+            correct_box = correct_class & iou50
+            correct_attributes = gt_attributes[:, None, :] == pred_attributes_result[None, :]
+            ap = []
+            # correct_attributes: n * 300 * 14 --> m *14
+            for i in range(correct_attributes.shape[0]):
+                ca = correct_attributes[i][correct_box[i]]
+                p = np.mean(ca, axis=0) if ca.shape[0] > 0 else np.zeros(gt_attributes.shape[-1])
+                ap.append(p[np.newaxis, :])
+            ap = np.concatenate(ap, axis=0)
+            self.ap.append(ap)
+
+            for i in range(self.niou):  # 在不同IoU置信度下的预测结果匹配结果
+                # 根据IoU置信度和类别对应得到预测结果与实际标签的对应关系
+                x = np.where((iou >= self.iouv[i]) & correct_class)
+                # 若存在和实际标签相匹配的预测结果
+                if x[0].shape[0]:  # x[0]:存在为True的索引(实际结果索引), x[1]当前所有True的索引(预测结果索引)
+                    # [label, detect, iou]
+                    matches = np.concatenate((np.stack(x, 1), iou[x[0], x[1]][:, None]), 1)
+                    if x[0].shape[0] > 1:  # 存在多个与目标对应的预测结果
+                        matches = matches[matches[:, 2].argsort()[::-1]]  # 根据IoU从高到低排序 [实际结果索引,预测结果索引,结果IoU]
+                        matches = matches[np.unique(matches[:, 1], return_index=True)[1]]  # 每一个预测结果保留一个和实际结果的对应
+                        matches = matches[np.unique(matches[:, 0], return_index=True)[1]]  # 每一个实际结果和一个预测结果对应
+                    correct[matches[:, 1].astype(int), i] = True  # 表面当前预测结果在当前IoU下实现了目标的预测
+
+            # 预测结果在不同IoU是否预测正确, 预测置信度, 预测类别, 实际类别
+            self.stats.append((correct, detections[:, 4], detections[:, 5], labels[:, 0]))
+
+    def calculate_oa(self):
+
+        aps = np.mean(np.concatenate(self.ap, axis=0), axis=0)
+        ap_mean = np.mean(aps)
+        for i, ap in enumerate(aps):
+            print(f"defect {i}: {ap:.3f}")
+        print(f"total   : {ap_mean:.3f}")
+
+def read_det_result(file_path, is_prediction=True, conf=0.0):
     """
     读取预测文件或标签文件
     :param file_path: 文件路径
@@ -233,11 +296,40 @@ def read_file(file_path, is_prediction=True, conf=0.0):
     :return: numpy array 格式的读取数据
     """
     data = np.loadtxt(file_path)
+    if len(data.shape) != 2:
+        data = np.expand_dims(data, axis=0)
     if is_prediction:
         data = xyhw_to_xyxypc(data, 640, 480, conf)
     else:
-        data = xyhw_to_xyxy(data if len(data.shape)==2 else np.expand_dims(data, axis=0), 640, 480)
+        data = xyhw_to_xyxy(data, 640, 480)
     return data
+
+def read_mdet_result(file_path, is_prediction=True, conf=0.0, with_prob=False):
+    """
+    读取预测文件或标签文件
+    :param file_path: 文件路径
+    :param is_prediction: 如果是预测文件，则读取格式为 [x1, y1, x2, y2, confidence, class_id]，否则读取标签
+    :return: numpy array 格式的读取数据
+    """
+    data = np.loadtxt(file_path)
+    if len(data.shape) != 2:
+        data = np.expand_dims(data, axis=0)
+    if is_prediction:
+        if with_prob:
+            data_det = np.hstack((data[:, :1], data[:, -5:]))
+            data_att = data[:, 2:-5]
+        else:
+            ones_column = np.ones((data.shape[0], 1))
+            data_det = np.hstack((data[:, :1], data[:, -4:], ones_column))
+            data_att = data[:, 2:-4]
+
+        data_det = xyhw_to_xyxypc(data_det, 640, 480, conf)
+        data_att = data_att[data[:, -1]>=conf]
+    else:
+        data_det = np.hstack((data[:, :1], data[:, -4:]))
+        data_det = xyhw_to_xyxy(data_det if len(data.shape)==2 else np.expand_dims(data, axis=0), 640, 480)
+        data_att = data[:, 2:-4]
+    return data_det, data_att
 
 def yolo_result_check(predict_dir, label_dir):
     file_list = os.listdir(label_dir)
@@ -247,30 +339,64 @@ def yolo_result_check(predict_dir, label_dir):
             with open(predict_path, 'w') as file:
                 pass  # 不写入任何内容，文件将保持为空
 
+def yolo_det_eval(predictions_dir, ground_truth_dir):
+    yolo_result_check(predictions_dir, ground_truth_dir)
 
+    file_list = os.listdir(predictions_dir)  # 假设文件名相同且按顺序排列
+
+    mAP_calculator1 = MAP()
+    for file_name in tqdm(file_list):
+        pred_path = os.path.join(predictions_dir, file_name)
+        label_path = os.path.join(ground_truth_dir, file_name)
+
+        detections = read_det_result(pred_path, is_prediction=True)
+        labels = read_det_result(label_path, is_prediction=False)
+
+        mAP_calculator1.process_batch(detections, labels)
+
+    mAP_calculator1.calculate_maps()
+
+def yolo_mdet_eval(predictions_dir, ground_truth_dir, conf=0.0, with_prob=False):
+    yolo_result_check(predictions_dir, ground_truth_dir)
+
+    file_list = os.listdir(predictions_dir)
+    mAP_calculator1 = MAP_OA()
+    for file_name in tqdm(file_list):
+        pred_path = os.path.join(predictions_dir, file_name)
+        label_path = os.path.join(ground_truth_dir, file_name)
+
+        detections, detections_att = read_mdet_result(pred_path, is_prediction=True, conf=conf, with_prob=with_prob)
+        if detections.shape[1] == 0:
+            continue
+        labels, labels_att = read_mdet_result(label_path, is_prediction=False)
+
+        mAP_calculator1.process_batch(detections, labels, detections_att, labels_att)
+
+    mAP_calculator1.calculate_maps()
+    mAP_calculator1.calculate_oa()
 
 if __name__ == '__main__':
     pass
     # 主程序
-    predictions_dir = r'E:\repository\ultralytics\runs\detect\val21\labels'
-    ground_truth_dir = r'E:\data\1123_thermal\ExpData\PolyUOutdoor_UAV\labels_val'
-    yolo_result_check(predictions_dir, ground_truth_dir)
+    # predictions_dir = r'E:\repository\ultralytics\runs\detect\val21\labels'
+    # ground_truth_dir = r'E:\data\1123_thermal\ExpData\PolyUOutdoor_UAV\labels_val'
+    #
+    # yolo_det_eval(predictions_dir, ground_truth_dir)
+    #
+    # predictions_dir = r'E:\repository\ultralytics\runs\mdetect\val103\labels'
+    # ground_truth_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels_val'
+    #
+    # yolo_mdet_eval(predictions_dir, ground_truth_dir, conf=0.5)
 
-    # 获取所有文件的路径
-    predict_files = os.listdir(predictions_dir)  # 假设文件名相同且按顺序排列
-    label_files = os.listdir(ground_truth_dir)
+    # mdet_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\mayolo_infer'
+    # label_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels_val'
+    # yolo_mdet_eval(mdet_dir, label_dir, with_prob=False)
 
-    mAP_calculator1 = MeanAveragePrecison()
-    # 批量处理文件
-    for pred_file, label_file in zip(predict_files, label_files):
-        pred_path = os.path.join(predictions_dir, pred_file)
-        label_path = os.path.join(ground_truth_dir, label_file)
+    mdet_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c_llava\images_infer_result_mdet'
+    label_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels_val'
+    for infer_name in os.listdir(mdet_dir):
+        print(infer_name)
+        infer_path = os.path.join(mdet_dir, infer_name)
+        yolo_mdet_eval(infer_path, label_dir, with_prob=False)
 
-        # 读取预测框和标签
-        detections = read_file(pred_path, is_prediction=True)
-        labels = read_file(label_path, is_prediction=False)
 
-        # 处理批次
-        mAP_calculator1.process_batch(detections, labels)
-
-    mAP_calculator1.calculate_maps()
