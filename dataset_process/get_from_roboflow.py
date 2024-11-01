@@ -1,7 +1,8 @@
 import os
 from roboflow import Roboflow
 
-location = r'E:\data\2024_defect\2024_defect_pure_yolo'
+# location = r'E:\data\2024_defect\2024_defect_pure_yolo'
+location = r'E:\data\202411_trafficsign\collected_data'
 rf = Roboflow(api_key="AZpYfvetSYpLXI5Fb4sp")
 
 data_list = [
@@ -56,9 +57,13 @@ data_list = [
 # "maintanance-oyjxd", # https://universe.roboflow.com/oke-project/maintanance
 # "cracks-spalls-segmentation-ybu6m", # https://universe.roboflow.com/moin-exnkz/cracks-spalls-segmentation
 #     "corrosion-detections-2wfdu", # https://universe.roboflow.com/yolo-learning/corrosion-detections
-    "rust-vmwoa-klgu3", # https://universe.roboflow.com/kiot-utdwr/rust-vmwoa
-    "corrosion-of-automation-ioqzy", # https://universe.roboflow.com/corrosion-project/corrosion-of-automation
-    "corrosion-detection-npdhd-ekx8c", # https://universe.roboflow.com/corrosion-l4cqs/corrosion-detection-npdhd
+#     "rust-vmwoa-klgu3", # https://universe.roboflow.com/kiot-utdwr/rust-vmwoa
+#     "corrosion-of-automation-ioqzy", # https://universe.roboflow.com/corrosion-project/corrosion-of-automation
+#     "corrosion-detection-npdhd-ekx8c", # https://universe.roboflow.com/corrosion-l4cqs/corrosion-detection-npdhd
+
+'detect-veckx-fns2w',
+    'error-traffic-glvxm',
+    'sam-oow6j-vtyge',
 ]
 
 

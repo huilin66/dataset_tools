@@ -5,6 +5,8 @@ import numpy as np
 from tqdm import tqdm
 import pandas as pd
 from data_vis.yolo_vis import yolo_mdet_vis
+from yolo_eval import yolo_mdet_eval, yolo_remove_conf
+from yolo_split import copy_split
 from pathlib import Path
 
 categories = ['background', 'projecting_signboard', 'wall_signboard']
@@ -164,6 +166,19 @@ def get_gt_info_mdet(gt_path):
 
 
 def get_img_info_mdet(gt_path, img_dir, description=1):
+    def get_defect_name(attributes_names):
+        attributes_names_list = ["'%s'"%attribute_name for attribute_name in attributes_names]
+        names_str = ' '.join(attributes_names_list)
+        return names_str
+    def get_defect_info(gt_info, attributes, attributes_name):
+        attributes_names_list = []
+        for idx, attribute in enumerate(attributes):
+            if bool(int(gt_info[attribute])):
+                attributes_names_list.append("'%s'"%attributes_name[idx])
+        if len(attributes_names_list) == 0:
+            return "no"
+        else:
+            return ' '.join(attributes_names_list)
     gt_infos = get_gt_info_mdet(gt_path)
     img_infos = []
     for gt_info in gt_infos:
@@ -233,7 +248,54 @@ def get_img_info_mdet(gt_path, img_dir, description=1):
 
                 },
             ]
+        elif description == 4:
+            img_info['conversations'] = [
+                {
+                    "from": "human",
+                    "value": "<image>\nPlease check if the entered signboard has any defects."
+                },
+                {
+                    "from": "gpt",
+                    "value": "The entered signboard has %s defect"%get_defect_info(gt_info, attributes, attributes_name),
 
+                },
+            ]
+        elif description == 4.5:
+            img_info['conversations'] = [
+                {
+                    "from": "human",
+                    "value": "<image>\nPlease check if the signboard in the red box has any defects."
+                },
+                {
+                    "from": "gpt",
+                    "value": "The entered signboard has %s defect" % get_defect_info(gt_info, attributes, attributes_name),
+
+                },
+            ]
+        elif description == 5:
+            img_info['conversations'] = [
+                {
+                    "from": "human",
+                    "value": "<image>\nPlease check if the entered signboard has any of the following defects:%s"%get_defect_name(attributes_name)
+                },
+                {
+                    "from": "gpt",
+                    "value": "The entered signboard has %s defect" % get_defect_info(gt_info, attributes, attributes_name),
+
+                },
+            ]
+        elif description == 5.5:
+            img_info['conversations'] = [
+                {
+                    "from": "human",
+                    "value": "<image>\nPlease check if the signboard in the red box has any of the following defects:%s"%get_defect_name(attributes_name)
+                },
+                {
+                    "from": "gpt",
+                    "value": "The entered signboard has %s defect" % get_defect_info(gt_info, attributes, attributes_name),
+
+                },
+            ]
         img_infos.append(img_info)
     return img_infos
 
@@ -312,14 +374,13 @@ def llavaresult2mdet(input_dir, output_dir, ref_label_dir, attributes):
             pass
         else:
             df = pd.read_csv(label_path, header=None, index_col=None, sep=' ',
-                             names=['cat_id', len(attributes)] + attributes + ['x_center', 'y_center', 'w_box', 'h_box'])
+                             names=['cat_id', len(attributes)] + attributes + ['x_center', 'y_center', 'w_box', 'h_box', 'conf'])
             for idx in range(len(df)):
                 input_path = os.path.join(input_dir, label_name.replace('.txt', '_%d.txt' % idx))
-                if os.stat(input_path).st_size == 0:
+                if not os.path.exists(input_path) or os.stat(input_path).st_size == 0:
                     for attribute in attributes:
                         df.loc[idx, attribute] = 0
                 else:
-                    # df_input = pd.read_csv(input_path, header=0, index_col=0)
                     df_input = pd.read_csv(input_path, index_col='property')
                     df_input = df_input['value']
                     for attribute in attributes:
@@ -436,9 +497,13 @@ def mdet_val(predict_dir, label_dir):
         df_label = pd.read_csv(predict_path, header=None, index_col=None, sep=' ',)
         df_predict = pd.read_csv(predict_path, header=None, index_col=None, sep=' ',)
 
-def split_trainval(img_dir, img_dir_train, img_dir_val, ref_path):
-    os.makedirs(img_dir_train, exist_ok=True)
-    os.makedirs(img_dir_val, exist_ok=True)
+def split_trainval(img_dir, ref_path, get_train=False, get_val=False):
+    if get_train:
+        img_dir_train = img_dir+'_train'
+        os.makedirs(img_dir_train, exist_ok=True)
+    if get_val:
+        img_dir_val = img_dir+'_val'
+        os.makedirs(img_dir_val, exist_ok=True)
 
     train_list = get_ref_list(ref_path)
     file_list = os.listdir(img_dir)
@@ -446,13 +511,18 @@ def split_trainval(img_dir, img_dir_train, img_dir_val, ref_path):
         img_prefix = img_name.split('_')[0]
         img_path = os.path.join(img_dir, img_name)
         if img_prefix in train_list:
-            dst_path = os.path.join(img_dir_train, img_name)
+            if get_train:
+                dst_path = os.path.join(img_dir_train, img_name)
+                shutil.copy(img_path, dst_path)
         else:
-            dst_path = os.path.join(img_dir_val, img_name)
-        shutil.copy(img_path, dst_path)
+            if get_val:
+                dst_path = os.path.join(img_dir_val, img_name)
+                shutil.copy(img_path, dst_path)
 
 if __name__ == '__main__':
     pass
+    # region detection data 2 llava
+
     # img_dir = r'E:\data\2023_defect\yolo_fomat_c5\yolo_fomat_c5\images\train'
     # gt_dir = r'E:\data\2023_defect\yolo_fomat_c5\yolo_fomat_c5\labels\train'
     # dst_json = r'E:\data\2023_defect\yolo_fomat_c5\yolo_fomat_c5\defect2k.json'
@@ -472,11 +542,148 @@ if __name__ == '__main__':
     #     output_json = json.dumps(data)
     #     f.write(output_json)
 
+    # endregion
 
 
-    # root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c'
+    # region mdetection data 2 llava
+
+    root_dir_mdet = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c'
+    image_folder = os.path.join(root_dir_mdet, 'images')
+    label_folder = os.path.join(root_dir_mdet, 'labels')
+    vis_folder = os.path.join(root_dir_mdet, 'images_vis')
+    crop_folder1 = os.path.join(root_dir_mdet, 'images_crop')
+    crop_folder2 = os.path.join(root_dir_mdet, 'images_crop_keep')
+    crop_folder3 = os.path.join(root_dir_mdet, 'images_crop_det')
+    infer_vis_folder = os.path.join(root_dir_mdet, 'infer_images_vis')
+    infer_crop_folder1 = os.path.join(root_dir_mdet, 'infer_images_crop')
+    infer_crop_folder2 = os.path.join(root_dir_mdet, 'infer_images_crop_keep')
+    infer_crop_folder3 = os.path.join(root_dir_mdet, 'infer_images_crop_det')
+    image_val_folder = os.path.join(root_dir_mdet, 'images_val')
+    label_val_folder = os.path.join(root_dir_mdet, 'labels_val')
+    mayolo_infer1_folder = os.path.join(root_dir_mdet, 'mayolo_infer1')
+    mayolo_infer2_folder = os.path.join(root_dir_mdet, 'mayolo_infer2')
+    mayolo_infer2_folder_withoutconf = os.path.join(root_dir_mdet, 'mayolo_infer2_withoutconf')
+    attribute_file = os.path.join(root_dir_mdet, 'attribute.yaml')
+    class_file = os.path.join(root_dir_mdet, 'class.txt')
+    train_csv_path = os.path.join(root_dir_mdet, 'train.txt')
+    val_csv_path = os.path.join(root_dir_mdet, 'val.txt')
+
+    root_dir_llava = dst_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c_llava'
+    img_det_folder_llava = os.path.join(root_dir_llava, 'images_det')
+    img_crop_folder_llava = os.path.join(root_dir_llava, 'images_crop')
+    img_keep_folder_llava = os.path.join(root_dir_llava, 'images_keep')
+    img_infer_det_folder_llava = os.path.join(root_dir_llava, 'infer_images_det')
+    img_infer_crop_folder_llava = os.path.join(root_dir_llava, 'infer_images_crop')
+    img_infer_keep_folder_llava = os.path.join(root_dir_llava, 'infer_images_keep')
+    caption_folder = os.path.join(dst_dir, 'caption')
+    llava_caption1_crop = os.path.join(caption_folder, 'signboard_caption1_crop.json')
+    llava_caption1_keep = os.path.join(caption_folder, 'signboard_caption1_keep.json')
+    llava_caption2_crop = os.path.join(caption_folder, 'signboard_caption2_crop.json')
+    llava_caption2_keep = os.path.join(caption_folder, 'signboard_caption2_keep.json')
+    llava_caption3_crop = os.path.join(caption_folder, 'signboard_caption3_crop.json')
+    llava_caption3_keep = os.path.join(caption_folder, 'signboard_caption3_keep.json')
+    llava_caption3_det = os.path.join(caption_folder, 'signboard_caption3_det.json')
+    llava_caption4_crop = os.path.join(caption_folder, 'signboard_caption4_crop.json')
+    llava_caption4_keep = os.path.join(caption_folder, 'signboard_caption4_keep.json')
+    llava_caption4_det = os.path.join(caption_folder, 'signboard_caption4_det.json')
+    llava_caption5_crop = os.path.join(caption_folder, 'signboard_caption5_crop.json')
+    llava_caption5_keep = os.path.join(caption_folder, 'signboard_caption5_keep.json')
+    llava_caption5_det = os.path.join(caption_folder, 'signboard_caption5_det.json')
+    llava_infer_results_folder = os.path.join(root_dir_llava, 'llava_images_infer')
+    llava_infer_mdetect_folder = os.path.join(root_dir_llava, 'llava_images_infer_mdetect_format')
+
+    # region step1 generating dataset
+
+    # copy val image and label
+    # copy_split(image_folder, label_folder, image_val_folder, label_val_folder, val_csv_path)
+
+    # generate image data in mdetect dataset
+    # yolo_mdet_vis(image_folder, label_folder, vis_folder, class_file, crop_dir=crop_folder1, seg=False,
+    #               attribute_file=attribute_file, filter_no=True, crop_keep_shape=False, det_crop=False)
+    # yolo_mdet_vis(image_folder, label_folder, vis_folder, class_file, crop_dir=crop_folder2, seg=False,
+    #               attribute_file=attribute_file, filter_no=True, crop_keep_shape=True, det_crop=False)
+    # yolo_mdet_vis(image_folder, label_folder, vis_folder, class_file, crop_dir=crop_folder3, seg=False,
+    #               attribute_file=attribute_file, filter_no=True, crop_keep_shape=True, det_crop=True)
+
+    # move image data from mdetect to llava
+    # cp_imgs(crop_folder1, img_crop_folder_llava)
+    # cp_imgs(crop_folder2, img_keep_folder_llava)
+    # cp_imgs(crop_folder3, img_det_folder_llava)
+
+    # generate caption dataset
+    # os.makedirs(caption_folder, exist_ok=True)
+    # mdet2llava(img_crop_folder_llava, label_folder, llava_caption1_crop, ref_path=train_csv_path, description=1)
+    # mdet2llava(img_keep_folder_llava, label_folder, llava_caption1_keep, ref_path=train_csv_path, description=1)
+    # mdet2llava(img_crop_folder_llava, label_folder, llava_caption2_crop, ref_path=train_csv_path, description=2)
+    # mdet2llava(img_keep_folder_llava, label_folder, llava_caption2_keep, ref_path=train_csv_path, description=2)
+    # mdet2llava(img_crop_folder_llava, label_folder, llava_caption3_crop, ref_path=train_csv_path, description=3)
+    # mdet2llava(img_keep_folder_llava, label_folder, llava_caption3_keep, ref_path=train_csv_path, description=3)
+    # mdet2llava(img_det_folder_llava, label_folder, llava_caption3_det, ref_path=train_csv_path, description=3.5)
+    # mdet2llava(img_crop_folder_llava, label_folder, llava_caption4_crop, ref_path=train_csv_path, description=4)
+    # mdet2llava(img_keep_folder_llava, label_folder, llava_caption4_keep, ref_path=train_csv_path, description=4)
+    # mdet2llava(img_det_folder_llava, label_folder, llava_caption4_det, ref_path=train_csv_path, description=4.5)
+    # mdet2llava(img_crop_folder_llava, label_folder, llava_caption5_crop, ref_path=train_csv_path, description=5)
+    # mdet2llava(img_keep_folder_llava, label_folder, llava_caption5_keep, ref_path=train_csv_path, description=5)
+    # mdet2llava(img_det_folder_llava, label_folder, llava_caption5_det, ref_path=train_csv_path, description=5.5)
+
+    # get val images
+    # split_trainval(img_crop_folder_llava, ref_path=train_csv_path, get_train=False, get_val=True)
+    # split_trainval(img_keep_folder_llava, ref_path=train_csv_path, get_train=False, get_val=True)
+    # split_trainval(img_det_folder_llava, ref_path=train_csv_path, get_train=False, get_val=True)
+
+    # calculate map, oa metric
+    # yolo_mdet_eval(mayolo_infer1_folder, label_val_folder, conf=0.0, with_prob=True)
+    # yolo_mdet_eval(mayolo_infer2_folder, label_val_folder, conf=0.0, with_prob=True)
+
+    # endregion
+
+    # region step2 convert mayolo prediction result into llava data
+
+
+    # remove conf for vis and crop
+    # yolo_remove_conf(mayolo_infer2_folder, mayolo_infer2_folder_withoutconf, mdet=True)
+
+    # generate image data for mayolo infer result
+    # yolo_mdet_vis(image_val_folder, mayolo_infer2_folder_withoutconf, infer_vis_folder, class_file, crop_dir=infer_crop_folder1, seg=False,
+    #               attribute_file=attribute_file, filter_no=True, crop_keep_shape=False, det_crop=False)
+    # yolo_mdet_vis(image_val_folder, mayolo_infer2_folder_withoutconf, infer_vis_folder, class_file, crop_dir=infer_crop_folder2, seg=False,
+    #               attribute_file=attribute_file, filter_no=True, crop_keep_shape=True, det_crop=False)
+    # yolo_mdet_vis(image_val_folder, mayolo_infer2_folder_withoutconf, infer_vis_folder, class_file, crop_dir=infer_crop_folder3, seg=False,
+    #               attribute_file=attribute_file, filter_no=True, crop_keep_shape=True, det_crop=True)
+
+    # move image data from mdetect to llava
+    # cp_imgs(infer_crop_folder1, img_infer_crop_folder_llava)
+    # cp_imgs(infer_crop_folder2, img_infer_keep_folder_llava)
+    # cp_imgs(infer_crop_folder3, img_infer_det_folder_llava)
+
+
+
+    # convert llava infer result 2 mdetect format
+    # for infer_name in os.listdir(llava_infer_results_folder):
+    #     print(infer_name)
+    #     infer_path = os.path.join(llava_infer_results_folder, infer_name)
+    #     result_path = os.path.join(llava_infer_mdetect_folder, infer_name)
+    #     if '1' in infer_name:
+    #         llavaresult2mdet(infer_path, result_path, mayolo_infer2_folder, attributes)
+    #     elif '2' in infer_name:
+    #         llavaresult2mdet(infer_path, result_path, mayolo_infer2_folder, attributes2)
+    #     else:
+    #         llavaresult2mdet(infer_path, result_path, mayolo_infer2_folder, attributes_name)
+
+
+    # get the infer metrics
+    for infer_name in os.listdir(llava_infer_results_folder):
+        print(f"{infer_name} result:")
+        result_path = os.path.join(llava_infer_mdetect_folder, infer_name)
+        yolo_mdet_eval(result_path, label_val_folder, conf=0.0, with_prob=True)
+        print()
+    # endregion
+
+    # endregion
+
+    # region old code
     # dst_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c_llava_infer'
-    # # gt_dir = os.path.join(root_dir, 'labels')
+    # gt_dir = os.path.join(root_dir, 'labels')
     # infer_dir = os.path.join(root_dir, 'mayolo_infer')
     # train_csv_path = os.path.join(root_dir, 'train.txt')
 
@@ -553,17 +760,18 @@ if __name__ == '__main__':
     # mdetresult2llava(img_dir, vis_img_dir, crop_img_dir, predict_dir, class_file, attribute_file, crop_keep_shape=True, det_crop=True)
     # cp_imgs(crop_img_dir, dst_img_dir)
 
-    root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c'
-    infer_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c_llava\images_infer_result'
-    mdet_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c_llava\images_infer_result_mdet'
-    predict_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\mayolo_infer'
-    for infer_name in os.listdir(infer_dir):
-        print(infer_name)
-        infer_path = os.path.join(infer_dir, infer_name)
-        result_path = os.path.join(mdet_dir, infer_name)
-        if '1' in infer_name:
-            llavaresult2mdet(infer_path, result_path, predict_dir, attributes)
-        elif '2' in infer_name:
-            llavaresult2mdet(infer_path, result_path, predict_dir, attributes2)
-        else:
-            llavaresult2mdet(infer_path, result_path, predict_dir, attributes_name)
+    # root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c'
+    # infer_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c_llava\images_infer_result'
+    # mdet_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c_llava\images_infer_result_mdet'
+    # predict_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\mayolo_infer'
+    # for infer_name in os.listdir(infer_dir):
+    #     print(infer_name)
+    #     infer_path = os.path.join(infer_dir, infer_name)
+    #     result_path = os.path.join(mdet_dir, infer_name)
+    #     if '1' in infer_name:
+    #         llavaresult2mdet(infer_path, result_path, predict_dir, attributes)
+    #     elif '2' in infer_name:
+    #         llavaresult2mdet(infer_path, result_path, predict_dir, attributes2)
+    #     else:
+    #         llavaresult2mdet(infer_path, result_path, predict_dir, attributes_name)
+    # endregion

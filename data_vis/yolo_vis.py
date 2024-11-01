@@ -276,17 +276,19 @@ def yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=
         label_path = os.path.join(label_folder, label_list[i])
         img = cv2.imread(image_path)
         h, w = img.shape[:2]
+        img_vis = img.copy()
         with open(label_path, 'r') as f:
             if seg:
                 lb = [x.split() for x in f.read().strip().splitlines()]
             else:
+                data = f.read().strip().splitlines()
                 lb = np.array([x.split() for x in f.read().strip().splitlines()], dtype=np.float32)
             for idx, x in enumerate(lb):
                 if not seg:
                     if crop_dir is None:
-                        img, _, _ = xywh2xyxy(x, w, h, img, cats=cats)
+                        img_vis, _, _ = xywh2xyxy(x, w, h, img, img_vis, cats=cats)
                     else:
-                        img, img_crop, _ = xywh2xyxy(x, w, h, img, cats=cats, crop=True)
+                        img_vis, img_crop, _ = xywh2xyxy(x, w, h, img, img_vis, cats=cats, crop=True)
                         cat = cats[int(float(x[0]))]
                         save_path = os.path.join(crop_dir, cat, os.path.basename(image_path).replace('.jpg', '_%d.jpg'%idx).replace('.png', '_%d.jpg'%idx))
                         os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -298,9 +300,9 @@ def yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=
                     if len(x) <= 5:
                         continue
                     if crop_dir is None:
-                        img, _, _ = xywh2poly(x, w, h, img, cats=cats)
+                        img_vis, _, _ = xywh2poly(x, w, h, img, img_vis, img_viscats=cats)
                     else:
-                        img, img_crop, _ = xywh2poly(x, w, h, img, cats=cats, crop=True)
+                        img_vis, img_crop, _ = xywh2poly(x, w, h, img, img_vis, cats=cats, crop=True)
                         cat = cats[int(float(x[0]))]
                         save_path = os.path.join(crop_dir, cat, os.path.basename(image_path).replace('.jpg', '_%d.jpg'%idx).replace('.png', '_%d.jpg'%idx))
                         os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -309,7 +311,7 @@ def yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=
                         else:
                             print(img_crop.shape, save_path)
             save_path = image_path.replace(img_folder, output_folder)
-            cv2.imwrite(save_path, img)
+            cv2.imwrite(save_path, img_vis)
 
 def yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=None, attribute_file=None, filter_no=False, seg=False, crop_keep_shape=False, det_crop=True):
     cats = get_cats(class_file)
@@ -359,6 +361,8 @@ def yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=
                                                  os.path.basename(image_path).replace('.jpg', '_%d.jpg' % idx).replace(
                                                      '.png', '_%d.jpg' % idx))
                         os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                        if not img_crop.shape[0]>0 or not img_crop.shape[1]>0:
+                            continue
                         cv2.imwrite(save_path, img_crop)
 
                         for attribute_str in attribute_strs:
@@ -379,7 +383,7 @@ def yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=
                         else:
                             print(img_crop.shape, save_path)
             save_path = image_path.replace(img_folder, output_folder)
-            cv2.imwrite(save_path, img)
+            cv2.imwrite(save_path, img_vis)
 
 
 if __name__ == '__main__':
