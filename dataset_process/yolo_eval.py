@@ -1,7 +1,9 @@
 import os
 from tqdm import tqdm
 import numpy as np
-
+import pandas as pd
+attributes = ['surface_missing', 'surface_incomplete', 'surface_corroded', 'frame_corroded', 'surface_peeling',
+              'surface_fade', 'surface_deformed', 'frame_deformed', 'disconnected', 'added_billboard']
 # region tools
 
 def box_iou(boxesA, boxesB, eps=1e-7):
@@ -375,6 +377,32 @@ def yolo_mdet_eval(predictions_dir, ground_truth_dir, conf=0.0, with_prob=False)
     mAP_calculator1.calculate_maps()
     mAP_calculator1.calculate_oa()
 
+def yolo_add_conf1(input_dir, output_dir, mdet=False):
+    os.makedirs(output_dir, exist_ok=True)
+    file_list = os.listdir(input_dir)
+    for file_name in tqdm(file_list):
+        input_path = os.path.join(input_dir, file_name)
+        output_path = os.path.join(output_dir, file_name)
+        if mdet:
+            df = pd.read_csv(input_path, header=None, index_col=None, columns=['cat', len(attributes)] + attributes + ['x', 'y', 'h', 'w'], sep=' ')
+        else:
+            df = pd.read_csv(input_path, header=None, index_col=None, columns=['cat', 'x', 'y', 'h', 'w'], sep=' ')
+        df['conf'] = 1
+        df.to_csv(output_path, header=False, index=False, sep=' ')
+
+def yolo_remove_conf(input_dir, output_dir, mdet=False):
+    os.makedirs(output_dir, exist_ok=True)
+    file_list = os.listdir(input_dir)
+    for file_name in tqdm(file_list):
+        input_path = os.path.join(input_dir, file_name)
+        output_path = os.path.join(output_dir, file_name)
+        if mdet:
+            df = pd.read_csv(input_path, header=None, index_col=None, names=['cat', len(attributes)] + attributes + ['x', 'y', 'h', 'w', 'conf'], sep=' ')
+        else:
+            df = pd.read_csv(input_path, header=None, index_col=None, names=['cat', 'x', 'y', 'h', 'w', 'conf'], sep=' ')
+        df = df.drop(['conf'], axis=1)
+        df.to_csv(output_path, header=False, index=False, sep=' ')
+
 if __name__ == '__main__':
     pass
     # 主程序
@@ -388,15 +416,16 @@ if __name__ == '__main__':
     #
     # yolo_mdet_eval(predictions_dir, ground_truth_dir, conf=0.5)
 
-    # mdet_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\mayolo_infer'
+    # mdet_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels_val'
     # label_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels_val'
     # yolo_mdet_eval(mdet_dir, label_dir, with_prob=False)
 
-    mdet_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c_llava\images_infer_result_mdet'
-    label_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels_val'
-    for infer_name in os.listdir(mdet_dir):
-        print(infer_name)
-        infer_path = os.path.join(mdet_dir, infer_name)
-        yolo_mdet_eval(infer_path, label_dir, with_prob=False)
+    # mdet_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c_llava\images_infer_result_mdet'
+    # yolo_mdet_eval = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels_val'
+    # for infer_name in os.listdir(mdet_dir):
+    #     print(infer_name)
+    #     infer_path = os.path.join(mdet_dir, infer_name)
+    #     yolo_mdet_eval(infer_path, label_dir, with_prob=False)
 
-
+    yolo_remove_conf(r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\mayolo_infer2',
+                     r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\mayolo_infer22', mdet=True)
