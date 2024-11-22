@@ -4,63 +4,28 @@ import shutil
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+from pathlib import Path
 
-# class_dict = {
-#     0 : 'speed limit 20 (prohibitory)',
-#     1 : 'speed limit 30 (prohibitory)',
-#     2 : 'speed limit 50 (prohibitory)',
-#     3 : 'speed limit 60 (prohibitory)',
-#     4 : 'speed limit 70 (prohibitory)',
-#     5 : 'speed limit 80 (prohibitory)',
-#     6 : 'restriction ends 80 (other)',
-#     7 : 'speed limit 100 (prohibitory)',
-#     8 : 'speed limit 120 (prohibitory)',
-#     9 : 'no overtaking (prohibitory)',
-#     10 : 'no overtaking (trucks) (prohibitory)',
-#     11 : 'priority at next intersection (danger)',
-#     12 : 'priority road (other)',
-#     13 : 'give way (other)',
-#     14 : 'stop (other)',
-#     15 : 'no traffic both ways (prohibitory)',
-#     16 : 'no trucks (prohibitory)',
-#     17 : 'no entry (other)',
-#     18 : 'danger (danger)',
-#     19 : 'bend left (danger)',
-#     20 : 'bend right (danger)',
-#     21 : 'bend (danger)',
-#     22 : 'uneven road (danger)',
-#     23 : 'slippery road (danger)',
-#     24 : 'road narrows (danger)',
-#     25 : 'construction (danger)',
-#     26 : 'traffic signal (danger)',
-#     27 : 'pedestrian crossing (danger)',
-#     28 : 'school crossing (danger)',
-#     29 : 'cycles crossing (danger)',
-#     30 : 'snow (danger)',
-#     31 : 'animals (danger)',
-#     32 : 'restriction ends (other)',
-#     33 : 'go right (mandatory)',
-#     34 : 'go left (mandatory)',
-#     35 : 'go straight (mandatory)',
-#     36 : 'go right or straight (mandatory)',
-#     37 : 'go left or straight (mandatory)',
-#     38 : 'keep right (mandatory)',
-#     39 : 'keep left (mandatory)',
-#     40 : 'roundabout (mandatory)',
-#     41 : 'restriction ends (overtaking) (other)',
-#     42 : 'restriction ends (overtaking (trucks)) (other)',
-# }
 
 class_dict = {
     0 : 'background',
     1 : 'wall_signboard',
     2: 'projecting_signboard',
 }
-def random_select(img_dir, dst_dir, train_ratio=0.9, random_seed=1010, full_path=True):
+def random_select(img_dir, dst_dir, label_dir=None, train_ratio=0.9, random_seed=1010, full_path=True):
     file_list = os.listdir(img_dir)
+    if label_dir is not None:
+        label_list = os.listdir(label_dir)
+        label_list = [Path(label_name).stem for label_name in label_list]
+        file_list_check = []
+        for img_name in tqdm(file_list, desc='img check', total=len(file_list)):
+            name = Path(img_name).stem
+            if name in label_list:
+                file_list_check.append(img_name)
+        file_list = file_list_check
+
     if full_path:
         file_list = [os.path.join(img_dir, filename) for filename in file_list]
-        # file_list = [os.path.join(os.path.basename(img_dir), filename) for filename in file_list]
     np.random.seed(random_seed)
     np.random.shuffle(file_list)
     train_num = int(len(file_list)*train_ratio)
@@ -162,10 +127,24 @@ if __name__ == '__main__':
     #     r'E:\data\1123_thermal\ExpData\PolyUOutdoor_UAV\val.txt',
     # )
 
+    # copy_split(
+    #     r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\images',
+    #     r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels',
+    #     r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\images_val',
+    #     r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels_val',
+    #     r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\val.txt',
+    # )
+
+    # random_select(r'E:\data\202411_trafficsign\traff_sign_yolo\images',
+    #               r'E:\data\202411_trafficsign\traff_sign_yolo',
+    #               r'E:\data\202411_trafficsign\traff_sign_yolo\labels',
+    #               train_ratio=0.9)
+
+
     copy_split(
-        r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\images',
-        r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels',
-        r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\images_val',
-        r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels_val',
-        r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\val.txt',
+        r'E:\data\202411_trafficsign\traff_sign_yolo\images',
+        r'E:\data\202411_trafficsign\traff_sign_yolo\labels',
+        r'E:\data\202411_trafficsign\traff_sign_yolo\images_val',
+        r'E:\data\202411_trafficsign\traff_sign_yolo\labels_val',
+        r'E:\data\202411_trafficsign\traff_sign_yolo\val.txt',
     )

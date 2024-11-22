@@ -186,10 +186,17 @@ if __name__ == '__main__':
     #     # val_path = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\val.txt',
     # )
 
+    # yolo_sta(
+    #     gt_dir=r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels",
+    #     result_dir=r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels_sta",
+    #     class_path=r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\class.txt',
+    #     attribute_path=r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\attribute.yaml',
+    #     # val_path = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\val.txt',
+    # )
+
     yolo_sta(
-        gt_dir=r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels",
-        result_dir=r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels_sta",
-        class_path=r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\class.txt',
-        attribute_path=r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\attribute.yaml',
+        gt_dir=r"E:\data\202411_trafficsign\traff_sign_yolo\labels",
+        result_dir=r"E:\data\202411_trafficsign\traff_sign_yolo\labels_sta",
+        class_path=r'E:\data\202411_trafficsign\traff_sign_yolo\class.txt'
         # val_path = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\val.txt',
     )

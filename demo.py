@@ -1,5 +1,6 @@
 import os
 import cv2
+import pandas as pd
 from skimage import io
 from skimage.metrics import structural_similarity as ssim
 import imagehash
@@ -160,9 +161,65 @@ def phase_correlation(imageA, imageB):
 #
 # model = timm.create_model('swin_large_patch4_window12_384', pretrained=True)
 
-from timm.models import create_model
-import utils
+import os, re
+import cv2
+import numpy as np
+import pandas as pd
+from skimage.metrics import structural_similarity as ssim
+from tqdm import tqdm
+from natsort import natsorted
+# 定义文件夹路径和保存路径
+image_folder = r"E:\data\2024_defect\2024_defect_pure_yolo_final\detr_crack_dataset-bnrlv\train\images"  # 替换为你的图片文件夹路径
+output_csv = "image_similarity.csv"  # 输出的 CSV 文件路径
 
-model = create_model('repvit_m0_9')
-utils.replace_batchnorm(model)
+def extract_number(filename):
+    match = re.search(r'crack-(\d+)', filename)  # 匹配 "crack-" 后面的数字
+    return int(match.group(1)) if match else float('inf')  # 无法匹配的放最后
+
+# 获取文件夹中的所有图片路径，读取前100张
+image_files = sorted(os.listdir(image_folder))
+image_files = natsorted(image_files)
+image_files = image_files[:100]
+image_paths = [os.path.join(image_folder, file) for file in image_files]
+
+# 加载图片
+def load_image(image_path):
+    return cv2.imread(image_path, cv2.IMREAD_COLOR)
+
+images = [load_image(path) for path in image_paths]
+
+# 计算两两图片的相似度
+# def compare_images(image1, image2):
+#     # 调整大小以确保比较一致
+#     image1 = cv2.resize(image1, (256, 256))
+#     image2 = cv2.resize(image2, (256, 256))
+#     # 计算 SSIM 相似度
+#     score, _ = ssim(image1, image2, full=True)
+#     return score
+from skimage.color import rgb2lab
+from scipy.spatial.distance import euclidean
+
+def compare_images(image1, image2):
+    lab1 = rgb2lab(image1)
+    lab2 = rgb2lab(image2)
+    mean_value = euclidean(lab1.mean(axis=(0, 1)), lab2.mean(axis=(0, 1)))  # Compare mean colors
+    min_value = euclidean(lab1.min(axis=(0, 1)), lab2.min(axis=(0, 1)))
+    max_value = euclidean(lab1.max(axis=(0, 1)), lab2.max(axis=(0, 1)))
+    return min_value
+
+# 创建相似度矩阵
+similarity_matrix = np.zeros((len(images), len(images)))
+
+for i in tqdm(range(len(images))):
+    for j in range(i, len(images)):  # 对称矩阵，只计算一半
+        if i == j:
+            similarity_matrix[i, j] = 1.0  # 对角线为1
+        else:
+            similarity_matrix[i, j] = compare_images(images[i], images[j])
+            similarity_matrix[j, i] = similarity_matrix[i, j]  # 对称性
+
+# 将结果保存到 CSV 文件
+df = pd.DataFrame(similarity_matrix, index=image_files, columns=image_files)
+df.to_csv(output_csv)
+print(f"相似度矩阵已保存到 {output_csv}")
 

@@ -14,8 +14,10 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from pathlib import Path
 from skimage.metrics import structural_similarity as ssim
-
+from skimage.color import rgb2lab
+from scipy.spatial.distance import euclidean
 from data_vis.yolo_vis import yolo_data_vis
+
 # region coco datasets
 ROOT_PATH = r'E:\data\2024_defect\2024_defect_det'
 
@@ -673,6 +675,47 @@ def search_intersect_data(root_dir, input_name, output_name, sta_summary_path):
         df_data.to_csv(output_csv_path)
 
 
+def search_color_tinydiffer(root_dir, input_name, output_name, temp_name):
+    def compare_images(image1, image2):
+        mean_value = euclidean(image1.mean(axis=(0, 1)), image2.mean(axis=(0, 1)))  # Compare mean colors
+        # min_value = euclidean(image1.min(axis=(0, 1)), image2.min(axis=(0, 1)))
+        # max_value = euclidean(image1.max(axis=(0, 1)), image2.max(axis=(0, 1)))
+        return mean_value
+    df = pd.read_csv(sta_summary_path, header=0, index_col=0)
+    for idx, row in df.iterrows():
+        data_dir = os.path.join(root_dir, row['name'])
+        input_csv_path = os.path.join(data_dir, input_name)
+        output_csv_path = os.path.join(data_dir, output_name)
+        df_data = pd.read_csv(input_csv_path, header=0, index_col=0)
+        df_data['intersect'] = False
+        df_data.to_csv(output_csv_path)
+
+    for i in range(len(df)):
+        print(i, len(df))
+        src_data_dir = os.path.join(root_dir, df.iloc[i]['name'])
+        src_imgs_dir = os.path.join(src_data_dir, 'train', 'images')
+        src_data_path = os.path.join(src_data_dir, output_name)
+        dst_data_path = os.path.join(src_data_dir, temp_name)
+        df_src = pd.read_csv(src_data_path, header=0, index_col=0)
+        df_src_keep = df_src[df_src['filter'] == False]
+        df_dst = pd.DataFrame(1000, index=df_src_keep.index, columns=df_src_keep.index)
+
+        for i in tqdm(range(len(df_src_keep))):
+            src_row = df_src_keep.iloc[i]
+            src_name = src_row.name
+            src_img_path = os.path.join(src_imgs_dir, src_name)
+            src_img = io.imread(src_img_path)
+            src_img_lab = rgb2lab(src_img)
+            for j in range(i, min(i+20, len(df_src_keep))):
+                dst_row = df_src_keep.iloc[j]
+                dst_name = dst_row.name
+                dst_img_path = os.path.join(src_imgs_dir, dst_name)
+                dst_img = io.imread(dst_img_path)
+                dst_img_lab = rgb2lab(dst_img)
+                color_difference = compare_images(src_img_lab, dst_img_lab)
+                df_dst.iloc[i, j] = color_difference
+        df_dst.to_csv(dst_data_path)
+
 def remove_data(root_dir, del_name):
     data_list = os.listdir(root_dir)
 
@@ -763,13 +806,12 @@ def convert_seg2det(root_dir, ref_path):
                 convert_yolo_hybrid_to_detection(src_path, det_path)
         else:
             raise NotImplementedError(f'P{data_name} is {task} type')
+
 def dataset_vis(root_dir, ref_path):
     data_list = os.listdir(root_dir)
     df = pd.read_csv(ref_path, header=0, index_col=0)
     df['cats'] = df['cats'].apply(ast.literal_eval)
     for idx, data_name in enumerate(data_list):
-        if idx<16:
-            continue
         print(data_name, idx, len(data_list))
         cats = df['cats'][idx]
         df_cats = pd.DataFrame(cats, columns=['cats'])
@@ -784,8 +826,6 @@ def dataset_vis(root_dir, ref_path):
         os.makedirs(crop_dir, exist_ok=True)
 
         yolo_data_vis(image_dir, label_dir, vis_dir, class_file=class_path, crop_dir=crop_dir)
-
-
 
 
 '''
@@ -824,14 +864,14 @@ if __name__ == '__main__':
 
     # search_intersect_data(data_dir, 'data_rmaug_rmshift_rmrotate_rmmirror.csv', 'data_rmaug_rmshift_rmrotate_rmmirror_rminter.csv', sta_summary_path)
 
+    search_color_tinydiffer(data_dir, 'data_rmaug_rmshift_rmrotate_rmmirror_rminter.csv', 'data_rmaug_rmshift_rmrotate_rmmirror_rminter_rmcolor.csv', 'color_difference.csv')
 
-
-    get_remained_img(data_dir, 'data.csv')
-    get_remained_img(data_dir, 'data_rmaug.csv')
-    get_remained_img(data_dir, 'data_rmaug_rmshift.csv')
-    get_remained_img(data_dir, 'data_rmaug_rmshift_rmrotate.csv')
-    get_remained_img(data_dir, 'data_rmaug_rmshift_rmrotate_rmmirror.csv')
-    get_remained_img(data_dir, 'data_rmaug_rmshift_rmrotate_rmmirror_rminter.csv')
+    # get_remained_img(data_dir, 'data.csv')
+    # get_remained_img(data_dir, 'data_rmaug.csv')
+    # get_remained_img(data_dir, 'data_rmaug_rmshift.csv')
+    # get_remained_img(data_dir, 'data_rmaug_rmshift_rmrotate.csv')
+    # get_remained_img(data_dir, 'data_rmaug_rmshift_rmrotate_rmmirror.csv')
+    # get_remained_img(data_dir, 'data_rmaug_rmshift_rmrotate_rmmirror_rminter.csv')
 
     # remove_data(data_dir, 'data.csv')
 
@@ -840,3 +880,4 @@ if __name__ == '__main__':
     # convert_seg2det(dst_data_dir, sta_summary_path)
 
     # dataset_vis(dst_data_dir, sta_summary_path)
+
