@@ -281,7 +281,6 @@ def yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=
             if seg:
                 lb = [x.split() for x in f.read().strip().splitlines()]
             else:
-                data = f.read().strip().splitlines()
                 lb = np.array([x.split() for x in f.read().strip().splitlines()], dtype=np.float32)
             for idx, x in enumerate(lb):
                 if not seg:
@@ -402,20 +401,25 @@ if __name__ == '__main__':
     # root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10'
     # root_dir = r'E:\data\tp\sar_det'
     # root_dir = r'E:\data\0111_testdata\data_new\yolo_src'
-    root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c'
+    # root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c'
+    # root_dir = r'E:\data\20241113_road_veg\dataset'
+    root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\crack-bpxku-hcu46\train'
     img_folder = os.path.join(root_dir, 'images')
-    label_folder = os.path.join(root_dir, 'labels')
-    output_folder = os.path.join(root_dir, 'images_vis')
+    # label_folder = os.path.join(root_dir, 'labels')
+    label_folder = os.path.join(root_dir, 'labels_det')
+    # output_folder = os.path.join(root_dir, 'images_vis')
+    output_folder = os.path.join(root_dir, 'img_vis')
     # crop_folder = os.path.join(root_dir, 'images_crop')
     # crop_folder = os.path.join(root_dir, 'images_crop_keep')
-    crop_folder = os.path.join(root_dir, 'images_crop_det')
+    # crop_folder = os.path.join(root_dir, 'images_crop_det')
+    crop_folder = os.path.join(root_dir, 'img_crop')
     attribute_file = os.path.join(root_dir, 'attribute.yaml')
     class_file = os.path.join(root_dir, 'class.txt')
 
     shutil.rmtree(output_folder, ignore_errors=True)
     shutil.rmtree(crop_folder, ignore_errors=True)
 
-    # yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=False)
+    yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=False)
     # yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=True)
-    yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=False, attribute_file=attribute_file, filter_no=True, crop_keep_shape=True, det_crop=True)
+    # yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=False, attribute_file=attribute_file, filter_no=True, crop_keep_shape=True, det_crop=True)
     # yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=True, attribute_file=attribute_file, filter_no=True)

@@ -4,6 +4,16 @@ import pandas as pd
 from tqdm import tqdm
 import numpy as np
 
+'''
+6种两两类别生成贡献概率矩阵的方法
+1：直接统计得到
+2：统计后，剔除不包括任何attribute的negative样本
+3：对角线归一化，每一列除以对角线的值
+4：3的转置，对角线归一化，每一行除以对角线的值
+5：（3+4）/2
+6：提取对角线平方根后，先按行归一化，再按列归一化
+'''
+
 def get_com(gt_dir, attribute_file, save_path, filter_background=False, norm=False):
     with open(attribute_file, 'r') as file:
         attribute_dict = yaml.safe_load(file)['attributes']
