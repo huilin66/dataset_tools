@@ -5,13 +5,16 @@ import pandas as pd
 from tqdm import tqdm
 import seaborn as sns
 import matplotlib.pyplot as plt
-
+from data_sta import dir_shape_sta
 
 shp_rate_bins = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2, 2.1, 2.2, 2.4, 2.6, 3, 3.5, 4, 5]
 
 # center_x center_y width height
-def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None):
+def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None, img_dir=None):
     os.makedirs(result_dir, exist_ok=True)
+
+    if img_dir is not None:
+        dir_shape_sta(img_dir, os.path.join(result_dir, 'image_shape.png'))
 
     df_class = pd.read_csv(class_path, header=None, index_col=None, names=['class_name'])
     classes = df_class['class_name'].to_list()
@@ -194,9 +197,18 @@ if __name__ == '__main__':
     #     # val_path = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\val.txt',
     # )
 
+    # yolo_sta(
+    #     gt_dir=r"E:\data\202411_trafficsign\traff_sign_yolo\labels",
+    #     result_dir=r"E:\data\202411_trafficsign\traff_sign_yolo\labels_sta",
+    #     class_path=r'E:\data\202411_trafficsign\traff_sign_yolo\class.txt'
+    #     # val_path = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\val.txt',
+    # )
+
     yolo_sta(
-        gt_dir=r"E:\data\202411_trafficsign\traff_sign_yolo\labels",
-        result_dir=r"E:\data\202411_trafficsign\traff_sign_yolo\labels_sta",
-        class_path=r'E:\data\202411_trafficsign\traff_sign_yolo\class.txt'
+        img_dir=r"E:\data\2024_defect\2024_defect_pure_yolo_merge\images",
+        gt_dir=r"E:\data\2024_defect\2024_defect_pure_yolo_merge\labels",
+        result_dir=r"E:\data\2024_defect\2024_defect_pure_yolo_merge\info_sta",
+        class_path=r'E:\data\2024_defect\2024_defect_pure_yolo_merge\class.txt'
         # val_path = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\val.txt',
     )
+

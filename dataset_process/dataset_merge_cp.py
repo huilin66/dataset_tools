@@ -2,9 +2,7 @@ from dataset_merge import *
 
 def search_color_tinydiffer(root_dir, input_name, output_name, temp_name):
     def compare_images(image1, image2):
-        mean_value = euclidean(image1.mean(axis=(0, 1)), image2.mean(axis=(0, 1)))  # Compare mean colors
-        # min_value = euclidean(image1.min(axis=(0, 1)), image2.min(axis=(0, 1)))
-        # max_value = euclidean(image1.max(axis=(0, 1)), image2.max(axis=(0, 1)))
+        mean_value = euclidean(image1.mean(axis=(0, 1)), image2.mean(axis=(0, 1)))
         return mean_value
     df = pd.read_csv(sta_summary_path, header=0, index_col=0)
     for idx, row in df.iterrows():
