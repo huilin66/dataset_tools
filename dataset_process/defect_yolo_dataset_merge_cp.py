@@ -1,4 +1,4 @@
-from dataset_merge import *
+from defect_yolo_dataset_merge import *
 
 def search_color_tinydiffer(root_dir, input_name, output_name, temp_name):
     def compare_images(image1, image2):

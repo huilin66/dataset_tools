@@ -33,6 +33,7 @@ def img_gap_copy(source_folder, destination_folder, gap_num=3):
             destination_path = os.path.join(destination_folder, '%d'%i, file_name)
             io.imsave(destination_path, img_processed)
 
+
 def yolo_copy(input_dir_list, output_dir):
     for i, input_dir in enumerate(input_dir_list):
         input_img_dir = os.path.join(input_dir, 'images')
@@ -49,6 +50,7 @@ def yolo_copy(input_dir_list, output_dir):
             input_label_path = os.path.join(input_label_dir, file_name)
             output_label_path = os.path.join(output_label_dir, file_name.replace('.txt', '_%d.txt'%i))
             shutil.copyfile(input_label_path, output_label_path)
+
 
 if __name__ == '__main__':
     pass
