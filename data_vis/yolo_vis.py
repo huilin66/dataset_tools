@@ -265,11 +265,11 @@ def yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=
     label_list = os.listdir(label_folder)
     label_list.sort()
     if not os.path.exists(output_folder):
-        os.mkdir(output_folder)
+        os.makedirs(output_folder, exist_ok=True)
     if crop_dir is not None and not os.path.exists(crop_dir):
-        os.mkdir(crop_dir)
+        os.makedirs(crop_dir, exist_ok=True)
         for cat in cats.values():
-            os.mkdir(os.path.join(crop_dir, cat))
+            os.makedirs(os.path.join(crop_dir, cat), exist_ok=True)
 
     for i in tqdm(range(len(img_list))):
         image_path = os.path.join(img_folder, img_list[i])
@@ -402,28 +402,38 @@ if __name__ == '__main__':
     # root_dir = r'E:\data\tp\sar_det'
     # root_dir = r'E:\data\0111_testdata\data_new\yolo_src'
     # root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c'
+    # root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c_det'
+    # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\bd1-9hgll-94afa\train'
     # root_dir = r'E:\data\20241113_road_veg\dataset'
     # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\crack-bpxku-hcu46\train'
-    root_dir = r'E:\demo\demo_slice_merge\yolo'
-    # img_folder = os.path.join(root_dir, 'images')
+    # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\defects-jkoqd-a3con\train'
+    # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\tile-jspbo-jhjfh\train'
+    root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\wall-defect-ogum1-3wsxo\train'
+    # root_dir = r'E:\demo\demo_slice_merge\yolo'
+    img_folder = os.path.join(root_dir, 'images')
     # label_folder = os.path.join(root_dir, 'labels')
     # img_folder = os.path.join(root_dir, 'images_slice')
     # label_folder = os.path.join(root_dir, 'labels_slice')
-    img_folder = os.path.join(root_dir, 'images_merge')
-    label_folder = os.path.join(root_dir, 'labels_merge')
+    # img_folder = os.path.join(root_dir, 'images_merge')
+    # label_folder = os.path.join(root_dir, 'labels_merge')
     # label_folder = os.path.join(root_dir, 'labels_det')
+    label_folder = os.path.join(root_dir, 'labels_det')
+    # label_folder = os.path.join(root_dir, 'labels_det_update')
     # output_folder = os.path.join(root_dir, 'images_vis')
-    # output_folder = os.path.join(root_dir, 'img_vis')
-    # crop_folder = os.path.join(root_dir, 'img_crop')
+    output_folder = os.path.join(root_dir, 'img_vis')
+    crop_folder = os.path.join(root_dir, 'img_crop')
+    # output_folder = os.path.join(root_dir, 'img_vis_update')
+    # crop_folder = os.path.join(root_dir, 'img_crop_update')
     # crop_folder = os.path.join(root_dir, 'images_crop')
     # crop_folder = os.path.join(root_dir, 'images_crop_keep')
     # crop_folder = os.path.join(root_dir, 'images_crop_det')
     # output_folder = os.path.join(root_dir, 'img_vis_slice')
     # crop_folder = os.path.join(root_dir, 'img_crop_slice')
-    output_folder = os.path.join(root_dir, 'img_vis_merge')
-    crop_folder = os.path.join(root_dir, 'img_crop_merge')
+    # output_folder = os.path.join(root_dir, 'img_vis_merge')
+    # crop_folder = os.path.join(root_dir, 'img_crop_merge')
     attribute_file = os.path.join(root_dir, 'attribute.yaml')
     class_file = os.path.join(root_dir, 'class.txt')
+    # class_file = os.path.join(root_dir, 'class_update.txt')
 
     shutil.rmtree(output_folder, ignore_errors=True)
     shutil.rmtree(crop_folder, ignore_errors=True)

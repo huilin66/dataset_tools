@@ -17,217 +17,12 @@ from skimage.metrics import structural_similarity as ssim
 from skimage.color import rgb2lab
 from scipy.spatial.distance import euclidean
 from data_vis.yolo_vis import yolo_data_vis
+from natsort import natsorted
 
-# region coco datasets
-ROOT_PATH = r'E:\data\2024_defect\2024_defect_det'
-
-error_set = {
-    'ConcreteCracksDetection':['data repeat'], # with hole category
-    'Dam_data.v14i.coco': ['hole category mixed with peeling and spalling'], # with hole category, mixed with peeling and spalling
-    'defectdetection': ['low resolution', 'Contamination is confusing'],
-    'Defects.v7-last-one.coco': ['cropped data'],
-    'detr_crack_dataset.v1i.coco': ['too much crack'],
-    'dsa.v1i.coco': ['blister mixed with water seepage'],
-    'new dataset.v3i.coco': ['too fragment'],
-    'tile.v6i.coco': ['too fragment'],
-    'wall.v1i.coco': ['few data'],
-    # 'walldefect': ['peeling is  crack'] # useful crack
-}
-
-categories_map = {
-    '200im': {
-        'crack': "crack",
-        'spall': "concrete_spalling",
-    },
-    '400img': {
-        'crack': "crack",
-        'spall': "concrete_spalling",
-    },
-    'Building Defect.v3i.coco': {
-        'crack': "crack",
-        'spall': "concrete_spalling",
-    },
-}
-categories_final = [
-    {
-        "id": 0,
-        "name": "background",
-        "supercategory": "none"
-    },
-    {
-        "id": 1,
-        "name": "crack",
-        "supercategory": "defect"
-    },
-    {
-        "id": 2,
-        "name": "concrete_spalling",
-        "supercategory": "defect"
-    },
-    {
-        "id": 3,
-        "name": "finishes_peeling",
-        "supercategory": "defect"
-    },
-    {
-        "id": 4,
-        "name": "water_seepage",
-        "supercategory": "defect"
-    },
-    {
-        "id": 5,
-        "name": "stain",
-        "supercategory": "defect"
-    },
-    {
-        "id": 6,
-        "name": "vegetation",
-        "supercategory": "defect"
-    }
-]
-
-# endregion
-
-# region coco tools
-
-def json_load(js_path):
-    with open(js_path, 'r') as load_f:
-        data = json.load(load_f)
-    return data
-
-def json_save(js_path, data):
-    with open(js_path, 'w') as save_f:
-        json.dump(data, save_f)
-
-
-def dataset_merge_coco(dst_dir, data_prefixs=None, merge_dir='train', img_gap=10000, anno_gap=10000):
-    dst_dir = os.path.join(dst_dir, merge_dir)
-    if not os.path.exists(dst_dir):
-        os.makedirs(os.path.join(dst_dir, merge_dir))
-    dst_json = os.path.join(dst_dir, '_annotations.coco.json')
-
-    data_list = os.listdir(dst_dir)
-    data_list.remove('00data_fuse')
-    data_key_list = [i for i in data_list if i not in b]
-
-
-    # data_key_list = [
-    #     '200im', '400img', 'Building Defect.v3i.coco',
-    #     'oldbuildingdamagedetection', 'defectdetection', 'walldefect',
-    #     # '200im', 'defectdetection',
-    # ]
-    # img_list = [
-    #     os.path.join(ROOT_PATH, data_key, merge_dir) for data_key in data_key_list
-    # ]
-    # json_list = [
-    #     os.path.join(ROOT_PATH, data_key, merge_dir, '_annotations.coco.json') for data_key in data_key_list
-    # ]
-    # categories_list = [
-    #     {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5},
-    #     {0: 0, 1: 1, 2: 6},
-    #     {0: 0, 1: 1, 2: 6},
-    #     {0: 0, 1: 1, 2: 6},
-    #     {0: 0, 1: 1, 2: 6},
-    #     {0: 0, 1: 1, 2: 6, 3: 2},
-    #     {0: 0, 1: 1, 2: 2, 3: 3},
-    #     # {0: 0, 1: 1, 2: 6},
-    #     # {0: 0, 1: 1, 2: 6, 3: 2},
-    # ]
-    if data_prefixs is None or len(data_prefixs) != len(data_key_list):
-        data_prefixs = ['data%02d_' % idx for idx in range(len(data_key_list))]
-
-    images_new = []
-    annos_new = []
-    for idx, train_js in enumerate(json_list):
-        data = json_load(train_js)
-        categories, images, annotations = data['categories'], data['images'], data['annotations']
-
-        data_prefix = data_prefixs[idx]
-        img_records = []
-        for img_record in tqdm(images, desc='%s img %s' % (merge_dir, data_prefix)):
-            img_record['id'] += img_gap*idx
-            src_name = img_record['file_name']
-            dst_name = data_prefix + src_name
-            img_record['file_name'] = dst_name
-            img_records.append(img_record)
-            src_path = os.path.join(img_list[idx], src_name)
-            dst_path = os.path.join(dst_dir, dst_name)
-            shutil.copy(src_path, dst_path)
-        anno_records = []
-        for anno_record in tqdm(annotations, desc='%s anno %s' % (merge_dir, data_prefix)):
-            anno_record['id'] += anno_gap*idx
-            anno_record['image_id'] += anno_gap * idx
-            anno_record['category_id'] =  categories_list[idx][anno_record['category_id']]
-            anno_records.append(anno_record)
-        images_new += img_records
-        annos_new += anno_records
-    data_new = {}
-    data_new['images'] = images_new
-    data_new['annotations'] = annos_new
-    data_new['categories'] = categories_final
-    json_save(dst_json, data_new)
-
-
-def dataset_sta_coco(root_dir, save_path):
-    pass
-
-    df = pd.DataFrame(None, columns=['name', 'train_img', 'train_box', 'val_img', 'val_num', 'test_img','test_num', 'cats'])
-
-    dir_list = os.listdir(root_dir)
-    dir_list.remove('00data_fuse')
-    for data_name in dir_list:
-        data_dir = os.path.join(root_dir, data_name)
-        train_dir = os.path.join(data_dir, 'train')
-        val_dir = os.path.join(data_dir, 'valid')
-        test_dir = os.path.join(data_dir, 'test')
-        train_data = json_load(os.path.join(train_dir, '_annotations.coco.json'))
-        val_data = json_load(os.path.join(val_dir, '_annotations.coco.json'))
-        test_data = json_load(os.path.join(test_dir, '_annotations.coco.json'))
-        cat_list = train_data['categories']
-        cats = []
-        for category in cat_list:
-            cat_name = category['name']
-            cats.append(cat_name)
-        train_img = len(train_data['images'])
-        train_box = len(train_data['annotations'])
-        val_img = len(val_data['images'])
-        val_box = len(val_data['annotations'])
-        test_img = len(test_data['images'])
-        test_box = len(test_data['annotations'])
-        record = [data_name, train_img, train_box, val_img, val_box, test_img, test_box, cats]
-        df.loc[len(df)] = record
-    print(df)
-    df.to_csv(save_path)
-
-
-def dataset_vis_coco(root_dir):
-    dir_list = os.listdir(root_dir)
-    dir_list.remove('00data_fuse')
-    for data_name in dir_list:
-        data_dir = os.path.join(root_dir, data_name)
-        # val_dir = os.path.join(data_dir, 'valid')
-        # val_vis_dir = os.path.join(data_dir, 'val_vis')
-        # anno_vis(os.path.join(val_dir, '_annotations.coco.json'), img_dir=val_dir, vis_dir=val_vis_dir)
-        train_dir = os.path.join(data_dir, 'train')
-        train_vis_dir = os.path.join(data_dir, 'train_vis')
-        anno_vis(os.path.join(train_dir, '_annotations.coco.json'), img_dir=train_dir, vis_dir=train_vis_dir)
-
-
-def get_root_csv_coco(data_root, save_dir):
-    os.makedirs(save_dir, exist_ok=True)
-    dir_list = os.listdir(data_root)
-    for data_name in dir_list:
-        data_dir = os.path.join(data_root, data_name)
-        if os.path.isdir(data_dir):
-            data_path = os.path.join(data_dir, r'README.dataset.txt')
-            if os.path.exists(data_path):
-                save_path = os.path.join(save_dir, data_name+'_url.txt')
-                shutil.copy(data_path, save_path)
-                print('save to',save_path)
-            else:
-                print(data_name, 'not exist')
-
-# endregion
+categories = ['background',
+              'crack', 'hole', 'blister', 'delamination', 'peeling',
+              'spalling', 'mold', 'corrosion', 'condensation', 'stain',
+              'vegetation', 'mix']
 
 # region yolo tools
 
@@ -774,6 +569,107 @@ def final_copy(src_dir, dst_dir, ref_name):
             shutil.copyfile(src_img_path, dst_img_path)
             shutil.copyfile(src_label_path, dst_label_path)
 
+def check_det_label(root_dir):
+    def remove_sample(error_info, label_path, image_dir):
+        base_name = Path(label_path).stem
+        img_extensions = ['.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG']
+
+        img_remove = False
+        for ext in img_extensions:
+            img_path = os.path.join(image_dir, base_name + ext)
+            if os.path.exists(img_path):
+                os.remove(img_path)
+                img_remove = True
+                break
+        if not img_remove:
+            IOError(f'cannot find image for {label_path}')
+
+        os.remove(label_path)
+        print(f'{error_info} remove {os.path.basename(label_path)}, {os.path.basename(img_path)}')
+
+    data_list = os.listdir(root_dir)
+    for idx, data_name in enumerate(data_list):
+        print(data_name, idx, len(data_list))
+        data_dir = os.path.join(root_dir, data_name)
+        image_dir = os.path.join(data_dir, 'train', 'images')
+        label_dir = os.path.join(data_dir, 'train', 'labels_det')
+
+        label_list = os.listdir(label_dir)
+        for label_name in label_list:
+            label_path = os.path.join(label_dir, label_name)
+            if os.path.getsize(label_path) == 0:
+                remove_sample(error_info='(empty)', label_path=label_path, image_dir=image_dir)
+            else:
+                try:
+                    df = pd.read_csv(label_path, header=None, index_col=None, sep=' ')
+                    if df.shape[1] != 5:
+                        remove_sample(error_info=df.shape, label_path=label_path, image_dir=image_dir)
+                except Exception as e:
+                    remove_sample(error_info=f'(error : {e})', label_path=label_path, image_dir=image_dir)
+
+def dataset_merge(src_dir, dst_dir, sta_summary_path, categories, based_on_updated_labels=False):
+    def copy_sample(src_image_path, dst_image_path, src_label_path, dst_label_path, categories_mapping, category):
+        df_label = pd.read_csv(src_label_path, header=None, index_col=None, names=['cat_id', 'x', 'y', 'h', 'w'], sep=' ')
+        df_label['cat_id'] = df_label['cat_id'].apply(lambda x: categories_mapping[category[x]])
+        df_label = df_label[~df_label['cat_id'].isin([categories_mapping['background'], categories_mapping['mix']])]
+        if len(df_label) > 0:
+            df_label.to_csv(dst_label_path, header=False, index=False, sep=' ')
+            shutil.copyfile(src_image_path, dst_image_path)
+
+    os.makedirs(dst_dir, exist_ok=True)
+    if based_on_updated_labels:
+        cat_column = 'cats_update'
+        cat_check_column = 'cats_check_update'
+        label_dir_name = 'labels_det_update'
+    else:
+        cat_column = 'cat'
+        cat_check_column = 'cats_check'
+        label_dir_name = 'labels_det'
+
+    categories_mapping = {category: idx for idx, category in enumerate(categories)}
+
+    shutil.rmtree(dst_dir)
+    dst_images_dir = os.path.join(dst_dir, 'images')
+    dst_labels_dir = os.path.join(dst_dir, 'labels')
+    os.makedirs(dst_images_dir, exist_ok=True)
+    os.makedirs(dst_labels_dir, exist_ok=True)
+
+    df_sta = pd.read_csv(sta_summary_path, header=0, index_col=0)
+    df_sta[cat_column] = df_sta[cat_column].apply(ast.literal_eval)
+    df_sta[cat_check_column] = df_sta[cat_check_column].apply(ast.literal_eval)
+
+    # region check
+    cats_lengths = df_sta[cat_column].apply(len)
+    cats_check_lengths = df_sta[cat_check_column].apply(len)
+    mismatch = df_sta[cats_lengths != cats_check_lengths]
+    if len(mismatch) > 0:
+        print(mismatch)
+
+    def check_categories(cats_list):
+        return all(item in categories for item in cats_list)
+    invalid_records = df_sta[~df_sta[cat_check_column].apply(check_categories)]
+    if len(invalid_records) > 0:
+        print(invalid_records)
+    # endregion
+
+
+    for idx, row in df_sta.iterrows():
+        category = row[cat_check_column]
+        data_name = row['name']
+        print(f'{idx}/{len(df_sta)}, {data_name}, category: {category}')
+
+        src_data_dir = os.path.join(src_dir, data_name)
+        src_images_dir = os.path.join(src_data_dir, 'train', 'images')
+        src_labels_dir = os.path.join(src_data_dir, 'train', label_dir_name)
+
+        img_list = os.listdir(src_images_dir)
+        for img_name in tqdm(img_list):
+            src_image_path = os.path.join(src_images_dir, img_name)
+            src_label_path = os.path.join(src_labels_dir, Path(img_name).stem+'.txt')
+            dst_image_path = os.path.join(dst_images_dir, img_name)
+            dst_label_path = os.path.join(dst_labels_dir, Path(img_name).stem+'.txt')
+
+            copy_sample(src_image_path, dst_image_path, src_label_path, dst_label_path, categories_mapping, category)
 
 def convert_seg2det(root_dir, ref_path):
     data_list = os.listdir(root_dir)
@@ -832,6 +728,131 @@ def dataset_vis(root_dir, ref_path):
 butler-defect-yevm2 有衣服？
 
 '''
+
+def get_csv_by_cliped_img(label_dir, img_crop_dir, class_path=None, class_list=None):
+    if class_path is not None:
+        df = pd.read_csv(class_path, header=None, index_col=None, names=['category'])
+        cats = df['category'].to_dict()
+    elif class_list is not None:
+        cats = {i: name for i, name in enumerate(class_list)}
+    else:
+        ValueError('class_path or class_list must be specified')
+
+    label_list = os.listdir(label_dir)
+    label_list = natsorted(label_list)
+    df_label_list = []
+    for label_name in tqdm(label_list, desc='Loading labels'):
+        label_path = os.path.join(label_dir, label_name)
+        df_label = pd.read_csv(label_path, header=None, index_col=None, names=['cat_id', 'x', 'y', 'w', 'h'], sep=' ')
+        df_label['file_name'] = label_name
+        df_label['object_id'] = df_label.index
+        df_label_list.append(df_label)
+    if len(df_label_list) > 0:
+        df = pd.concat(df_label_list, axis=0)
+        df['cat_name'] = df['cat_id'].map(cats)
+        df['updated_cat_name'] = df['cat_name']
+
+        for cat_id in range(len(cats)):
+            df_cat = df[df['cat_id'] == cat_id]
+            df_cat_path = os.path.join(img_crop_dir, cats[cat_id]+'.csv')
+            df_cat.to_csv(df_cat_path, index=False)
+
+def dataset_get_csv_by_cliped_img(root_dir, sta_summary_path):
+    df_sta = pd.read_csv(sta_summary_path, header=0, index_col=0)
+    df_sta['cats'] = df_sta['cats'].apply(ast.literal_eval)
+    df_sta['cats_check'] = df_sta['cats_check'].apply(ast.literal_eval)
+
+    for idx, dataset_name in enumerate(df_sta['name']):
+        print(idx, dataset_name)
+        data_dir = os.path.join(root_dir, dataset_name, 'train')
+        label_dir = os.path.join(data_dir, 'labels_det')
+        img_crop_dir = os.path.join(data_dir, 'img_crop')
+        class_path = os.path.join(data_dir, 'class.txt')
+        get_csv_by_cliped_img(label_dir, img_crop_dir, class_path)
+
+def label_update_by_cliped_img(input_dir, output_dir, img_crop_dir, class_path=None, class_list=None):
+    if class_path is not None:
+        df = pd.read_csv(class_path, header=None, index_col=None, names=['category'])
+        cats = df['category'].to_dict()
+    elif class_list is not None:
+        cats = {i: name for i, name in enumerate(class_list)}
+    else:
+        ValueError('class_path or class_list must be specified')
+
+    cats2id = {name: id for id, name in cats.items()}
+
+    os.makedirs(output_dir, exist_ok=True)
+    for label_name in tqdm(os.listdir(input_dir), desc='Label copy'):
+        input_path = os.path.join(input_dir, label_name)
+        output_path = os.path.join(output_dir, label_name)
+        shutil.copy(input_path, output_path)
+
+    for cat_id, cat_name in cats.items():
+        cat_csv_path = os.path.join(img_crop_dir, f'{cat_name}.csv')
+        if not os.path.exists(cat_csv_path):
+            continue
+        df_cat = pd.read_csv(cat_csv_path, header=0, index_col=0)
+        df_cat_differ = df_cat[df_cat['updated_cat_name'] != df_cat['cat_name']]
+
+        df_cat_differ['updated_cat_id'] = df_cat_differ['updated_cat_name'].map(cats2id)
+        label_differ_list = df_cat_differ['file_name'].unique()
+        for label_differ in tqdm(label_differ_list, desc='Label update'):
+            df_label_differ = df_cat_differ[df_cat_differ['file_name'] == label_differ]
+            label_path = os.path.join(output_dir, label_differ)
+            df_label = pd.read_csv(label_path, header=None, index_col=None, names=['cat_id', 'x', 'y', 'w', 'h'], sep=' ')
+            for idx, row in df_label_differ.iterrows():
+                object_id = row['object_id']
+                updated_cat_name = row['updated_cat_name']
+                df_label.loc[object_id, 'cat_id'] = cats2id[updated_cat_name]
+            df_label.to_csv(label_path, header=False, index=False, sep=' ')
+        print(f'updated {len(label_differ_list)} files, {len(df_cat_differ)} boxes')
+
+def dataset_label_update_by_cliped_img(root_dir, sta_summary_path):
+    df_sta = pd.read_csv(sta_summary_path, header=0, index_col=0)
+    df_sta['cats'] = df_sta['cats'].apply(ast.literal_eval)
+    df_sta['cats_check'] = df_sta['cats_check'].apply(ast.literal_eval)
+    df_sta['cats_update'] = df_sta['cats']
+    df_sta['cats_check_update'] = df_sta['cats_check']
+
+
+    for idx, dataset_name in enumerate(df_sta['name']):
+
+        data_dir = os.path.join(root_dir, dataset_name, 'train')
+        label_dir = os.path.join(data_dir, 'labels_det')
+        label_update_dir = os.path.join(data_dir, 'labels_det_update')
+        img_crop_dir = os.path.join(data_dir, 'img_crop')
+        class_path = os.path.join(data_dir, 'class.txt')
+        class_update_path = os.path.join(data_dir, 'class_update.txt')
+
+        df = pd.read_csv(class_path, header=None, index_col=None, names=['category'])
+        cats = df['category'].to_list()
+        added_cats = []
+        for cat_name in cats:
+            cat_path = os.path.join(img_crop_dir, cat_name+'.csv')
+            if not os.path.exists(cat_path):
+                continue
+            df_cat = pd.read_csv(cat_path)
+            updated_cat_names = df_cat['updated_cat_name'].unique()
+            for updated_cat_name in updated_cat_names:
+                if updated_cat_name not in cats and updated_cat_name not in added_cats:
+                    added_cats.append(updated_cat_name)
+                    if updated_cat_name not in categories:
+                        print(f'{updated_cat_name} not in {categories} for {cat_path}')
+        final_cats = cats + added_cats
+
+        src_row = df_sta.loc[idx].to_list()
+        src_row[-2] = final_cats
+        src_row[-1] = src_row[-1] + added_cats
+        df_sta.loc[idx] = src_row
+        print(f'\n{idx}, {dataset_name}:\n {cats}\n -->\n {final_cats}\n')
+
+        label_update_by_cliped_img(label_dir, label_update_dir, img_crop_dir, class_list=final_cats)
+
+        df_class_update = pd.DataFrame(src_row[-1], columns=['cat_updated'])
+        df_class_update.to_csv(class_update_path, header=False, index=False)
+
+    df_sta.to_csv(sta_summary_path)
+
 if __name__ == '__main__':
     pass
     # region coco codes
@@ -849,6 +870,7 @@ if __name__ == '__main__':
 
     data_dir = r'E:\data\2024_defect\2024_defect_pure_yolo'
     dst_data_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final'
+    merge_data_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_merge'
     sta_summary_path = r'E:\data\2024_defect\2024_defect_pure_yolo_sta\sta_summary.csv'
     # datasets_sta_yolo(data_dir, sta_summary_path)
 
@@ -864,7 +886,8 @@ if __name__ == '__main__':
 
     # search_intersect_data(data_dir, 'data_rmaug_rmshift_rmrotate_rmmirror.csv', 'data_rmaug_rmshift_rmrotate_rmmirror_rminter.csv', sta_summary_path)
 
-    search_color_tinydiffer(data_dir, 'data_rmaug_rmshift_rmrotate_rmmirror_rminter.csv', 'data_rmaug_rmshift_rmrotate_rmmirror_rminter_rmcolor.csv', 'color_difference.csv')
+    # search_color_tinydiffer(data_dir, 'data_rmaug_rmshift_rmrotate_rmmirror_rminter.csv', 'data_rmaug_rmshift_rmrotate_rmmirror_rminter_rmcolor.csv', 'color_difference.csv')
+
 
     # get_remained_img(data_dir, 'data.csv')
     # get_remained_img(data_dir, 'data_rmaug.csv')
@@ -877,7 +900,15 @@ if __name__ == '__main__':
 
     # final_copy(data_dir, dst_data_dir, 'data_rmaug_rmshift_rmrotate_rmmirror_rminter.csv')
 
+
+
     # convert_seg2det(dst_data_dir, sta_summary_path)
+    # check_det_label(dst_data_dir)
 
     # dataset_vis(dst_data_dir, sta_summary_path)
 
+    # dataset_get_csv_by_cliped_img(dst_data_dir, sta_summary_path)
+
+    # dataset_label_update_by_cliped_img(dst_data_dir, sta_summary_path)
+
+    dataset_merge(dst_data_dir, merge_data_dir, sta_summary_path, categories, based_on_updated_labels=True)
