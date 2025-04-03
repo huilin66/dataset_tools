@@ -1,12 +1,11 @@
 import os
 import shutil
-
-import matplotlib.pyplot as plt
 import numpy as np
 import cv2
 from tqdm import tqdm
 import yaml
 import pandas as pd
+from PIL import Image, ImageOps
 
 red_color_bgr = (0, 0, 255)
 colormap = [
@@ -53,26 +52,36 @@ def attribute2label(label, attribute_values, attributes, attribute_len):
     return attribute_labels
 
 def get_attribute_len(attributes):
-    attribute_len = 0
-    for k, v in attributes.items():
-        attribute_len += len(v)-1
+    # attribute_len = 0
+    # for k, v in attributes.items():
+    #     attribute_len += len(v)-1
+    attribute_len = len(attributes)
     return attribute_len
 
 def get_attribute(attribute_dict, gt_attribute):
-    attributes = {}
-    idx = 0
-    attribute_len = get_attribute_len(attribute_dict)
-    assert attribute_len == len(gt_attribute)
-    if isinstance(gt_attribute[0], str):
-        gt_attribute = [int(gt_value) for gt_value in gt_attribute]
-    for k, v in attribute_dict.items():
-        assert len(v) > 1
-        attributes[k] = False
-        for i in range(1, len(v)):
-            if gt_attribute[idx] == 1:
-                attributes[k] = v[i]
-            idx += 1
-    return attributes
+    # attributes = {}
+    # idx = 0
+    # attribute_len = get_attribute_len(attribute_dict)
+    # assert attribute_len == len(gt_attribute)
+    # if isinstance(gt_attribute[0], str):
+    #     gt_attribute = [int(gt_value) for gt_value in gt_attribute]
+    # for k, v in attribute_dict.items():
+    #     assert len(v) > 1
+    #     attributes[k] = False
+    #     for i in range(1, len(v)):
+    #         if gt_attribute[idx] == 1:
+    #             attributes[k] = v[i]
+    #         idx += 1
+    # return attributes
+
+    attributes_recover = {}
+    attribute_dict_key_list = list(attribute_dict.keys())
+
+    for idx, gt_value in enumerate(gt_attribute):
+        attribute_name = attribute_dict_key_list[idx]
+        attribute_value = attribute_dict[attribute_name][int(gt_value)]
+        attributes_recover[attribute_name] = attribute_value
+    return attributes_recover
 # endregion
 
 
@@ -134,7 +143,7 @@ def xywh2xyxy(x, w1, h1, img, img_vis, cats, crop=True, attributes=None, filter_
         for idx, (k, v) in enumerate(attributes.items()):
             if filter_no:
                 text = f'{k}'
-                if not v:
+                if not v or v == 'no':
                     continue
             else:
                 text = f'{k}-{v}'
@@ -160,7 +169,7 @@ def xywh2xyxy(x, w1, h1, img, img_vis, cats, crop=True, attributes=None, filter_
             for idx, (k, v) in enumerate(attributes.items()):
                 if filter_no:
                     text = f'{k}'
-                    if not v:
+                    if not v or v == 'no':
                         continue
                 else:
                     text = f'{k}-{v}'
@@ -219,7 +228,7 @@ def xywh2poly(x, w, h, img, img_vis, cats, crop=True, attributes=None, filter_no
         for idx, (k, v) in enumerate(attributes.items()):
             text = f'{k}-{v}'
             if filter_no:
-                if not v:
+                if not v or v == 'no':
                     continue
             count += 1
             color = (255, 0, 0) if v is not False else (0, 0, 0)
@@ -243,7 +252,7 @@ def xywh2poly(x, w, h, img, img_vis, cats, crop=True, attributes=None, filter_no
             for idx, (k, v) in enumerate(attributes.items()):
                 text = f'{k}-{v}'
                 if filter_no:
-                    if not v:
+                    if not v or v == 'no':
                         continue
                 count2 += 1
                 color = (255, 0, 0) if v is not False else (0, 0, 0)
@@ -312,11 +321,12 @@ def yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=
             save_path = image_path.replace(img_folder, output_folder)
             cv2.imwrite(save_path, img_vis)
 
-def yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=None, attribute_file=None, filter_no=False, seg=False, crop_keep_shape=False, det_crop=True):
+def yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=None, attribute_file=None,
+                  filter_no=False, seg=False, crop_keep_shape=False, det_crop=True):
     cats = get_cats(class_file)
     if attribute_file is not None:
         with open(attribute_file, 'r') as file:
-            attribute_dict = yaml.safe_load(file)['attributes']
+            attribute_dict = yaml.load(file, Loader=yaml.BaseLoader)['attributes']
     else:
         attribute_dict = None
     img_list = os.listdir(img_folder)
@@ -336,7 +346,11 @@ def yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=
     for i in tqdm(range(len(img_list))):
         image_path = os.path.join(img_folder, img_list[i])
         label_path = os.path.join(label_folder, label_list[i])
-        img = cv2.imread(image_path)
+        # img = cv2.imread(image_path)
+        img = Image.open(image_path)
+        # img = ImageOps.exif_transpose(img)
+        img = np.array(img)
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         h, w = img.shape[:2]
         img_vis = img.copy()
         with open(label_path, 'r') as f:
@@ -408,37 +422,42 @@ if __name__ == '__main__':
     # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\crack-bpxku-hcu46\train'
     # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\defects-jkoqd-a3con\train'
     # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\tile-jspbo-jhjfh\train'
-    root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\wall-defect-ogum1-3wsxo\train'
+    # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\wall-defect-ogum1-3wsxo\train'
     # root_dir = r'E:\demo\demo_slice_merge\yolo'
+    root_dir = r'E:\data\202502_signboard\20250224 Signboard Data and CDU\Selected_Sample'
     img_folder = os.path.join(root_dir, 'images')
-    # label_folder = os.path.join(root_dir, 'labels')
+    # img_folder = os.path.join(root_dir, 'images_val')
+    label_folder = os.path.join(root_dir, 'labels')
     # img_folder = os.path.join(root_dir, 'images_slice')
     # label_folder = os.path.join(root_dir, 'labels_slice')
     # img_folder = os.path.join(root_dir, 'images_merge')
     # label_folder = os.path.join(root_dir, 'labels_merge')
     # label_folder = os.path.join(root_dir, 'labels_det')
-    label_folder = os.path.join(root_dir, 'labels_det')
+    # label_folder = os.path.join(root_dir, 'labels_det')
     # label_folder = os.path.join(root_dir, 'labels_det_update')
-    # output_folder = os.path.join(root_dir, 'images_vis')
-    output_folder = os.path.join(root_dir, 'img_vis')
-    crop_folder = os.path.join(root_dir, 'img_crop')
+    # label_folder = os.path.join(root_dir, 'labels_val')
+    # output_folder = os.path.join(root_dir, 'images_val_vis')
+    output_folder = os.path.join(root_dir, 'images_vis')
+    # output_folder = os.path.join(root_dir, 'img_vis')
+    # crop_folder = os.path.join(root_dir, 'img_crop')
     # output_folder = os.path.join(root_dir, 'img_vis_update')
     # crop_folder = os.path.join(root_dir, 'img_crop_update')
-    # crop_folder = os.path.join(root_dir, 'images_crop')
+    crop_folder = os.path.join(root_dir, 'images_crop')
     # crop_folder = os.path.join(root_dir, 'images_crop_keep')
     # crop_folder = os.path.join(root_dir, 'images_crop_det')
     # output_folder = os.path.join(root_dir, 'img_vis_slice')
     # crop_folder = os.path.join(root_dir, 'img_crop_slice')
     # output_folder = os.path.join(root_dir, 'img_vis_merge')
     # crop_folder = os.path.join(root_dir, 'img_crop_merge')
-    attribute_file = os.path.join(root_dir, 'attribute.yaml')
+    # attribute_file = os.path.join(root_dir, 'attribute.yaml')
+    attribute_file = os.path.join(root_dir, 'attribute_v3.yaml')
     class_file = os.path.join(root_dir, 'class.txt')
     # class_file = os.path.join(root_dir, 'class_update.txt')
 
-    shutil.rmtree(output_folder, ignore_errors=True)
-    shutil.rmtree(crop_folder, ignore_errors=True)
+    # shutil.rmtree(output_folder, ignore_errors=True)
+    # shutil.rmtree(crop_folder, ignore_errors=True)
 
-    yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=False)
+    # yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=False)
     # yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=True)
     # yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=False, attribute_file=attribute_file, filter_no=True, crop_keep_shape=True, det_crop=True)
-    # yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=True, attribute_file=attribute_file, filter_no=True)
+    yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=True, attribute_file=attribute_file, filter_no=True)

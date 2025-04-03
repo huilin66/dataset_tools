@@ -61,9 +61,13 @@ data_list = [
 #     "corrosion-of-automation-ioqzy", # https://universe.roboflow.com/corrosion-project/corrosion-of-automation
 #     "corrosion-detection-npdhd-ekx8c", # https://universe.roboflow.com/corrosion-l4cqs/corrosion-detection-npdhd
 
-'detect-veckx-fns2w',
-    'error-traffic-glvxm',
-    'sam-oow6j-vtyge',
+# 'detect-veckx-fns2w',
+#     'error-traffic-glvxm',
+#     'sam-oow6j-vtyge',
+
+    "condensation-ysvlp",
+    "raindrop-q3bsb-47sik",
+    "object-please-ztqrd",
 ]
 
 
