@@ -10,6 +10,32 @@ from data_sta import dir_shape_sta
 shp_rate_bins = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2, 2.1, 2.2, 2.4, 2.6, 3, 3.5, 4, 5]
 
 # center_x center_y width height
+def segmented_bar(df, save_path):
+    plt.figure(figsize=(12, 6))
+    box_cats = df.columns.to_list()
+    assert box_cats[-1] == 'total'
+    for cat in box_cats:
+        plt.bar(df.index, df[cat], label=cat, color='skyblue')
+
+    # 添加总数标签
+    for i, tot in enumerate(df['total']):
+        plt.text(i, tot + 5, f'{tot}', ha='center', va='bottom', fontsize=10)
+
+    # 添加标题和标签
+    plt.title('Distribution of Signboard Defect by Category', fontsize=16)
+    plt.xlabel('Categories', fontsize=14)
+    plt.ylabel('Count', fontsize=14)
+
+    # 添加图例
+    plt.legend(title='box Type', bbox_to_anchor=(1.05, 1), loc='upper left')
+
+    # 旋转 x 轴标签，避免重叠
+    plt.xticks(rotation=45, ha='right')
+    plt.savefig(save_path, bbox_inches='tight')
+    # plt.show()
+
+
+
 def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None, img_dir=None):
     os.makedirs(result_dir, exist_ok=True)
 
@@ -28,8 +54,6 @@ def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None, 
         csv_path = os.path.join(result_dir, 'sta_attribute.csv')
         df_attribute.to_csv(csv_path)
         print('csv save to', csv_path)
-
-
 
         print('+'*100)
         no_defect_boxes = df_attribute[df_attribute['attribute sum'] == 0].shape[0]
@@ -63,11 +87,31 @@ def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None, 
         category_defects.loc['total'] = total_defects
         category_defects = category_defects.T
 
-        plt.figure(figsize=(12, 8))
-        category_defects.drop(index=['attribute sum', 'with attribute']).plot(kind='bar', title='defects distribution')
+
+        cats = category_defects.drop(index=['attribute sum', 'with attribute'])
+        cats = cats.sort_index()
+        plt.rcParams.update({
+            'font.size': 12,  # 增大字体
+            'axes.titlesize': 14,  # 标题字体
+            'xtick.labelsize': 11,  # X轴标签字体
+            'ytick.labelsize': 11,  # Y轴标签字体
+            'legend.fontsize': 10,  # 图例字体
+        })
+        fig, ax = plt.subplots(figsize=(10, 6), tight_layout=True)
+        colors = ['#6baed6', '#fdae6b', '#74c476']
+        bars = cats.plot(
+            kind='bar',
+            title='distribution of defective signboard',
+            ax=ax,
+            color=colors,
+            width=0.7,
+        )
+        # category_defects.drop(index=['attribute sum', 'with attribute']).plot(kind='bar', title='defects distribution')
         plt.xticks(rotation=15)
         plt.savefig(png_att_path)
         plt.close()
+        category_defects.to_csv(csv_path.replace('.csv', '_distributions.csv'))
+        segmented_bar(category_defects, csv_path.replace('.csv', '_distributions.png'))
         print('+'*100)
         print(category_defects)
         print('+'*100)
@@ -198,17 +242,32 @@ if __name__ == '__main__':
     # )
 
     # yolo_sta(
+    #     gt_dir=r"E:\data\0417_signboard\data0521_m\yolo_rgb_detection5\labels",
+    #     result_dir=r"E:\data\0417_signboard\data0521_m\yolo_rgb_detection5\labels_sta",
+    #     class_path=r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5\class.txt',
+    #     attribute_path=r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5\attribute.yaml',
+    #     # val_path = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\val.txt',
+    # )
+
+    # yolo_sta(
     #     gt_dir=r"E:\data\202411_trafficsign\traff_sign_yolo\labels",
     #     result_dir=r"E:\data\202411_trafficsign\traff_sign_yolo\labels_sta",
     #     class_path=r'E:\data\202411_trafficsign\traff_sign_yolo\class.txt'
     #     # val_path = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\val.txt',
     # )
 
+    # yolo_sta(
+    #     img_dir=r"E:\data\2024_defect\2024_defect_pure_yolo_merge\images",
+    #     gt_dir=r"E:\data\2024_defect\2024_defect_pure_yolo_merge\labels",
+    #     result_dir=r"E:\data\2024_defect\2024_defect_pure_yolo_merge\info_sta",
+    #     class_path=r'E:\data\2024_defect\2024_defect_pure_yolo_merge\class.txt'
+    #     # val_path = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\val.txt',
+    # )
+
     yolo_sta(
-        img_dir=r"E:\data\2024_defect\2024_defect_pure_yolo_merge\images",
-        gt_dir=r"E:\data\2024_defect\2024_defect_pure_yolo_merge\labels",
-        result_dir=r"E:\data\2024_defect\2024_defect_pure_yolo_merge\info_sta",
-        class_path=r'E:\data\2024_defect\2024_defect_pure_yolo_merge\class.txt'
+        gt_dir=r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels",
+        result_dir=r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels_sta",
+        class_path=r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\class.txt',
+        attribute_path=r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\attribute.yaml',
         # val_path = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\val.txt',
     )
-

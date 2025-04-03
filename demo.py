@@ -1,225 +1,72 @@
-import os
-import cv2
-import pandas as pd
-from skimage import io
-from skimage.metrics import structural_similarity as ssim
-import imagehash
-from PIL import Image
-
-# 计算感知哈希相似度 (pHash)
-def calculate_phash_similarity(imageA_path, imageB_path):
-    # 打开图片并计算感知哈希值
-    hashA = imagehash.phash(Image.open(imageA_path))
-    hashB = imagehash.phash(Image.open(imageB_path))
-
-    # 计算哈希值之间的差距（距离越小，图片越相似）
-    return abs(hashA - hashB)
-
-# 计算 SSIM
-def calculate_ssim(imageA, imageB):
-    # 将图像转换为灰度图以计算 SSIM
-    grayA = cv2.cvtColor(imageA, cv2.COLOR_BGR2GRAY)
-    grayB = cv2.cvtColor(imageB, cv2.COLOR_BGR2GRAY)
-    score, _ = ssim(grayA, grayB, full=True)
-    return score
-
-# 计算直方图相似度
-def calculate_histogram_similarity(imageA, imageB):
-    # 计算图片的直方图，并进行归一化
-    histA = cv2.calcHist([imageA], [0], None, [256], [0, 256])
-    histB = cv2.calcHist([imageB], [0], None, [256], [0, 256])
-    histA = cv2.normalize(histA, histA).flatten()
-    histB = cv2.normalize(histB, histB).flatten()
-
-    # 使用相关性比较直方图
-    similarity = cv2.compareHist(histA, histB, cv2.HISTCMP_CORREL)
-    return similarity
-import cv2
 import numpy as np
-
-def find_translation(imageA, imageB):
-    # 转换为灰度图
-    grayA = cv2.cvtColor(imageA, cv2.COLOR_BGR2GRAY)
-    grayB = cv2.cvtColor(imageB, cv2.COLOR_BGR2GRAY)
-
-    # 创建ORB特征检测器
-    orb = cv2.ORB_create()
-
-    # 检测特征点和描述符
-    keypointsA, descriptorsA = orb.detectAndCompute(grayA, None)
-    keypointsB, descriptorsB = orb.detectAndCompute(grayB, None)
-
-    # 使用BFMatcher进行特征点匹配
-    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-    matches = bf.match(descriptorsA, descriptorsB)
-
-    # 按距离排序
-    matches = sorted(matches, key=lambda x: x.distance)
-
-    # 获取匹配点
-    pointsA = np.float32([keypointsA[m.queryIdx].pt for m in matches])
-    pointsB = np.float32([keypointsB[m.trainIdx].pt for m in matches])
-
-    # 使用RANSAC剔除错误匹配，并估计平移矩阵
-    if len(pointsA) >= 400:  # 至少需要4个点来计算仿射变换
-        matrix, mask = cv2.estimateAffinePartial2D(pointsA, pointsB, method=cv2.RANSAC)
-        if matrix is not None:
-            # 平移量是仿射变换矩阵中的最后一列
-            translation = matrix[:, 2]
-            return translation, mask.sum()  # 返回平移量和有效匹配的数量
-        else:
-            return None, 0
-    else:
-        return None, 0
+from matplotlib import pyplot as plt
 
 
-def phase_correlation(imageA, imageB):
-    # 将图片转换为灰度图
-    r1, g1, b1 = cv2.split(imageA)
-    r2, g2, b2 = cv2.split(imageB)
+def apply_masks_to_image(image, masks, colors, alpha):
+    """
+    将带有颜色的mask叠加到图像上
 
-    # 使用傅里叶变换计算相位相关
-    shift1, p1 = cv2.phaseCorrelate(np.float32(r1), np.float32(r2))
-    shift2, p2 = cv2.phaseCorrelate(np.float32(g1), np.float32(g2))
-    shift3, p3 = cv2.phaseCorrelate(np.float32(b1), np.float32(b2))
-    shift = shift1 + shift2 + shift3
-    p = p1 + p2 + p3
+    参数:
+        image: 原始图像 (H, W, 3)
+        masks: 多个mask (H, W, n)
+        colors: 颜色数组 (n, 3)
+        alpha: 透明度 (标量或n,)
 
-    return shift, p
+    返回:
+        叠加后的图像 (H, W, 3)
+    """
+    # 确保alpha是数组形式
+    alpha = np.asarray(alpha)
+    if alpha.ndim == 0:
+        alpha = np.full(masks.shape[2], alpha)
 
-# # 图片路径
-# img_dir = r'E:\data\2024_defect\2024_defect_pure_yolo\8.10-train-e3pt6-rfruo\train\images'
-# # img_name1 = r'IMG_0760_JPG_jpg.rf.ea590674028b55c5af4b404ffbdc7d7d.jpg'
-# # img_name2 = r'IMG_0761_JPG_jpg.rf.5bf795b640168089ed03d49e0dbbf1c2.jpg'
-# # img_name2 = r'IMG_0763_JPG_jpg.rf.493a14f4da27268dae4f707dfe380211.jpg'
-# '''
-# SSIM: 0.8175189262868251
-# Histogram Similarity: 0.7842843485090284
-# pHash similarity (distance): 8
-# SSIM: 0.76299829869551
-# Histogram Similarity: 0.6590532336908695
-# pHash similarity (distance): 24
-# '''
-# # img_name1 = r'IMG_0846_JPG_jpg.rf.ce1204d0cc2fd76a2a30a428bb66c2af.jpg'
-# # img_name1 = r'IMG_0847_JPG_jpg.rf.f0d342f21a8573ccd2c39b24e258cafe.jpg'
-# # img_name2 = r'IMG_0848_JPG_jpg.rf.d6d13a202b50378762756889363d2fef.jpg'
-# # img_name2 = r'IMG_0845_JPG_jpg.rf.5bf18cf1effa5abce28e1c4d93dc7dff.jpg'
-# '''
-# SSIM: 0.549671291143662
-# Histogram Similarity: 0.8985382908603161
-# pHash similarity (distance): 8
-# Detected shift (x, y): ((-12.94651216700197, -30.21279684981579), 0.7554708497226238)
-# '''
-# # img_name1 = r'IMG_2460_JPG_jpg.rf.362f7ea90ed98293b6726dca9c9fa22d.jpg'
-# # img_name2 = r'IMG_2461_JPG_jpg.rf.d5891a9e05d20033bb021569b88362fc.jpg'
-# '''
-# SSIM: 0.7514438351005026
-# Histogram Similarity: 0.7662142931378835
-# pHash similarity (distance): 26
-# '''
-# # img_name1 = r'IMG_20200118_100636_jpg.rf.c07853f314a2b33614884b7b65ce15ef.jpg'
-# # img_name2 = r'IMG_20200118_100640_jpg.rf.6a955292322455a90a7ccbe35641b63c.jpg'
-#
-#
-# img_name1 = r'IMG_0767_JPG_jpg.rf.95eb86b8b75d48d31efea07fc7d209a3.jpg'
-# img_name2 = r'IMG_0768_JPG_jpg.rf.3a9b53b19633747e7f3f088029d31c3f.jpg'
-# img_path1 = os.path.join(img_dir, img_name1)
-# img_path2 = os.path.join(img_dir, img_name2)
-#
-# # 读取两张图片（用 OpenCV 读取以进行直方图计算）
-# imageA = cv2.imread(img_path1)
-# imageB = cv2.imread(img_path2)
+    # 将masks从(H,W,n)转为(H,W,n,1)以便广播
+    masks_exp = masks[..., np.newaxis]
 
-# # 计算SSIM
-# similarity = calculate_ssim(imageA, imageB)
-# print(f"SSIM: {similarity}")
-#
-# # 计算直方图相似度
-# hist_similarity = calculate_histogram_similarity(imageA, imageB)
-# print(f"Histogram Similarity: {hist_similarity}")
-#
-# # 计算 pHash 相似度
-# phash_similarity = calculate_phash_similarity(img_path1, img_path2)
-# print(f"pHash similarity (distance): {phash_similarity}")
+    # 将colors从(n,3)转为(1,1,n,3)以便广播
+    colors_exp = colors.reshape(1, 1, *colors.shape)
 
+    # 调整alpha的形状为(1,1,n,1)以便广播
+    alpha_exp = alpha.reshape(1, 1, -1, 1)
 
-# # 找到两张图片之间的平移
-# translation = find_translation(imageA, imageB)
-# if translation is not None:
-#     print(f"Translation vector: {translation}")
-# else:
-#     print("No translation found or insufficient matches.")
+    # 计算每个mask的彩色贡献 (H,W,n,3)
+    colored_masks = masks_exp * colors_exp
 
-# shift = phase_correlation(imageA, imageB)
-# print(f"Detected shift (x, y): {shift}")
-# import timm
-# # # print(timm.list_models())
-# # model = timm.create_model('convnext_tiny', pretrained=True)
-# # print(model)
-# for m in timm.list_models():
-#     print(m)
-#
-# model = timm.create_model('swin_large_patch4_window12_384', pretrained=True)
+    # 加权合并所有mask (H,W,3)
+    combined_masks = np.sum(colored_masks * alpha_exp, axis=2)
 
-import os, re
-import cv2
-import numpy as np
-import pandas as pd
-from skimage.metrics import structural_similarity as ssim
-from tqdm import tqdm
-from natsort import natsorted
-# 定义文件夹路径和保存路径
-image_folder = r"E:\data\2024_defect\2024_defect_pure_yolo_final\detr_crack_dataset-bnrlv\train\images"  # 替换为你的图片文件夹路径
-output_csv = "image_similarity.csv"  # 输出的 CSV 文件路径
+    # 计算所有mask的总权重 (H,W)
+    total_weight = np.sum(masks * alpha, axis=2)
 
-def extract_number(filename):
-    match = re.search(r'crack-(\d+)', filename)  # 匹配 "crack-" 后面的数字
-    return int(match.group(1)) if match else float('inf')  # 无法匹配的放最后
+    # 归一化权重 (避免除以0)
+    total_weight = np.clip(total_weight, 0, 1)
+    total_weight_exp = np.expand_dims(total_weight, axis=-1)
 
-# 获取文件夹中的所有图片路径，读取前100张
-image_files = sorted(os.listdir(image_folder))
-image_files = natsorted(image_files)
-image_files = image_files[:100]
-image_paths = [os.path.join(image_folder, file) for file in image_files]
+    # 计算最终的mask效果 (H,W,3)
+    final_mask_effect = np.where(total_weight_exp > 0,
+                                 combined_masks / total_weight_exp,
+                                 0)
 
-# 加载图片
-def load_image(image_path):
-    return cv2.imread(image_path, cv2.IMREAD_COLOR)
+    # 计算原始图像的保留权重 (H,W,1)
+    original_weight = 1 - total_weight_exp
 
-images = [load_image(path) for path in image_paths]
+    # 叠加效果
+    result = image * original_weight + final_mask_effect
 
-# 计算两两图片的相似度
-# def compare_images(image1, image2):
-#     # 调整大小以确保比较一致
-#     image1 = cv2.resize(image1, (256, 256))
-#     image2 = cv2.resize(image2, (256, 256))
-#     # 计算 SSIM 相似度
-#     score, _ = ssim(image1, image2, full=True)
-#     return score
-from skimage.color import rgb2lab
-from scipy.spatial.distance import euclidean
+    # 确保结果在合理范围内
+    return np.clip(result, 0, 255).astype(np.uint8)
 
-def compare_images(image1, image2):
-    lab1 = rgb2lab(image1)
-    lab2 = rgb2lab(image2)
-    mean_value = euclidean(lab1.mean(axis=(0, 1)), lab2.mean(axis=(0, 1)))  # Compare mean colors
-    min_value = euclidean(lab1.min(axis=(0, 1)), lab2.min(axis=(0, 1)))
-    max_value = euclidean(lab1.max(axis=(0, 1)), lab2.max(axis=(0, 1)))
-    return min_value
+if __name__ == '__main__':
+    # 假设输入数据
+    H, W = 256, 256
+    n = 5
+    image = np.random.randint(0, 256, (H, W, 3), dtype=np.uint8)  # 随机图像
+    masks = np.random.rand(H, W, n)  # 随机mask
+    colors = np.random.randint(0, 256, (n, 3))  # 随机颜色
+    alpha = 0.7  # 统一透明度
 
-# 创建相似度矩阵
-similarity_matrix = np.zeros((len(images), len(images)))
-
-for i in tqdm(range(len(images))):
-    for j in range(i, len(images)):  # 对称矩阵，只计算一半
-        if i == j:
-            similarity_matrix[i, j] = 1.0  # 对角线为1
-        else:
-            similarity_matrix[i, j] = compare_images(images[i], images[j])
-            similarity_matrix[j, i] = similarity_matrix[i, j]  # 对称性
-
-# 将结果保存到 CSV 文件
-df = pd.DataFrame(similarity_matrix, index=image_files, columns=image_files)
-df.to_csv(output_csv)
-print(f"相似度矩阵已保存到 {output_csv}")
-
+    print(image.shape, masks.shape, colors, alpha)
+    # 应用mask
+    result_image = apply_masks_to_image(image, masks, colors, alpha)
+    plt.imshow(result_image)
+    plt.show()

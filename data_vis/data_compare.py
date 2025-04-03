@@ -118,12 +118,12 @@ if __name__ == '__main__':
     pass
     cat_compare(
         pre_dir_list = [
+            r'E:\cp_dir\temp\predictss\yolo8',
+            r'E:\cp_dir\temp\predictss\yolo9',
+            r'E:\cp_dir\temp\predictss\yolo10',
+            r'E:\cp_dir\temp\predictss\mayolo',
             r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\images',
             r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\images_vis',
-            r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\predict\yolo8',
-            r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\predict\yolo9',
-            r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\predict\yolo10',
-            r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\predict\mayolo'
         ],
-        show_dir=r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\predict\cat_show',
+        show_dir=r'E:\cp_dir\temp\predictss\cat_show',
     )
