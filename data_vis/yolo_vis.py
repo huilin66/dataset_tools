@@ -142,7 +142,7 @@ def xywh2xyxy(x, w1, h1, img, img_vis, cats, crop=True, attributes=None, filter_
         br_poss = []
         for idx, (k, v) in enumerate(attributes.items()):
             if filter_no:
-                text = f'{k}'
+                text = f'{k}-{v}'
                 if not v or v == 'no':
                     continue
             else:
@@ -168,7 +168,7 @@ def xywh2xyxy(x, w1, h1, img, img_vis, cats, crop=True, attributes=None, filter_
             br_poss = []
             for idx, (k, v) in enumerate(attributes.items()):
                 if filter_no:
-                    text = f'{k}'
+                    text = f'{k}-{v}'
                     if not v or v == 'no':
                         continue
                 else:
@@ -218,7 +218,7 @@ def xywh2poly(x, w, h, img, img_vis, cats, crop=True, attributes=None, filter_no
                   color=colormap[int(label)], thickness=-1)
     cv2.putText(img_vis, cats[int(label)], (int(top_left_x), int(top_left_y)+7), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
 
-    print(cats[int(label)], int(top_left_y),int(bottom_right_y), int(top_left_x),int(bottom_right_x), int(bottom_right_y)-int(top_left_y), int(bottom_right_x)-int(top_left_x))
+    # print(cats[int(label)], int(top_left_y),int(bottom_right_y), int(top_left_x),int(bottom_right_x), int(bottom_right_y)-int(top_left_y), int(bottom_right_x)-int(top_left_x))
     if attributes is not None:
         count = 0
         count2 = 0
@@ -415,7 +415,7 @@ if __name__ == '__main__':
     # root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10'
     # root_dir = r'E:\data\tp\sar_det'
     # root_dir = r'E:\data\0111_testdata\data_new\yolo_src'
-    # root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c'
+    root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c'
     # root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c_det'
     # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\bd1-9hgll-94afa\train'
     # root_dir = r'E:\data\20241113_road_veg\dataset'
@@ -424,7 +424,7 @@ if __name__ == '__main__':
     # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\tile-jspbo-jhjfh\train'
     # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\wall-defect-ogum1-3wsxo\train'
     # root_dir = r'E:\demo\demo_slice_merge\yolo'
-    root_dir = r'E:\data\202502_signboard\20250224 Signboard Data and CDU\Selected_Sample'
+    # root_dir = r'E:\data\202502_signboard\20250224 Signboard Data and CDU\Selected_Sample\data\2025.4.3'
     img_folder = os.path.join(root_dir, 'images')
     # img_folder = os.path.join(root_dir, 'images_val')
     label_folder = os.path.join(root_dir, 'labels')
@@ -449,8 +449,8 @@ if __name__ == '__main__':
     # crop_folder = os.path.join(root_dir, 'img_crop_slice')
     # output_folder = os.path.join(root_dir, 'img_vis_merge')
     # crop_folder = os.path.join(root_dir, 'img_crop_merge')
-    # attribute_file = os.path.join(root_dir, 'attribute.yaml')
-    attribute_file = os.path.join(root_dir, 'attribute_v3.yaml')
+    attribute_file = os.path.join(root_dir, 'attribute.yaml')
+    # attribute_file = os.path.join(root_dir, 'attribute_v4.yaml')
     class_file = os.path.join(root_dir, 'class.txt')
     # class_file = os.path.join(root_dir, 'class_update.txt')
 
@@ -459,5 +459,5 @@ if __name__ == '__main__':
 
     # yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=False)
     # yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=True)
-    # yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=False, attribute_file=attribute_file, filter_no=True, crop_keep_shape=True, det_crop=True)
-    yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=True, attribute_file=attribute_file, filter_no=True)
+    yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=False, attribute_file=attribute_file, filter_no=True, crop_keep_shape=True, det_crop=True)
+    # yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=True, attribute_file=attribute_file, filter_no=True)
