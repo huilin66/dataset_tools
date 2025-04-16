@@ -119,4 +119,4 @@ if __name__ == '__main__':
     get_report('report.pdf', r'img.png', data, records)
 
 
-
+    '/nfsv4/23039356r/repository/ultralytics/runs/mdetect/exp_yolo10x_head1231_20/weights'
