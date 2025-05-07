@@ -16,7 +16,7 @@ def dataset_merge(root_dir, dst_dir):
         images_dir = os.path.join(dataset_dir, 'images')
         labels_dir = os.path.join(dataset_dir, 'labels')
         images_list = os.listdir(images_dir)
-        for image_name in tqdm(images_list, desc=f'merge {idx}/{len(dataset_list)}'):
+        for image_name in tqdm(images_list, desc=f'merge {dataset_name}; {idx}/{len(dataset_list)}'):
             label_name = Path(image_name).stem + '.txt'
             image_path = os.path.join(images_dir, image_name)
             label_path = os.path.join(labels_dir, label_name)

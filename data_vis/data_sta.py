@@ -5,7 +5,7 @@ import seaborn as sns
 from tqdm import tqdm
 from skimage import io
 import matplotlib.pyplot as plt
-
+from pathlib import Path
 def img_read(img_path):
     img = io.imread(img_path)
     return img
@@ -19,8 +19,9 @@ def dir_shape_sta(imgs_path, save_path):
     '''
     print('images shape sta:')
     imgs_list = [os.path.join(imgs_path, file_name) for file_name in os.listdir(imgs_path)]
-    list_shape_sta(imgs_list, save_path)
+    img_shape_df = list_shape_sta(imgs_list, save_path)
     print('finish\n')
+    return img_shape_df
 
 
 def list_shape_sta(imgs_list, save_path):
@@ -31,7 +32,7 @@ def list_shape_sta(imgs_list, save_path):
     :return:
     '''
     new_img_list = []
-    shape_df = pd.DataFrame(None, columns=['height', 'width'], dtype=np.int)
+    shape_df = pd.DataFrame(None, columns=['img_height', 'img_width'], dtype=np.int)
     with tqdm(imgs_list) as pbar:
         pbar.set_description('shape sta ')
         for index, img_path in enumerate(pbar):
@@ -41,14 +42,15 @@ def list_shape_sta(imgs_list, save_path):
                 print(img_path, e)
                 continue
             shape_df.loc[index] = [img.shape[0], img.shape[1]]
-            new_img_list.append(os.path.basename(img_path))
+            new_img_list.append(Path(img_path).stem)
 
-    sns.jointplot(x='height', y='width', data=shape_df)
-    plt.savefig(save_path.replace('.csv', '.png'))
+    sns.jointplot(x='img_height', y='img_width', data=shape_df)
+    plt.savefig(save_path)
 
-    shape_df['filename'] = [os.path.basename(gt_path) for gt_path in new_img_list]
-    shape_df.to_csv(save_path)
+    shape_df['image'] = [os.path.basename(gt_path) for gt_path in new_img_list]
+    shape_df.to_csv(save_path.replace('.png', '.csv'))
     print('save to %s' % save_path)
+    return shape_df
 
 
 if __name__ == '__main__':

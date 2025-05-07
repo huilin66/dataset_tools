@@ -19,7 +19,7 @@ all_csv_path = r'E:\data\202502_signboard\20250224 Signboard Data and CDU\data_a
 dst_dir = r'E:\data\202502_signboard\20250224 Signboard Data and CDU\Selected_Sample\selected_img_3000'
 batch1_1_dir = r'E:\data\202502_signboard\20250224 Signboard Data and CDU\Selected_Sample\data\batch1_1500'
 batch1_2_dir = r'E:\data\202502_signboard\20250224 Signboard Data and CDU\Selected_Sample\data\batch2_1500'
-
+data_all_dir = r'E:\data\202502_signboard\20250224 Signboard Data and CDU\Selected_Sample\data_all'
 def get_img_list(img_dir_list):
     total_num = []
     for img_dir in img_dir_list:
@@ -51,13 +51,16 @@ def get_img_sta(img_dir_list, all_csv_path=all_csv_path):
     df_all = pd.concat(df_list)
     df_all.to_csv(all_csv_path, encoding='utf-8')
 
-def get_imgs(dst_dir, all_csv_path=all_csv_path):
+def get_imgs(dst_dir, all_csv_path=all_csv_path, n=None):
     os.makedirs(dst_dir, exist_ok=True)
     df = pd.read_csv(all_csv_path, header=0, index_col=0)
     print(f'before drop_duplicates {len(df)}')
     df = df.drop_duplicates(subset=['img_name'], keep='first')
     print(f'after drop_duplicates {len(df)}')
-    sampled_df = df.sample(n=3000, replace=False, random_state=42).sort_index()
+    if n is not None:
+        sampled_df = df.sample(n=n, replace=False, random_state=42).sort_index()
+    else:
+        sampled_df = df
     for idx, row in tqdm(sampled_df.iterrows(), total=len(sampled_df), desc=f"copy file"):
         img_path = os.path.join(row['img_dir'], row['img_name'])
         dst_img_path = os.path.join(dst_dir, f"{row['img_name']}")
@@ -79,5 +82,7 @@ if __name__ == '__main__':
     pass
     # get_img_list(img_dir_list)
     # get_img_sta(img_dir_list)
-    get_imgs(dst_dir)
-    copy_imgs(dst_dir, batch1_1_dir, batch1_2_dir)
+    # get_imgs(dst_dir, all_csv_path, 3000)
+    # copy_imgs(dst_dir, batch1_1_dir, batch1_2_dir)
+
+    get_imgs(data_all_dir, all_csv_path, None)
