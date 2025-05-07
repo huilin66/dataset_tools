@@ -62,11 +62,30 @@ def mdet_predict_check(input_dir, ref_dir):
                     df_new.to_csv(input_path, header=False, index=False, sep=' ')
                     print(f'{file_name} change from {len(df)} -> {len(df_new)}')
 
+
+def info_merge(input_dir, save_path):
+    label_list = os.listdir(input_dir)
+    df = pd.DataFrame(None, columns=['file_name', 'object_id', 'class_id', 'att_num', 'att', 'segment'])
+    for label_name in tqdm(label_list):
+        label_path = os.path.join(input_dir, label_name)
+        with open(label_path, 'r') as f:
+            lines = f.readlines()
+            for idx, line in enumerate(lines):
+                nums = line.strip().split()
+                df.loc[len(df)] = [label_name, idx, int(nums[0]), int(nums[1]), nums[2:2+int(nums[1])], nums[2+int(nums[1]):]]
+    df.to_csv(save_path, encoding='utf-8-sig')
+
+
+
+
 if __name__ == '__main__':
+    pass
     # yolo_classmerge(input_dir=r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection6\labels')
     # check_mdet(r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels')
 
-    mdet_predict_check(
-        r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\mayolo_infer',
-        r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels_val',
-    )
+    # mdet_predict_check(
+    #     r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\mayolo_infer',
+    #     r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels_val',
+    # )
+    # info_merge(r'E:\data\202502_signboard\annotation_result_merge\labels_update',
+    #            r'E:\data\202502_signboard\annotation_result_merge\info_update.csv')

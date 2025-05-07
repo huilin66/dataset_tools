@@ -9,6 +9,8 @@ from YOLO_slicing.slicing import slice_image
 from YOLO_slicing.slicing import load_image_pil, calculate_slices_xyxy
 
 from shapely import geometry
+from shapely.validation import explain_validity
+
 
 def load_label_seg(label):
     pass
@@ -59,51 +61,99 @@ def anotation_inside_slice_seg(mask,slice_coord):
     else:
         return True
 
+# def intersect_xyxy_seg(mask, slice_coord):
+#     """
+#     Calculate intersection between two boxes
+#
+#     Returns:
+#         List[int]: [xmin,ymin,xmax,ymax]
+#     """
+#     # 定义多边形的顶点坐标
+#     polygon_coords = np.array(mask).reshape((-1,2))
+#
+#     # 创建多边形对象和矩形对象
+#     polygon = geometry.Polygon(polygon_coords)
+#
+#     # 检查 polygon 是否合法
+#     if not polygon.is_valid:
+#         print("Invalid polygon:", explain_validity(polygon))
+#         polygon = polygon.buffer(0)
+#     rectangle = geometry.box(*slice_coord)  # 通过矩形的对角线坐标创建矩形对象
+#     # rectangle = geometry.Polygon([(xmin,ymin),(xmin,ymax),(xmax,ymax),(xmax,ymin)])
+#
+#     # 计算重叠区域
+#     overlap_area = polygon.intersection(rectangle)
+#
+#     if isinstance(overlap_area, shapely.Polygon):
+#         xs,ys = overlap_area.exterior.xy
+#         merged_list = [val for pair in zip(xs,ys) for val in pair]
+#         return merged_list, False
+#     elif isinstance(overlap_area, shapely.MultiPolygon):
+#         overlap_area_list = [polygon for polygon in overlap_area.geoms]
+#         merged_list_list = []
+#         for overlap_area in overlap_area_list:
+#             xs,ys = overlap_area.exterior.xy
+#             merged_list = [val for pair in zip(xs,ys) for val in pair]
+#             merged_list_list.append(merged_list)
+#         return merged_list_list, True
+
+import numpy as np
+import shapely.geometry as geometry
+from shapely.validation import explain_validity
+
 def intersect_xyxy_seg(mask, slice_coord):
     """
-    Calculate intersection between two boxes
+    Calculate intersection between a mask (polygon) and a slice (rectangle).
+
+    Args:
+        mask (list or np.ndarray): Polygon vertices [(x1, y1), (x2, y2), ...].
+        slice_coord (tuple): Rectangle coordinates (xmin, ymin, xmax, ymax).
 
     Returns:
-        List[int]: [xmin,ymin,xmax,ymax]
+        tuple: (intersection_points, is_multi_polygon)
+            - intersection_points: List of flattened coordinates [x1, y1, x2, y2, ...] or []
+            - is_multi_polygon: bool (True if result is MultiPolygon)
     """
-    # 定义多边形的顶点坐标
-    polygon_coords = np.array(mask).reshape((-1,2))
-    xmin,ymin,xmax,ymax = slice_coord
+    # 检查输入合法性
+    if mask is None or len(mask) == 0:
+        raise ValueError("mask cannot be empty or None")
+    polygon_coords = np.array(mask).reshape((-1, 2))
+    if polygon_coords.size == 0:
+        raise ValueError("mask must contain at least one point")
+    if not isinstance(slice_coord, (tuple, list)) or len(slice_coord) != 4:
+        raise ValueError("slice_coord must be a tuple/list of (xmin, ymin, xmax, ymax)")
+    xmin, ymin, xmax, ymax = slice_coord
+    if xmin >= xmax or ymin >= ymax:
+        raise ValueError("Invalid slice coordinates: xmin < xmax and ymin < ymax required")
 
-    # 创建多边形对象和矩形对象
+    # 创建多边形和矩形
     polygon = geometry.Polygon(polygon_coords)
-    rectangle = geometry.box(*slice_coord)  # 通过矩形的对角线坐标创建矩形对象
-    # rectangle = geometry.Polygon([(xmin,ymin),(xmin,ymax),(xmax,ymax),(xmax,ymin)])
+    if not polygon.is_valid:
+        print("Invalid polygon:", explain_validity(polygon))
+        # 尝试修复非法几何体
+        if not polygon.exterior.is_ccw:
+            polygon = geometry.Polygon(polygon.exterior.coords[::-1])  # 反转顺序
+        polygon = polygon.buffer(0)
+    rectangle = geometry.box(xmin, ymin, xmax, ymax)
 
-    # 计算重叠区域
+    # 计算交集
     overlap_area = polygon.intersection(rectangle)
-    # print(overlap_area)
+    if overlap_area.is_empty:
+        return [], False
 
-
-
-    # x, y = rectangle.exterior.xy
-    # plt.plot(x, y, color='red', alpha=0.7, linewidth=3, solid_capstyle='round', zorder=1)
-    #
-    # x, y = polygon.exterior.xy
-    # plt.plot(x, y, color='blue', alpha=0.7, linewidth=2, solid_capstyle='round', zorder=2)
-    #
-    # # x, y = overlap_area.exterior.xy
-    # # plt.plot(x, y, color='green', alpha=0.7, linewidth=2, solid_capstyle='round', zorder=3)
-    #
-    #
-    # plt.show()
-    if isinstance(overlap_area, shapely.Polygon):
-        xs,ys = overlap_area.exterior.xy
-        merged_list = [val for pair in zip(xs,ys) for val in pair]
-        return merged_list, False
-    elif isinstance(overlap_area, shapely.MultiPolygon):
-        overlap_area_list = [polygon for polygon in overlap_area.geoms]
+    # 处理结果
+    if isinstance(overlap_area, geometry.Polygon):
+        xs, ys = overlap_area.exterior.xy
+        return [val for pair in zip(xs, ys) for val in pair], False
+    elif isinstance(overlap_area, geometry.MultiPolygon):
         merged_list_list = []
-        for overlap_area in overlap_area_list:
-            xs,ys = overlap_area.exterior.xy
-            merged_list = [val for pair in zip(xs,ys) for val in pair]
-            merged_list_list.append(merged_list)
+        for polygon in overlap_area.geoms:
+            xs, ys = polygon.exterior.xy
+            merged_list_list.append([val for pair in zip(xs, ys) for val in pair])
         return merged_list_list, True
+    else:
+        return [], False  # 其他情况（如 GeometryCollection）
+
 
 def rel_coord_xyxy_seg(mask, slice):
     patch_w = slice[2] - slice[0]
@@ -506,10 +556,24 @@ if __name__ == '__main__':
     #            tp_dir=r'E:\demo\demo_slice_merge\yolo\tp',
     #            slice_w=1440, slice_h=1440, overlap_w=0.5, overlap_h=0.5, seg=False)
     # 1440*1440 -> 2280*5760
-    yolo_merge(input_img_dir=r'E:\demo\demo_slice_merge\yolo\images_slice',
-               input_txt_dir=r'E:\demo\demo_slice_merge\yolo\labels_slice',
-               output_img_dir=r'E:\demo\demo_slice_merge\yolo\images_merge',
-               output_txt_dir=r'E:\demo\demo_slice_merge\yolo\labels_merge',
-               tp_dir=r'E:\data\0417_signboard\data0417\tp',
-               src_h=2880, src_w=5760,
-               slice_w=1440, slice_h=1440, overlap_w=0.5, overlap_h=0.5, seg=True)
+    # yolo_merge(input_img_dir=r'E:\demo\demo_slice_merge\yolo\images_slice',
+    #            input_txt_dir=r'E:\demo\demo_slice_merge\yolo\labels_slice',
+    #            output_img_dir=r'E:\demo\demo_slice_merge\yolo\images_merge',
+    #            output_txt_dir=r'E:\demo\demo_slice_merge\yolo\labels_merge',
+    #            tp_dir=r'E:\data\0417_signboard\data0417\tp',
+    #            src_h=2880, src_w=5760,
+    #            slice_w=1440, slice_h=1440, overlap_w=0.5, overlap_h=0.5, seg=True)
+
+
+    yolo_slice(input_img_dir=r'E:\data\202502_signboard\annotation_result_merge\images_re',
+               input_txt_dir=r'E:\data\202502_signboard\annotation_result_merge\labels_update_seg',
+               output_img_dir=r'E:\data\202502_signboard\annotation_result_merge\images_slice_640',
+               output_txt_dir=r'E:\data\202502_signboard\annotation_result_merge\labels_slice_640',
+               tp_dir=r'E:\data\202502_signboard\annotation_result_merge\tp',
+               slice_w=640, slice_h=640, overlap_w=0.2, overlap_h=0.2, seg=True)
+    yolo_slice(input_img_dir=r'E:\data\202502_signboard\annotation_result_merge\images_re',
+               input_txt_dir=r'E:\data\202502_signboard\annotation_result_merge\labels_update_seg',
+               output_img_dir=r'E:\data\202502_signboard\annotation_result_merge\images_slice_960',
+               output_txt_dir=r'E:\data\202502_signboard\annotation_result_merge\labels_slice_960',
+               tp_dir=r'E:\data\202502_signboard\annotation_result_merge\tp',
+               slice_w=960, slice_h=960, overlap_w=0.2, overlap_h=0.2, seg=True)

@@ -1,11 +1,9 @@
 import os
-
+import math
 import numpy as np
 import pandas as pd
 from datasets import tqdm
 from scipy.optimize import linear_sum_assignment
-
-from PIL import Image
 
 
 def compute_iou(box1, box2):
@@ -34,7 +32,7 @@ def parse_boxes(file_path, pred=False):
             boxes.append((cls, x, y, h, w))
             if pred:
                 atts = list(map(float, parts[2:-4]))
-                atts = [1 if x > 0.5 else 0 for x in atts]
+                atts = [1 if x > 0.0 else 0 for x in atts]
             else:
                 atts = list(map(int, parts[2:-4]))
             df.loc[len(df)] = [cls, x, y, h, w] + atts
@@ -96,6 +94,8 @@ def match_boxes(label_boxes_abs, pred_boxes_abs, save_dir, threshold=0.5):
 
 def process_files(label_path, pred_path, save_path, image_width=640, image_height=480, threshold=0.5):
     label_boxes, labels_df = parse_boxes(label_path)
+    if not os.path.exists(pred_path):
+        return 0, 0, 0, 0, 0
     pred_boxes, pred_df = parse_boxes(pred_path, pred=True)
 
     label_abs = convert_to_abs(label_boxes, image_width, image_height)
@@ -115,101 +115,95 @@ def process_files(label_path, pred_path, save_path, image_width=640, image_heigh
             record = labels_df.iloc[i].tolist()+[None]*len(pred_df.columns)
         merge_df.loc[len(merge_df.index)] = record
 
-    for i in range(10):
+    counts_all = []
+    counts_div = []
+    # for i in range(9):
+    # for i in [1, 4, 5, 6, 7]:
+    for i in [0, 2, 3]:
         merge_df[f'precision_att{i+1}'] = merge_df[f'att{i+1}_labels'] == merge_df[f'att{i+1}_pred']
         # merge_df[f'true_att{i+1}'] = (merge_df[f'att{i+1}_labels'] == 1) & (merge_df[f'att{i+1}_labels'] == merge_df[f'att{i+1}_pred'])
 
         count_all = (merge_df[f'att{i+1}_labels'] == 1).sum()
         count_true = ((merge_df[f'att{i+1}_labels'] == 1) & (merge_df[f'att{i+1}_labels'] == merge_df[f'att{i+1}_pred'])).sum()
-        merge_df[f'true_att{i + 1}'] = count_true/count_all if count_true != 0 else 0
+        count_div = count_true/count_all if count_all != 0 else np.nan
+        counts_all.append(count_all)
+        counts_div.append(count_div)
+
     precision_cols = merge_df.filter(like='precision_att').columns
     precision_means = merge_df[precision_cols].mean().tolist()
-    mean_precision = np.mean(precision_means)
+    mean_precision = np.nanmean(precision_means)
 
-    true_cols = merge_df.filter(like='true_att').columns
-    true_means = merge_df[true_cols].mean().tolist()
-    mean_true = np.mean(true_means)
+    mean_num = np.sum(counts_all)
+
+    counts_div = [i for i in counts_div if not math.isnan(i)]
+    mean_true = np.mean(counts_div) if len(counts_div)>0 else np.nan
 
     num_matched = len(match_dict)
     precision = num_matched / len(pred_boxes) if len(pred_boxes) > 0 else 0.0
     recall = num_matched / len(label_boxes) if len(label_boxes) > 0 else 0.0
     merge_df.to_csv(save_path)
-    return precision, recall, mean_precision, mean_true
+    return precision, recall, mean_precision, mean_true, mean_num
+
+
+def process_dirs(label_dir, pred_dirs, save_dir, threshold=0.5):
+    pass
+    os.makedirs(save_dir, exist_ok=True)
+    pred_list = os.listdir(pred_dirs[0])
+    df = pd.DataFrame(None, columns=['file_name',
+                                     'precision_box_v8', 'recall_box_v8', 'att_oa_v8', 'att_oa_true_v8', 'att_true_num_v8',
+                                     'precision_box_v9', 'recall_box_v9', 'att_oa_v9', 'att_oa_true_v9', 'att_true_num_v9',
+                                     'precision_box_v10', 'recall_box_v10', 'att_oa_v10', 'att_oa_true_v10', 'att_true_num_v10',
+                                     'precision_box_vma', 'recall_box_vma', 'att_oa_vma', 'att_oa_true_vma', 'att_true_num_vma',
+                                     ])
+    for pred_file in tqdm(pred_list):
+        label_path = os.path.join(label_dir, pred_file)
+        save_path = os.path.join(save_dir, pred_file)
+        result = [pred_file]
+        for pred_dir in pred_dirs:
+            pred_path = os.path.join(pred_dir, pred_file)
+            precision, recall, att_oa, att_oa_true, att_true_num = process_files(label_path, pred_path, save_path, threshold=threshold)
+            result += [precision, recall, att_oa, att_oa_true, att_true_num]
+        df.loc[len(df.index)] = result
+    df.to_csv(save_dir+'_filter2.csv')
 
 
 def process_dir(label_dir, pred_dir, save_dir, threshold=0.5):
     pass
     os.makedirs(save_dir, exist_ok=True)
     pred_list = os.listdir(pred_dir)
-    df = pd.DataFrame(None, columns=['file_name', 'precision_box', 'recall_box', 'att_oa', 'att_oa_true'])
+    df = pd.DataFrame(None, columns=['file_name', 'precision_box', 'recall_box', 'att_oa', 'att_oa_true', 'att_true_num'])
     for pred_file in tqdm(pred_list):
         label_path = os.path.join(label_dir, pred_file)
         pred_path = os.path.join(pred_dir, pred_file)
         save_path = os.path.join(save_dir, pred_file)
-        precision, recall, att_oa, att_oa_true = process_files(label_path, pred_path, save_path, threshold=threshold)
-        df.loc[len(df.index)] = [pred_file, precision, recall, att_oa, att_oa_true]
+        precision, recall, att_oa, att_oa_true, att_true_num = process_files(label_path, pred_path, save_path, threshold=threshold)
+        df.loc[len(df.index)] = [pred_file, precision, recall, att_oa, att_oa_true, att_true_num]
     df.to_csv(save_dir+'.csv')
 
-# # 示例用法
-# if __name__ == "__main__":
-#     pass
-#     label_dir = r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels"
-#     pred_dir = r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\predict_\predict_mayolox4\labels"
-#     save_dir = r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\predict_\predict_mayolox4_infer"
-#     process_dir(label_dir, pred_dir, save_dir)
+# 示例用法
+if __name__ == "__main__":
+    pass
+    # label_dir = r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels"
+    # pred_dir = r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\predict_\predict_mayolox4\labels"
+    # save_dir = r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\predict_\predict_mayolox4_infer"
+    # process_dir(label_dir, pred_dir, save_dir)
+
+    label_dir = r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels"
+    pred_dirs = [
+        r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\predict_\predict_yolo8x2\labels",
+        r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\predict_\predict_yolo9e2\labels",
+        r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\predict_\predict_yolo10x2\labels",
+        r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\predict_\predict_mayolox4\labels",
+    ]
+    save_dir = r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\predict_\predict_compare"
+    process_dirs(label_dir, pred_dirs, save_dir)
 
 
-
-    # label_file = r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels\FLIR0826.txt"
-    # pred_file = r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\predict_\predict_mayolox4\labels\FLIR0826.txt"
+    # label_file = r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels\FLIR1312.txt"
+    # pred_file = r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\predict_\predict_mayolox4\labels\FLIR1312.txt"
     # image_width = 640  # 替换为实际图片宽度
     # image_height = 480  # 替换为实际图片高度
     # threshold = 0.5
     #
-    # precision, recall = process_files(label_file, pred_file, None, image_width, image_height, threshold)
-    #
-    # with open("output.txt", "w") as f:
-    #     f.write("\n".join(output))
-    # print(f"Precision: {precision:.4f}")
+    # process_files(label_file, pred_file, None, image_width, image_height, threshold)
 
-import matplotlib.pyplot as plt
-import cv2
-
-color_map = {
-    0: [0, 0, 0],  # 背景（黑色）
-    1: [255, 0, 0],  # 类别1（红色）
-    2: [0, 255, 0],  # 类别2（绿色）
-    3: [0, 0, 255],  # 类别3（蓝色）
-    4: [255, 255, 0],
-    5: [0, 255, 255],
-    6: [255, 0, 255],
-    7: [128, 128, 128],
-}
-def visualize_semantic_mask(image_path, mask_path):
-    image = cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2RGB)
-    mask = cv2.imread(mask_path, cv2.IMREAD_UNCHANGED)  # 保留透明度
-    color_mask = np.zeros((*mask.shape, 3), dtype=np.uint8)
-    for class_id, color in color_map.items():
-        color_mask[mask == class_id] = color
-
-    # plt.figure(figsize=(12, 6))
-    # plt.subplot(121)
-    # plt.imshow(image)
-    # plt.title("Original Image")
-    #
-    # plt.subplot(122)
-    # plt.imshow(mask, cmap="jet")
-    # plt.colorbar()
-    # plt.title("Semantic Segmentation Mask")
-    # plt.show()
-
-    image = Image.fromarray(image)
-    mask = Image.fromarray(color_mask)
-    img_overlay = Image.blend(image, mask, 0.5)
-    img_overlay.show()
-
-# 示例调用
-visualize_semantic_mask(
-    r"E:\data\202502_signboard\annotation_result_merge\images\0_20210325_163405.jpg",
-    r"E:\data\202502_signboard\annotation_result_merge\semantic_masks\0_20210325_163405.png",
-    )

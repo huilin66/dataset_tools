@@ -40,7 +40,7 @@ def random_select(img_dir,  label_dir=None, save_dir=None, train_ratio=0.9, rand
 
 if __name__ == '__main__':
     pass
-    dataset_dir = r'E:\data\202502_signboard\annotation_result_merge'
+    dataset_dir = r'E:\cp_dir\data'
     images_dir = os.path.join(dataset_dir, 'images')
     labels_dir = os.path.join(dataset_dir, 'labels')
     random_select(images_dir, labels_dir)

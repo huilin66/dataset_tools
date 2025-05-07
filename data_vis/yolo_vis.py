@@ -10,8 +10,8 @@ from PIL import Image, ImageOps
 red_color_bgr = (0, 0, 255)
 colormap = [
     (255, 42, 4),
-    (235, 219, 11),
-    (243, 243, 243),
+    # (235, 219, 11),
+    # (243, 243, 243),
     (183, 223, 0),
     (104, 31, 17),
     (221, 111, 255),
@@ -84,6 +84,17 @@ def get_attribute(attribute_dict, gt_attribute):
     return attributes_recover
 # endregion
 
+def is_light_color(color, threshold=0.5):
+    r, g, b = color
+    # 归一化 RGB 值到 [0, 1]
+    r_norm = r / 255.0
+    g_norm = g / 255.0
+    b_norm = b / 255.0
+
+    # 计算相对亮度（W3C 标准）
+    luminance = 0.2126 * r_norm + 0.7152 * g_norm + 0.0722 * b_norm
+
+    return luminance > threshold
 
 def xywh2xyxy(x, w1, h1, img, img_vis, cats, crop=True, attributes=None, filter_no=False, alpha=0.5, tf=1, sf=2/3, crop_keep_shape=False, det_crop=False):
     label, x, y, w, h = x
@@ -97,18 +108,19 @@ def xywh2xyxy(x, w1, h1, img, img_vis, cats, crop=True, attributes=None, filter_
     bottom_right_x = x_t + w_t / 2
     bottom_right_y = y_t + h_t / 2
 
+
     if crop:
         if det_crop:
             img_crop = img.copy()
             cv2.rectangle(img_crop, (int(top_left_x), int(top_left_y)), (int(bottom_right_x), int(bottom_right_y)),
                           red_color_bgr, 2)
 
-            text_size = cv2.getTextSize(cats[int(label)], cv2.FONT_HERSHEY_SIMPLEX, sf - 0.1, tf)[0]
+            text_size = cv2.getTextSize(cats[int(label)], cv2.FONT_HERSHEY_SIMPLEX  , sf - 0.1, tf)[0]
             cv2.rectangle(img_crop,
                           (int(top_left_x), int(top_left_y) + 10),
                           (int(top_left_x) + text_size[0] - 15, int(top_left_y) + 7 - text_size[1] + 3),
                           color=red_color_bgr, thickness=-1)
-            cv2.putText(img_crop, cats[int(label)], (int(top_left_x), int(top_left_y) + 7), cv2.FONT_HERSHEY_SIMPLEX,
+            cv2.putText(img_crop, cats[int(label)], (int(top_left_x), int(top_left_y) + 7), cv2.FONT_HERSHEY_SIMPLEX  ,
                         0.5, (0, 0, 0), 1)
 
         else:
@@ -125,14 +137,18 @@ def xywh2xyxy(x, w1, h1, img, img_vis, cats, crop=True, attributes=None, filter_
         img_crop = None
     cv2.rectangle(img_vis, (int(top_left_x), int(top_left_y)), (int(bottom_right_x), int(bottom_right_y)), colormap[int(label)], 2)
 
-    text_size = cv2.getTextSize(cats[int(label)], cv2.FONT_HERSHEY_SIMPLEX, sf - 0.1, tf)[0]
+    text_size = cv2.getTextSize(cats[int(label)], cv2.FONT_HERSHEY_SIMPLEX  , sf - 0.1, tf)[0]
 
     # Draw the background rectangle
     cv2.rectangle(img_vis,
                   (int(top_left_x), int(top_left_y)+10),
                   (int(top_left_x)+text_size[0]-15, int(top_left_y)+7-text_size[1]+3),
                   color=colormap[int(label)], thickness=-1)
-    cv2.putText(img_vis, cats[int(label)], (int(top_left_x), int(top_left_y)+7), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+    if not is_light_color(colormap[int(label)]):
+        cv2.putText(img_vis, cats[int(label)], (int(top_left_x), int(top_left_y) + 7), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                    (255, 255, 255), 1)
+    else:
+        cv2.putText(img_vis, cats[int(label)], (int(top_left_x), int(top_left_y)+7), cv2.FONT_HERSHEY_SIMPLEX  , 0.5, (0, 0, 0), 1)
 
     if attributes is not None:
         count = 0
@@ -143,14 +159,14 @@ def xywh2xyxy(x, w1, h1, img, img_vis, cats, crop=True, attributes=None, filter_
         for idx, (k, v) in enumerate(attributes.items()):
             if filter_no:
                 text = f'{k}-{v}'
-                if not v or v == 'no':
+                if not v or v == 'no' or 'no' in v:
                     continue
             else:
                 text = f'{k}-{v}'
             count += 1
             color = (255, 0, 0) if v is not False else (0, 0, 0)
-            cv2.putText(img_vis, text, (int(top_left_x), int(top_left_y) + 12 + 10 * count), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-            (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+            cv2.putText(img_vis, text, (int(top_left_x), int(top_left_y) + 12 + 10 * count), cv2.FONT_HERSHEY_SIMPLEX  , 0.5, color, 1)
+            (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX  , 0.5, 1)
             attribute_strs.append(text)
             br_poss.append([int(top_left_x)+text_width-15, int(top_left_y) + 12+10*count])
 
@@ -169,16 +185,16 @@ def xywh2xyxy(x, w1, h1, img, img_vis, cats, crop=True, attributes=None, filter_
             for idx, (k, v) in enumerate(attributes.items()):
                 if filter_no:
                     text = f'{k}-{v}'
-                    if not v or v == 'no':
+                    if not v or v == 'no' or 'no' in v:
                         continue
                 else:
                     text = f'{k}-{v}'
                 count2 += 1
                 color = (255, 0, 0) if v is not False else (0, 0, 0)
-                # text_size = cv2.putText(img, text, (int(top_left_x), int(top_left_y) + 12+10*count), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)[0]
-                cv2.putText(img_vis, text, (int(top_left_x), int(top_left_y) + 12 + 10 * count2), cv2.FONT_HERSHEY_SIMPLEX,
+                # text_size = cv2.putText(img, text, (int(top_left_x), int(top_left_y) + 12+10*count), cv2.FONT_HERSHEY_SIMPLEX  , 0.5, color, 1)[0]
+                cv2.putText(img_vis, text, (int(top_left_x), int(top_left_y) + 12 + 10 * count2), cv2.FONT_HERSHEY_SIMPLEX  ,
                             0.5, color, 1)
-                (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX  , 0.5, 1)
                 attribute_strs.append(text)
                 br_poss.append([int(top_left_x) + text_width - 15, int(top_left_y) + 12 + 10 * count2])
     else:
@@ -211,12 +227,12 @@ def xywh2poly(x, w, h, img, img_vis, cats, crop=True, attributes=None, filter_no
     cv2.fillPoly(mask, [polys], color=colormap[int(label)])
     cv2.addWeighted(mask, alpha, img_vis, 1 - alpha, 0, img_vis)
 
-    text_size = cv2.getTextSize(cats[int(label)], cv2.FONT_HERSHEY_SIMPLEX, sf - 0.1, tf)[0]
+    text_size = cv2.getTextSize(cats[int(label)], cv2.FONT_HERSHEY_SIMPLEX  , sf - 0.1, tf)[0]
     cv2.rectangle(img_vis,
                   (int(top_left_x), int(top_left_y)+10),
                   (int(top_left_x)+text_size[0]-15, int(top_left_y)+7-text_size[1]+3),
                   color=colormap[int(label)], thickness=-1)
-    cv2.putText(img_vis, cats[int(label)], (int(top_left_x), int(top_left_y)+7), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+    cv2.putText(img_vis, cats[int(label)], (int(top_left_x), int(top_left_y)+7), cv2.FONT_HERSHEY_SIMPLEX  , 0.5, (0, 0, 0), 1)
 
     # print(cats[int(label)], int(top_left_y),int(bottom_right_y), int(top_left_x),int(bottom_right_x), int(bottom_right_y)-int(top_left_y), int(bottom_right_x)-int(top_left_x))
     if attributes is not None:
@@ -232,8 +248,8 @@ def xywh2poly(x, w, h, img, img_vis, cats, crop=True, attributes=None, filter_no
                     continue
             count += 1
             color = (255, 0, 0) if v is not False else (0, 0, 0)
-            cv2.putText(img_vis, text, (int(top_left_x), int(top_left_y) + 12 + 10 * count), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-            (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+            cv2.putText(img_vis, text, (int(top_left_x), int(top_left_y) + 12 + 10 * count), cv2.FONT_HERSHEY_SIMPLEX  , 0.5, color, 1)
+            (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX  , 0.5, 1)
             attribute_strs.append(text)
             br_poss.append([int(top_left_x)+text_width-15, int(top_left_y) + 12+10*count])
 
@@ -256,10 +272,10 @@ def xywh2poly(x, w, h, img, img_vis, cats, crop=True, attributes=None, filter_no
                         continue
                 count2 += 1
                 color = (255, 0, 0) if v is not False else (0, 0, 0)
-                # text_size = cv2.putText(img, text, (int(top_left_x), int(top_left_y) + 12+10*count), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)[0]
-                cv2.putText(img_vis, text, (int(top_left_x), int(top_left_y) + 12 + 10 * count2), cv2.FONT_HERSHEY_SIMPLEX,
+                # text_size = cv2.putText(img, text, (int(top_left_x), int(top_left_y) + 12+10*count), cv2.FONT_HERSHEY_SIMPLEX  , 0.5, color, 1)[0]
+                cv2.putText(img_vis, text, (int(top_left_x), int(top_left_y) + 12 + 10 * count2), cv2.FONT_HERSHEY_SIMPLEX  ,
                             0.5, color, 1)
-                (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX  , 0.5, 1)
                 attribute_strs.append(text)
                 br_poss.append([int(top_left_x) + text_width - 15, int(top_left_y) + 12 + 10 * count2])
     else:
@@ -415,8 +431,8 @@ if __name__ == '__main__':
     # root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10'
     # root_dir = r'E:\data\tp\sar_det'
     # root_dir = r'E:\data\0111_testdata\data_new\yolo_src'
+    # root_dir = r'E:\cp_dir\data'
     root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c'
-    # root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c_det'
     # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\bd1-9hgll-94afa\train'
     # root_dir = r'E:\data\20241113_road_veg\dataset'
     # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\crack-bpxku-hcu46\train'
