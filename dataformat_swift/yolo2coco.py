@@ -4,7 +4,7 @@ import os
 import sys
 import shutil
 from datetime import datetime
-
+import numpy as np
 import cv2
 
 
@@ -35,33 +35,35 @@ def addImgItem(coco_data, image_set, image_id, file_name, size):
     return image_id
 
 
-def addAnnoItem(coco_data, annotation_id, object_name, image_id, category_id, bbox):
+def addAnnoItem(coco_data, annotation_id, object_name, image_id, category_id, bbox, polygon=None):
     annotation_item = dict()
     annotation_item['segmentation'] = []
-    seg = []
-    # bbox[] is x,y,w,h
-    # left_top
-    seg.append(bbox[0])
-    seg.append(bbox[1])
-    # left_bottom
-    seg.append(bbox[0])
-    seg.append(bbox[1] + bbox[3])
-    # right_bottom
-    seg.append(bbox[0] + bbox[2])
-    seg.append(bbox[1] + bbox[3])
-    # right_top
-    seg.append(bbox[0] + bbox[2])
-    seg.append(bbox[1])
-
-    annotation_item['segmentation'].append(seg)
-
-    annotation_item['area'] = bbox[2] * bbox[3]
+    if polygon is None:
+        seg = []
+        # bbox[] is x,y,w,h
+        # left_top
+        seg.append(bbox[0])
+        seg.append(bbox[1])
+        # left_bottom
+        seg.append(bbox[0])
+        seg.append(bbox[1] + bbox[3])
+        # right_bottom
+        seg.append(bbox[0] + bbox[2])
+        seg.append(bbox[1] + bbox[3])
+        # right_top
+        seg.append(bbox[0] + bbox[2])
+        seg.append(bbox[1])
+        annotation_item['segmentation'].append(seg)
+        annotation_item['area'] = bbox[2] * bbox[3]
+    else:
+        annotation_item['segmentation'].append(polygon)
+        area = poly2area(polygon)
+        annotation_item['area'] = area
     annotation_item['iscrowd'] = 0
     annotation_item['ignore'] = 0
     annotation_item['image_id'] = image_id
     annotation_item['bbox'] = bbox
     annotation_item['category_id'] = category_id
-    # annotation_id += 1
     annotation_item['id'] = annotation_id
     coco_data['annotations'].append(annotation_item)
 
@@ -77,7 +79,23 @@ def xywhn2xywh(bbox, size):
     return list(map(int, box))
 
 
-def parseXmlFilse(image_path, anno_path, json_path, dst_img_dir=None):
+def poly2area(polygon):
+    x = polygon[:, 0]
+    y = polygon[:, 1]
+    return 0.5 * np.abs(np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1)))
+
+
+def poly2xywh(polygon):
+    x_min = np.min(polygon[:, 0])
+    y_min = np.min(polygon[:, 1])
+    x_max = np.max(polygon[:, 0])
+    y_max = np.max(polygon[:, 1])
+    width = x_max - x_min
+    height = y_max - y_min
+    return [x_min, y_min, width, height]
+
+
+def yolo2coco(image_path, anno_path, json_path, dst_img_dir=None, seg=False):
     coco_data = dict()
     coco_data['images'] = []
     coco_data['annotations'] = []
@@ -113,19 +131,27 @@ def parseXmlFilse(image_path, anno_path, json_path, dst_img_dir=None):
                 shutil.copy(img_path, dst_img_path)
             img = cv2.imread(img_path)
             shape = img.shape
+            height, width = img.shape[:2]
             filename = images[index].split(os.sep)[-1]
             image_id += 1
             current_image_id = addImgItem(coco_data, image_set, image_id, filename, shape)
         else:
             continue
         with open(file, 'r') as fid:
-            for i in fid.readlines():
-                i = i.strip().split()
-                category = int(i[0])
+            for line in fid.readlines():
+                line = [float(x) for x in line.strip().split()]
+                category = int(line[0])+1
                 category_name = category_id[category]
-                bbox = xywhn2xywh((i[1], i[2], i[3], i[4]), shape)
+                if not seg:
+                    bbox = xywhn2xywh((i[1], i[2], i[3], i[4]), shape)
+                    addAnnoItem(coco_data, annotation_id, category_name, current_image_id, category, bbox)
+                else:
+                    polygon = np.array(line[1:]).reshape(-1, 2)
+                    polygon[:, 0] = polygon[:, 0] * width
+                    polygon[:, 1] = polygon[:, 1] * height
+                    box = poly2xywh(polygon)
+                    addAnnoItem(coco_data, annotation_id, category_name, current_image_id, category, box, polygon)
                 annotation_id += 1
-                addAnnoItem(coco_data, annotation_id, category_name, current_image_id, category, bbox)
 
     json.dump(coco_data, open(json_path, 'w'))
     print("class nums:{}".format(len(coco_data['categories'])))
@@ -196,4 +222,4 @@ if __name__ == '__main__':
     image_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\images'
     label_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\labels'
     json_path = r'E:\data\0417_signboard\data0521_m\coco_rgb_detection5_det\instance_all.json'
-    parseXmlFilse(image_dir, label_dir, json_path)
+    yolo2coco(image_dir, label_dir, json_path)
