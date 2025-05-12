@@ -6,7 +6,7 @@ import shutil
 from datetime import datetime
 import numpy as np
 import cv2
-
+from tqdm import tqdm
 
 
 
@@ -37,7 +37,6 @@ def addImgItem(coco_data, image_set, image_id, file_name, size):
 
 def addAnnoItem(coco_data, annotation_id, object_name, image_id, category_id, bbox, polygon=None):
     annotation_item = dict()
-    annotation_item['segmentation'] = []
     if polygon is None:
         seg = []
         # bbox[] is x,y,w,h
@@ -53,10 +52,10 @@ def addAnnoItem(coco_data, annotation_id, object_name, image_id, category_id, bb
         # right_top
         seg.append(bbox[0] + bbox[2])
         seg.append(bbox[1])
-        annotation_item['segmentation'].append(seg)
+        annotation_item['segmentation'] = seg
         annotation_item['area'] = bbox[2] * bbox[3]
     else:
-        annotation_item['segmentation'].append(polygon)
+        annotation_item['segmentation'] = [polygon.flatten().tolist()]
         area = poly2area(polygon)
         annotation_item['area'] = area
     annotation_item['iscrowd'] = 0
@@ -120,7 +119,7 @@ def yolo2coco(image_path, anno_path, json_path, dst_img_dir=None, seg=False):
     images = [os.path.join(image_path, i) for i in os.listdir(image_path)]
     files = [os.path.join(anno_path, i) for i in os.listdir(anno_path)]
     images_index = dict((v.split(os.sep)[-1][:-4], k) for k, v in enumerate(images))
-    for file in files:
+    for file in tqdm(files):
         if os.path.splitext(file)[-1] != '.txt' or 'classes' in file.split(os.sep)[-1]:
             continue
         if file.split(os.sep)[-1][:-4] in images_index:
@@ -140,10 +139,10 @@ def yolo2coco(image_path, anno_path, json_path, dst_img_dir=None, seg=False):
         with open(file, 'r') as fid:
             for line in fid.readlines():
                 line = [float(x) for x in line.strip().split()]
-                category = int(line[0])+1
+                category = int(line[0])
                 category_name = category_id[category]
                 if not seg:
-                    bbox = xywhn2xywh((i[1], i[2], i[3], i[4]), shape)
+                    bbox = xywhn2xywh((line[1], line[2], line[3], line[4]), shape)
                     addAnnoItem(coco_data, annotation_id, category_name, current_image_id, category, bbox)
                 else:
                     polygon = np.array(line[1:]).reshape(-1, 2)
@@ -219,7 +218,7 @@ if __name__ == '__main__':
     # parseXmlFilse(image_dir, label_dir, json_path)
 
 
-    image_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\images'
-    label_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\labels'
-    json_path = r'E:\data\0417_signboard\data0521_m\coco_rgb_detection5_det\instance_all.json'
-    yolo2coco(image_dir, label_dir, json_path)
+    image_dir = r'/data/huilin/data/isds/bd_data/data389_seg/images'
+    label_dir = r'/data/huilin/data/isds/bd_data/data389_seg/labels'
+    json_path = r'/data/huilin/data/isds/bd_data/data389_seg/instance_all.json'
+    yolo2coco(image_dir, label_dir, json_path, seg=True)
