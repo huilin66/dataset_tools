@@ -15,7 +15,14 @@ def compute_iou_box(box1, box2):
     x2_tp = xc2-w2*0.5
     y1_tp = yc1-h1*0.5
     y2_tp = yc2-w2*0.5
-
+    x1_bt = xc1+w1*0.5
+    x2_bt = xc2+w2*0.5
+    y1_bt = yc1+h1*0.5
+    y2_bt = yc2+w2*0.5
+    x1 = max(x1_tp, x2_tp)
+    y1 = max(y1_tp, y2_tp)
+    x2 = min(x1_bt, x2_bt)
+    y2 = min(y1_bt, y2_bt)
     inter_area = max(0, x2 - x1) * max(0, y2 - y1)
     box1_area = (box1[2] - box1[0]) * (box1[3] - box1[1])
     box2_area = (box2[2] - box2[0]) * (box2[3] - box2[1])
@@ -64,7 +71,7 @@ def parse_boxes(file_path, image_width, image_height, pred=False, with_att=False
                 conf = 1
             df.loc[len(df)] = [cls, x, y, h, w, conf]
     if with_att:
-        columns = ['att_%d'%i for i in range(len(atts[0]))]
+        columns = ['att%d'%i for i in range(len(atts[0]))]
         df_att = pd.DataFrame(atts, columns=columns)
         df = pd.concat([df,df_att], axis=1)
     boxes_abs = box2box_abs(boxes, image_width, image_height)
@@ -104,7 +111,7 @@ def parse_masks(file_path, image_width, image_height, pred=False, with_att=False
             box = poly2xywh(polygon)
             boxes.append([cls]+box)
     if with_att:
-        columns = ['att_%d' % i for i in range(len(atts[0]))]
+        columns = ['att%d' % i for i in range(len(atts[0]))]
         df_att = pd.DataFrame(atts, columns=columns)
         df = pd.concat([df, df_att], axis=1)
     boxes_abs = box2box_abs(boxes, image_width, image_height)
@@ -176,11 +183,11 @@ def match_boxes(label_boxes_abs, pred_boxes_abs, save_dir, threshold=0.5):
 def process_files(label_path, pred_path, save_path, image_width=640, image_height=480, seg=False, with_conf=False,
                   with_att=False, threshold=0.5):
     if seg:
-        label_boxes, label_masks, labels_df = parse_masks(label_path, image_width, image_height)
-        pred_boxes, pred_mask, pred_df = parse_masks(pred_path, image_width, image_height, pred=True)
+        label_boxes, label_masks, labels_df = parse_masks(label_path, image_width, image_height, with_att=with_att, with_conf=with_conf)
+        pred_boxes, pred_mask, pred_df = parse_masks(pred_path, image_width, image_height, with_att=with_att, with_conf=with_conf, pred=True)
     else:
-        label_boxes, labels_df = parse_boxes(label_path, image_width, image_height)
-        pred_boxes, pred_df = parse_boxes(pred_path, image_width, image_height, pred=True)
+        label_boxes, labels_df = parse_boxes(label_path, image_width, image_height, with_att=with_att, with_conf=with_conf)
+        pred_boxes, pred_df = parse_boxes(pred_path, image_width, image_height, with_att=with_att, with_conf=with_conf, pred=True)
 
 
     match_dict = match_boxes(label_boxes, pred_boxes, threshold)
@@ -199,14 +206,11 @@ def process_files(label_path, pred_path, save_path, image_width=640, image_heigh
 
     counts_all = []
     counts_div = []
-    # for i in range(9):
-    # for i in [1, 4, 5, 6, 7]:
-    for i in [0, 2, 3]:
-        merge_df[f'precision_att{i+1}'] = merge_df[f'att{i+1}_labels'] == merge_df[f'att{i+1}_pred']
-        # merge_df[f'true_att{i+1}'] = (merge_df[f'att{i+1}_labels'] == 1) & (merge_df[f'att{i+1}_labels'] == merge_df[f'att{i+1}_pred'])
+    for i in range(4):
+        merge_df[f'precision_att{i}'] = merge_df[f'att{i}_labels'] == merge_df[f'att{i}_pred']
 
-        count_all = (merge_df[f'att{i+1}_labels'] == 1).sum()
-        count_true = ((merge_df[f'att{i+1}_labels'] == 1) & (merge_df[f'att{i+1}_labels'] == merge_df[f'att{i+1}_pred'])).sum()
+        count_all = (merge_df[f'att{i}_labels'] == 1).sum()
+        count_true = ((merge_df[f'att{i}_labels'] == 1) & (merge_df[f'att{i}_labels'] == merge_df[f'att{i}_pred'])).sum()
         count_div = count_true/count_all if count_all != 0 else np.nan
         counts_all.append(count_all)
         counts_div.append(count_div)
@@ -230,7 +234,7 @@ def process_files(label_path, pred_path, save_path, image_width=640, image_heigh
 
 def model_pred_compare(label_dir, pred_dir, save_dir=None, seg=False, with_conf=False, with_att=False, threshold=0.5):
     if save_dir is None:
-        save_dir = label_dir + f'_{os.path.dirname(pred_dir)}'
+        save_dir = label_dir + f'_{os.path.basename(pred_dir)}'
     columns = ['file_name', 'precision_box', 'recall_box', 'att_oa', 'att_oa_true', 'att_true_num',]
     os.makedirs(save_dir, exist_ok=True)
     pred_list = os.listdir(pred_dir)
@@ -248,7 +252,7 @@ def model_pred_compare(label_dir, pred_dir, save_dir=None, seg=False, with_conf=
                                                                                  threshold=threshold)
         result += [precision, recall, att_oa, att_oa_true, att_true_num]
         df.loc[len(df.index)] = result
-    df.to_csv(save_path)
+    df.to_csv(save_dir+'.csv')
 
 def models_pred_compare(label_dir, preds_dir):
     pass
