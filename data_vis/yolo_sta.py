@@ -5,6 +5,7 @@ import pandas as pd
 from tqdm import tqdm
 import seaborn as sns
 import matplotlib.pyplot as plt
+import numpy as np
 from data_sta import dir_shape_sta
 from matplotlib import rcParams
 rcParams['font.family'] = 'Times New Roman'
@@ -37,7 +38,7 @@ def segmented_bar(df, save_path):
 
 
 
-def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None, img_dir=None):
+def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None, img_dir=None, seg=False):
     os.makedirs(result_dir, exist_ok=True)
 
     if img_dir is not None:
@@ -51,7 +52,7 @@ def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None, 
     if attribute_path is None:
         df_box, _ = get_df_yolo(gt_dir, ref_txt=ref_txt, classes=classes)
     else:
-        df_box, df_attribute = get_df_yolo(gt_dir, ref_txt=ref_txt, classes=classes, attribute_path=attribute_path, mdet=True)
+        df_box, df_attribute = get_df_yolo(gt_dir, ref_txt=ref_txt, classes=classes, attribute_path=attribute_path, mdet=True, seg=seg)
 
         # region
         csv_path = os.path.join(result_dir, 'sta_attribute.csv')
@@ -200,6 +201,16 @@ def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None, 
     print('sta result save to', png_num_path)
     # endregion
 
+def poly2xywh(mask):
+    mask = np.array([mask[::2], mask[1::2]])
+    x_min,y_min = np.min(mask, axis=1)
+    x_max,y_max = np.max(mask, axis=1)
+    x_center = (x_max + x_min) / 2
+    y_center = (y_max + y_min) / 2
+    width = x_max - x_min
+    height = y_max - y_min
+    return [x_center, y_center, width, height]
+
 def get_df_yolo(gt_dir, classes, attribute_path=None, ref_txt=None, mdet=False, seg=False):
     category_dict = {i: name for i, name in enumerate(classes)}
 
@@ -209,16 +220,16 @@ def get_df_yolo(gt_dir, classes, attribute_path=None, ref_txt=None, mdet=False, 
         img_list = pd.read_csv(ref_txt, header=None, index_col=None)[0].tolist()
         gt_list = [Path(img_path).stem+'.txt' for img_path in img_list]
 
-    if not seg:
-        if mdet:
-            assert attribute_path is not None, 'attribute_path must be provided, which is "%s"'%attribute_path
-            with open(attribute_path, 'r') as file:
-                attribute_dict = yaml.safe_load(file)['attributes']
-            attribute_keys = list(attribute_dict.keys())
-            names = ['category'] + ['attribute_len'] + attribute_keys + [ 'center_x', 'center_y', 'width', 'height']
-        else:
-            names = ['category', 'center_x', 'center_y', 'width', 'height']
 
+    if mdet:
+        assert attribute_path is not None, 'attribute_path must be provided, which is "%s"'%attribute_path
+        with open(attribute_path, 'r') as file:
+            attribute_dict = yaml.safe_load(file)['attributes']
+        attribute_keys = list(attribute_dict.keys())
+        names = ['category'] + ['attribute_len'] + attribute_keys + [ 'center_x', 'center_y', 'width', 'height']
+    else:
+        names = ['category', 'center_x', 'center_y', 'width', 'height']
+    if not seg:
         dfs = []
         for gt_name in tqdm(gt_list):
             gt_path = os.path.join(gt_dir, gt_name)
@@ -235,8 +246,38 @@ def get_df_yolo(gt_dir, classes, attribute_path=None, ref_txt=None, mdet=False, 
         else:
             df_attribute = None
         return df_box, df_attribute
-
-
+    else:
+        dfs = []
+        for gt_name in tqdm(gt_list):
+            gt_path = os.path.join(gt_dir, gt_name)
+            df = pd.DataFrame(None, columns=names+['image'])
+            with open(gt_path, 'r') as f:
+                data = f.readlines()
+                for id_line, line in enumerate(data):
+                    parts = line.strip().split(' ')
+                    category = int(parts[0])
+                    image_name = Path(gt_path).stem
+                    if mdet:
+                        att_len = int(parts[1])
+                        atts = list(map(float, parts[2:2+att_len]))
+                        polygons = list(map(float, parts[2+att_len:]))
+                        xywh = poly2xywh(polygons)
+                        df.loc[len(df)] = [category,att_len]+atts+xywh + [image_name]
+                    else:
+                        polygons = list(map(float, parts[1:]))
+                        xywh = poly2xywh(polygons)
+                        df.loc[len(df)] = [category]+xywh + [image_name]
+                    dfs.append(df)
+        dfs = pd.concat(dfs)
+        dfs['category'] = dfs['category'].map(category_dict)
+        df_box = dfs[['category', 'center_x', 'center_y', 'width', 'height', 'image']].copy()
+        if mdet:
+            df_attribute = dfs[['category', 'image']+attribute_keys].copy()
+            df_attribute['attribute sum'] = df_attribute.iloc[:, 2:].sum(axis=1)
+            df_attribute['with attribute'] = df_attribute['attribute sum'].apply(lambda x: 0 if x == 0 else 1)
+        else:
+            df_attribute = None
+        return df_box, df_attribute
 def info_vis(info_path):
     df = pd.read_csv(info_path, header=0, index_col=0)
     class_counts = df['class_id'].value_counts().sort_index()
@@ -262,13 +303,13 @@ if __name__ == '__main__':
     #     # val_path = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\val.txt',
     # )
 
-    yolo_sta(
-        gt_dir=r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels",
-        result_dir=r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels_sta",
-        class_path=r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\class.txt',
-        attribute_path=r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\attribute.yaml',
-        # val_path = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\val.txt',
-    )
+    # yolo_sta(
+    #     gt_dir=r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels",
+    #     result_dir=r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\labels_sta",
+    #     class_path=r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\class.txt',
+    #     attribute_path=r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c\attribute.yaml',
+    #     # val_path = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\val.txt',
+    # )
 
     # yolo_sta(
     #     gt_dir=r"E:\data\0417_signboard\data0521_m\yolo_rgb_detection5\labels",
@@ -310,3 +351,18 @@ if __name__ == '__main__':
     #     result_dir=r"E:\cp_dir\data\labels_sta",
     #     class_path=r'E:\cp_dir\data\class.txt',
     # )
+
+    yolo_sta(
+        gt_dir=r"E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset\labels",
+        result_dir=r"E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset\labels_sta",
+        class_path=r'E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset\class.txt',
+        attribute_path=r'E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset\attribute.yaml',
+        seg=True,
+    )
+    yolo_sta(
+        gt_dir=r"E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset_f001\labels",
+        result_dir=r"E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset_f001\labels_sta",
+        class_path=r'E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset_f001\class.txt',
+        attribute_path=r'E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset_f001\attribute.yaml',
+        seg=True,
+    )
