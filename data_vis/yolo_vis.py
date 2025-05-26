@@ -6,6 +6,7 @@ from tqdm import tqdm
 import yaml
 import pandas as pd
 from PIL import Image, ImageOps
+from pathlib import Path
 
 red_color_bgr = (0, 0, 255)
 colormap = [
@@ -208,6 +209,7 @@ def xywh2poly(x, w, h, img, img_vis, cats, crop=True, attributes=None, filter_no
         pos1 = float(polypos[i]) * w
         pos2 = float(polypos[i+1]) * h
         polys.append([pos1, pos2])
+        polys.append([pos1, pos2])
 
     polys = np.array(polys, np.int32)
     if crop:
@@ -338,7 +340,7 @@ def yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=
             cv2.imwrite(save_path, img_vis)
 
 def yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=None, attribute_file=None,
-                  filter_no=False, seg=False, crop_keep_shape=False, det_crop=True):
+                  filter_no=False, seg=False, crop_keep_shape=False, det_crop=True, seg_crop=False, single_save=False):
     cats = get_cats(class_file)
     if attribute_file is not None:
         with open(attribute_file, 'r') as file:
@@ -349,6 +351,7 @@ def yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=
     img_list.sort()
     label_list = os.listdir(label_folder)
     label_list.sort()
+    label_list = [Path(img_name).stem +'.txt' for img_name in img_list]
     assert len(img_list) == len(label_list), print('the number of images and labels do not match')
     # img_list = img_list[:2]
 
@@ -432,7 +435,7 @@ if __name__ == '__main__':
     # root_dir = r'E:\data\tp\sar_det'
     # root_dir = r'E:\data\0111_testdata\data_new\yolo_src'
     # root_dir = r'E:\cp_dir\data'
-    root_dir = r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10_c'
+    root_dir = r'E:\data\202502_signboard\data_annotation\annotation_result_merge'
     # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\bd1-9hgll-94afa\train'
     # root_dir = r'E:\data\20241113_road_veg\dataset'
     # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\crack-bpxku-hcu46\train'
@@ -475,5 +478,5 @@ if __name__ == '__main__':
 
     # yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=False)
     # yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=True)
-    yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=False, attribute_file=attribute_file, filter_no=True, crop_keep_shape=True, det_crop=True)
-    # yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=True, attribute_file=attribute_file, filter_no=True)
+    # yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=False, attribute_file=attribute_file, filter_no=True, crop_keep_shape=True, det_crop=True)
+    yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=None, seg=True, attribute_file=attribute_file, filter_no=True, crop_keep_shape=False, seg_crop=True)

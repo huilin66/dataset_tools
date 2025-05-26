@@ -6,6 +6,23 @@ from tqdm import tqdm
 
 class_list = [0, 1]
 
+def find_image_with_class(labels_dir, class_list, seg=False, with_att=False):
+    label_list = os.listdir(labels_dir)
+    for label_name in tqdm(label_list):
+        label_path = osp.join(labels_dir, label_name)
+        if not seg:
+            pass
+            # df = pd.read_csv(label_path, names=['class', 'xmin', 'ymin', 'xmax', 'ymax'])
+        else:
+            with open(label_path, 'r') as f:
+                lines = f.readlines()
+                for id_line, line in enumerate(lines):
+                    parts = line.strip().split(' ')
+                    class_id = int(parts[0])
+                    if class_id in class_list:
+                        print(f'find class{class_id} in {label_name}, object {id_line}')
+
+
 def yolo_classmerge(input_dir):
     '''
 
@@ -89,3 +106,5 @@ if __name__ == '__main__':
     # )
     # info_merge(r'E:\data\202502_signboard\annotation_result_merge\labels_update',
     #            r'E:\data\202502_signboard\annotation_result_merge\info_update.csv')
+    find_image_with_class(r'E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset\labels',
+                          class_list=[1], seg=True)
