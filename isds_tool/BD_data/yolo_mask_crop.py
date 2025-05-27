@@ -147,7 +147,7 @@ def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, 
         for att in atts:
             att_dir = os.path.join(crop_dir, att)
             for idx, level in enumerate(atts[att]):
-                att_level_dir = f'{att_dir}_{level}'
+                att_level_dir = os.path.join(att_dir, level)
                 os.makedirs(att_level_dir, exist_ok=True)
     elif save_method == 'category':
         for cat in cats:
@@ -156,10 +156,9 @@ def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, 
     elif save_method == 'attribute_category' and atts is not None:
         pass
 
+
     image_list = os.listdir(image_dir)
     for img_idx, image_name in enumerate(tqdm(image_list, desc='mask cropping ')):
-        # if img_idx < 480:
-        #     continue
         label_name = Path(image_name).stem + '.txt'
         image_path = os.path.join(image_dir, image_name)
         label_path = os.path.join(label_dir, label_name)
@@ -168,9 +167,13 @@ def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, 
         for idx, record in label.iterrows():
             if seg:
                 image_crop = xywh2poly_crop(record, image.copy(), crop_method=crop_method)
-                for att, levels in atts.items():
-                    att_level = levels[int(record[att])]
-                    save_path = os.path.join(crop_dir, f'{att}_{att_level}', Path(image_name).stem + f'_{idx}' + Path(image_name).suffix)
+                if save_method == 'attribute':
+                    for att, levels in atts.items():
+                        att_level = levels[int(record[att])]
+                        save_path = os.path.join(crop_dir, att, att_level, Path(image_name).stem + f'_{idx}' + Path(image_name).suffix)
+                        image_save(save_path, image_crop)
+                else:
+                    save_path = os.path.join(crop_dir,  Path(image_name).stem + f'_{idx}' + Path(image_name).suffix)
                     image_save(save_path, image_crop)
             else:
                 pass
@@ -180,8 +183,8 @@ def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, 
 
 if __name__ == '__main__':
     pass
-    root_dir = r'E:\data\202502_signboard\data_annotation\annotation_result_merge'
-    image_dir = os.path.join(root_dir, 'images_re')
+    root_dir = r'/localnvme/data/billboard/bd_data/data626_mseg_f001'
+    image_dir = os.path.join(root_dir, 'images')
     label_dir = os.path.join(root_dir, 'labels')
     attribute_file = os.path.join(root_dir, 'attribute.yaml')
     class_file = os.path.join(root_dir, 'class.txt')
