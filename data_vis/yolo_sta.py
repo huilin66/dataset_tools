@@ -352,17 +352,24 @@ if __name__ == '__main__':
     #     class_path=r'E:\cp_dir\data\class.txt',
     # )
 
+    # yolo_sta(
+    #     gt_dir=r"E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset\labels",
+    #     result_dir=r"E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset\labels_sta",
+    #     class_path=r'E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset\class.txt',
+    #     attribute_path=r'E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset\attribute.yaml',
+    #     seg=True,
+    # )
+    # yolo_sta(
+    #     gt_dir=r"E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset_f001\labels",
+    #     result_dir=r"E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset_f001\labels_sta",
+    #     class_path=r'E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset_f001\class.txt',
+    #     attribute_path=r'E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset_f001\attribute.yaml',
+    #     seg=True,
+    # )
+
     yolo_sta(
-        gt_dir=r"E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset\labels",
-        result_dir=r"E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset\labels_sta",
-        class_path=r'E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset\class.txt',
-        attribute_path=r'E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset\attribute.yaml',
-        seg=True,
-    )
-    yolo_sta(
-        gt_dir=r"E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset_f001\labels",
-        result_dir=r"E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset_f001\labels_sta",
-        class_path=r'E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset_f001\class.txt',
-        attribute_path=r'E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset_f001\attribute.yaml',
-        seg=True,
+        img_dir=r"/localnvme/data/added_data/rgbt/ODinMJ/rgb_data/images",
+        gt_dir=r"/localnvme/data/added_data/rgbt/ODinMJ/rgb_data/labels",
+        result_dir=r"/localnvme/data/added_data/rgbt/ODinMJ/rgb_data/labels_sta",
+        class_path=r'/localnvme/data/added_data/rgbt/ODinMJ/rgb_data/class.txt',
     )
