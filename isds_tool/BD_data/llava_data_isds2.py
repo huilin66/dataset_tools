@@ -110,21 +110,11 @@ def det2llava(img_dir, gt_dir, dst_json):
 
 def get_gt_info_mdet(gt_path):
     gt_infos = []
-    # df = pd.read_csv(gt_path, header=None, index_col=None, sep=' ',
-    #                  names=['cat_id', len(attributes)] + attributes + ['x_center', 'y_center', 'w_box', 'h_box'])
-    # for idx,row in df.iterrows():
-    #     gt_info = {}
-    #     img_name = os.path.basename(gt_path).replace('.txt', '_%d.jpg' % idx)
-    #     gt_info['img_name'] = img_name
-    #     gt_info['category'] = categories[int(row['cat_id'])]
-    #     for attribute in attributes:
-    #         gt_info[attribute] = row[attribute]
-    #     gt_infos.append(gt_info)
     with open(gt_path, 'r') as f:
         lines = f.readlines()
         for idx, line in enumerate(lines):
             parts = line.strip().split()
-            img_name = Path(gt_path).stem + '_%d'%idx
+            img_name = Path(gt_path).stem + '_%d'%idx + '.png'
             gt_info = {}
             gt_info['img_name'] = img_name
             gt_info['category'] = categories[int(parts[0])]
@@ -155,7 +145,6 @@ def get_img_info_mdet(gt_path, img_dir, description=1):
         img_info = {}
         img_info['id'] = img_name.replace('.jpg', '')
         img_info['image'] = os.path.basename(img_dir) + '/'+ img_name
-
         # 原始描述
         if description == 1:
             img_info['conversations'] = [
@@ -505,10 +494,10 @@ if __name__ == '__main__':
     os.makedirs(caption_folder, exist_ok=True)
     llava_caption5_crop = os.path.join(caption_folder, 'signboard_caption5_crop.json')
     # region generating dataset
-    myolo_crop(image_folder, label_folder, crop_folder, class_file,
-               attribute_file=attribute_file, seg=True,
-               save_method='all',
-               crop_method='without_background_box_shape')
+    # myolo_crop(image_folder, label_folder, crop_folder, class_file,
+    #            attribute_file=attribute_file, seg=True,
+    #            save_method='all',
+    #            crop_method='without_background_box_shape')
 
     mdet2llava(crop_folder, label_folder, llava_caption5_crop,  description=5)
     # endregion
