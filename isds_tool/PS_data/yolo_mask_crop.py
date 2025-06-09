@@ -148,6 +148,7 @@ def dict_revert(crop_dict):
     return reverted_dict
 
 def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, seg=True, save_method='attribute', crop_method='without_background_image_shape'):
+    os.makedirs(crop_dir)
     cats = get_cats(class_file)
     atts = get_atts(attribute_file) if attribute_file is not None else None
 
@@ -185,7 +186,7 @@ def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, 
                             image_save(save_path, image_crop)
                     else:
                         save_name = Path(image_name).stem + f'_{idx}' + Path(image_name).suffix
-                        save_path = os.path.join(crop_dir,  )
+                        save_path = os.path.join(crop_dir,  save_name)
                         image_save(save_path, image_crop)
                         crop_dict[save_name] = image_name
             else:
@@ -203,14 +204,26 @@ def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, 
 
 if __name__ == '__main__':
     pass
-    root_dir = r'/data/huilin/data/isds/ps_data/0527'
-    image_dir = os.path.join(root_dir, 'images')
-    label_dir = os.path.join(root_dir, 'images_seg_infer', 'labels')
-    attribute_file = os.path.join(root_dir, 'attribute.yaml')
-    class_file = os.path.join(root_dir, 'class.txt')
+    # root_dir = r'/data/huilin/data/isds/ps_data/0527'
+    # image_dir = os.path.join(root_dir, 'images')
+    # label_dir = os.path.join(root_dir, 'images_seg_infer', 'labels')
+    # attribute_file = os.path.join(root_dir, 'attribute.yaml')
+    # class_file = os.path.join(root_dir, 'class.txt')
+    #
+    # crop_dir = os.path.join(root_dir, 'images_crop_box')
+    # myolo_crop(image_dir, label_dir, crop_dir, class_file,
+    #            attribute_file=None, seg=True,
+    #            save_method='all',
+    #            crop_method='without_background_box_shape')
 
-    crop_dir = os.path.join(root_dir, 'images_crop_box')
-    myolo_crop(image_dir, label_dir, crop_dir, class_file,
+    root_dir = r'/data/huilin/data/isds/ps_data/0606'
+    image_folder = os.path.join(root_dir, 'merge_dir')
+    yolo_infer_folder = os.path.join(root_dir, 'merge_dir_seg_infer', 'labels')
+    crop_folder = os.path.join(root_dir, 'merge_dir_crop')
+    caption_folder = os.path.join(root_dir, 'caption')
+    class_file = os.path.join(root_dir, 'class.txt')
+    llava_caption5_crop = os.path.join(caption_folder, 'signboard_caption5_crop.json')
+    myolo_crop(image_folder, yolo_infer_folder, crop_folder, class_file,
                attribute_file=None, seg=True,
                save_method='all',
                crop_method='without_background_box_shape')

@@ -7,7 +7,7 @@ import pandas as pd
 from data_vis.yolo_vis import yolo_mdet_vis
 from pathlib import Path
 from yolo_mask_crop import myolo_crop
-categories = ['background', 'wall frame', 'wall display', 'projecting frame', 'projecting display', 'hanging frame', 'hanging display', 'other']
+categories = ['wall frame', 'wall display', 'projecting frame', 'projecting display', 'hanging frame', 'hanging display', 'other']
 attributes = ['deformation', 'broken', 'abandonment', 'corrosion']
 
 
@@ -211,6 +211,9 @@ def mdet2llava(img_dir, gt_dir, dst_json, train_ratio=1.0, ref_path=None, descri
 
 # region transform
 def find_with_defect(input_dir, crop_map_dict):
+    if not isinstance(crop_map_dict, dict):
+        with open(crop_map_dict, 'r') as f:
+            crop_map_dict = json.load(f)
     result_path = input_dir+'.csv'
     defect_dict = {}
     file_list = os.listdir(input_dir)
@@ -228,6 +231,45 @@ def find_with_defect(input_dir, crop_map_dict):
     df_defect.to_csv(result_path, index=False)
     return df_defect
 
+def copy_mdet_by_llava(label_dir, llava_dir, label_update_dir, crop_map1_path, crop_map2_path):
+    with open(crop_map1_path, 'r') as f:
+        crop_map_dict = json.load(f)
+    with open(crop_map2_path, 'r') as f:
+        crop_map_dict_revert = json.load(f)
+
+    print('find defect...')
+    result_path = llava_dir+'.csv'
+    if not os.path.exists(result_path):
+        df_defect = find_with_defect(llava_dir, crop_map_dict)
+    else:
+        df_defect = pd.read_csv(result_path, header=0, index_col=None)
+    print('finished!\n')
+    os.makedirs(label_update_dir, exist_ok=True)
+
+
+    file_with_defect_list = df_defect['file_name'].to_list()
+    for file_name in tqdm(file_with_defect_list):
+        label_name = Path(file_name).stem + '.txt'
+        label_path_src = os.path.join(label_dir, label_name)
+        label_path_dst = os.path.join(label_update_dir, label_name)
+        with open(label_path_src, 'r') as fr:
+            lines = fr.readlines()
+
+        label_llava_list = crop_map_dict_revert[file_name]
+        new_lines = []
+        with open(label_path_dst, 'w') as fw:
+            for obj_id in range(len(lines)):
+                file_name_obj = file_name.replace('.jpg', f'_{obj_id}.jpg')
+                if file_name_obj not in label_llava_list:
+                    print(file_name_obj, 'not exist!')
+                else:
+                    defect_pred_list = [4] + [0, 0, 0, 0]
+                    defect_str = ' '.join(map(str, defect_pred_list)) + ' '
+                    obj_line = lines[obj_id]
+                    obj_line_new = obj_line[:2] + defect_str + obj_line[2:]
+                    new_lines.append(obj_line_new)
+            fw.writelines(new_lines)
+
 def update_mdet_by_llava(label_dir, llava_dir, label_update_dir, crop_map1_path, crop_map2_path):
     with open(crop_map1_path, 'r') as f:
         crop_map_dict = json.load(f)
@@ -237,13 +279,11 @@ def update_mdet_by_llava(label_dir, llava_dir, label_update_dir, crop_map1_path,
     print('find defect...')
     result_path = llava_dir+'.csv'
     if not os.path.exists(result_path):
-        df_defect = find_with_defect(result_dir, crop_map_dict)
+        df_defect = find_with_defect(llava_dir, crop_map_dict)
     else:
         df_defect = pd.read_csv(result_path, header=0, index_col=None)
     print('finished!\n')
     os.makedirs(label_update_dir, exist_ok=True)
-    os.makedirs()
-
 
     file_with_defect_list = df_defect['file_name'].to_list()
     for file_name in tqdm(file_with_defect_list):
@@ -330,18 +370,18 @@ if __name__ == '__main__':
 
 
     # region mdetection data 2 llava
-    root_dir = r'/localnvme/data/billboard/bd_data/data626_mseg_f001'
-    image_folder = os.path.join(root_dir, 'images')
-    label_folder = os.path.join(root_dir, 'labels')
-    attribute_file = os.path.join(root_dir, 'attribute.yaml')
-    class_file = os.path.join(root_dir, 'class.txt')
-
-    llava_folder = os.path.join(root_dir, 'llava_data')
-    crop_folder = os.path.join(llava_folder, 'images_crop')
-    caption_folder = os.path.join(llava_folder, 'caption')
-    os.makedirs(crop_folder, exist_ok=True)
-    os.makedirs(caption_folder, exist_ok=True)
-    llava_caption5_crop = os.path.join(caption_folder, 'signboard_caption5_crop.json')
+    # root_dir = r'/localnvme/data/billboard/bd_data/data626_mseg_f001'
+    # image_folder = os.path.join(root_dir, 'images')
+    # label_folder = os.path.join(root_dir, 'labels')
+    # attribute_file = os.path.join(root_dir, 'attribute.yaml')
+    # class_file = os.path.join(root_dir, 'class.txt')
+    #
+    # llava_folder = os.path.join(root_dir, 'llava_data')
+    # crop_folder = os.path.join(llava_folder, 'images_crop')
+    # caption_folder = os.path.join(llava_folder, 'caption')
+    # os.makedirs(crop_folder, exist_ok=True)
+    # os.makedirs(caption_folder, exist_ok=True)
+    # llava_caption5_crop = os.path.join(caption_folder, 'signboard_caption5_crop.json')
     # region generating dataset
     # myolo_crop(image_folder, label_folder, crop_folder, class_file,
     #            attribute_file=attribute_file, seg=True,
@@ -350,3 +390,14 @@ if __name__ == '__main__':
 
     # mdet2llava(crop_folder, label_folder, llava_caption5_crop,  description=5)
     # endregion
+    root_dir = r'/data/huilin/data/isds/ps_data/0606'
+    image_folder = os.path.join(root_dir, 'merge_dir')
+    yolo_infer_folder = os.path.join(root_dir, 'merge_dir_seg_infer', 'labels')
+    crop_folder = os.path.join(root_dir, 'merge_dir_crop')
+    crop_map_path = os.path.join(root_dir, 'images_crop_box.json')
+    crop_map_revert_path = os.path.join(root_dir, 'merge_dir_crop_revert.json')
+    crop_infer_folder = os.path.join(root_dir, 'merge_dir_crop_risk_infer')
+    caption_folder = os.path.join(root_dir, 'caption')
+    class_file = os.path.join(root_dir, 'class.txt')
+    llava_caption5_crop = os.path.join(caption_folder, 'signboard_caption5_crop.json')
+    find_with_defect(crop_infer_folder, crop_map_path)
