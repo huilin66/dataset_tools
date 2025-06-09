@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 def get_task_batch(input_img_dir, input_pred_dir, output_dir, class_path, k=2):
     pass
-    input_pred_txt_dir = os.path.join(input_pred_dir, 'labels')
+    input_pred_txt_dir = input_pred_dir
     output_dir_list = [f'{output_dir}_{i+1}' for i in range(k)]
     output_image_dir_list = [os.path.join(output_dir, 'image') for output_dir in output_dir_list]
     output_label_dir_list = [os.path.join(output_dir, 'label') for output_dir in output_dir_list]
@@ -36,11 +36,16 @@ def get_task_batch(input_img_dir, input_pred_dir, output_dir, class_path, k=2):
 if __name__ == '__main__':
     pass
     CLASS_PATH = r'E:\data\202502_signboard\data_annotation\annotation guide 0510\class.txt'
-    input_img_dir=r'E:\data\202502_signboard\data_annotation\task\task0519\images_split\left'
-    input_pred_dir=r'E:\data\202502_signboard\data_annotation\task\task0519\images_split_pred\left'
-    output_dir = r'E:\data\202502_signboard\data_annotation\task\task0519\ps_task_left_batch'
-    get_task_batch(input_img_dir, input_pred_dir, output_dir, CLASS_PATH)
-    input_img_dir=r'E:\data\202502_signboard\data_annotation\task\task0519\images_split\right'
-    input_pred_dir=r'E:\data\202502_signboard\data_annotation\task\task0519\images_split_pred\right'
-    output_dir = r'E:\data\202502_signboard\data_annotation\task\task0519\ps_task_right_batch'
+    # input_img_dir=r'E:\data\202502_signboard\data_annotation\task\task0519\images_split\left'
+    # input_pred_dir=r'E:\data\202502_signboard\data_annotation\task\task0519\images_split_pred\left'
+    # output_dir = r'E:\data\202502_signboard\data_annotation\task\task0519\ps_task_left_batch'
+    # get_task_batch(input_img_dir, input_pred_dir, output_dir, CLASS_PATH)
+    # input_img_dir=r'E:\data\202502_signboard\data_annotation\task\task0519\images_split\right'
+    # input_pred_dir=r'E:\data\202502_signboard\data_annotation\task\task0519\images_split_pred\right'
+    # output_dir = r'E:\data\202502_signboard\data_annotation\task\task0519\ps_task_right_batch'
+    # get_task_batch(input_img_dir, input_pred_dir, output_dir, CLASS_PATH)
+
+    input_img_dir=r'E:\data\202502_signboard\data_annotation\task\task0528\pseudo_label_data\images_updated'
+    input_pred_dir=r'E:\data\202502_signboard\data_annotation\task\task0528\pseudo_label_data\labels_updated'
+    output_dir = r'E:\data\202502_signboard\data_annotation\task\task0528\pseudo_label_data\ps_task_batch'
     get_task_batch(input_img_dir, input_pred_dir, output_dir, CLASS_PATH)

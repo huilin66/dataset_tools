@@ -435,7 +435,7 @@ if __name__ == '__main__':
     # root_dir = r'E:\data\tp\sar_det'
     # root_dir = r'E:\data\0111_testdata\data_new\yolo_src'
     # root_dir = r'E:\cp_dir\data'
-    root_dir = r'E:\data\202502_signboard\data_annotation\annotation_result_merge'
+    root_dir = r'E:\data\202502_signboard\data_annotation\task\task0528\pseudo_label_data'
     # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\bd1-9hgll-94afa\train'
     # root_dir = r'E:\data\20241113_road_veg\dataset'
     # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\crack-bpxku-hcu46\train'
@@ -444,9 +444,9 @@ if __name__ == '__main__':
     # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\wall-defect-ogum1-3wsxo\train'
     # root_dir = r'E:\demo\demo_slice_merge\yolo'
     # root_dir = r'E:\data\202502_signboard\20250224 Signboard Data and CDU\Selected_Sample\data\2025.4.3'
-    img_folder = os.path.join(root_dir, 'images')
+    img_folder = os.path.join(root_dir, 'images_updated')
     # img_folder = os.path.join(root_dir, 'images_val')
-    label_folder = os.path.join(root_dir, 'labels')
+    label_folder = os.path.join(root_dir, 'labels_updated')
     # img_folder = os.path.join(root_dir, 'images_slice')
     # label_folder = os.path.join(root_dir, 'labels_slice')
     # img_folder = os.path.join(root_dir, 'images_merge')
@@ -479,4 +479,4 @@ if __name__ == '__main__':
     # yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=False)
     # yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=True)
     # yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=False, attribute_file=attribute_file, filter_no=True, crop_keep_shape=True, det_crop=True)
-    yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=None, seg=True, attribute_file=attribute_file, filter_no=True, crop_keep_shape=False, seg_crop=True)
+    yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=None, seg=True, attribute_file=attribute_file, filter_no=True, crop_keep_shape=False, seg_crop=False)
