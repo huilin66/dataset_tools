@@ -340,7 +340,7 @@ def yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=
             cv2.imwrite(save_path, img_vis)
 
 def yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=None, attribute_file=None,
-                  filter_no=False, seg=False, crop_keep_shape=False, det_crop=True, seg_crop=False, single_save=False):
+                  filter_no=True, seg=False, crop_keep_shape=False, det_crop=True, seg_crop=False, single_save=False):
     cats = get_cats(class_file)
     if attribute_file is not None:
         with open(attribute_file, 'r') as file:
@@ -353,7 +353,6 @@ def yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=
     label_list.sort()
     label_list = [Path(img_name).stem +'.txt' for img_name in img_list]
     assert len(img_list) == len(label_list), print('the number of images and labels do not match')
-    # img_list = img_list[:2]
 
     os.makedirs(output_folder, exist_ok=True)
     print(output_folder)
@@ -365,6 +364,8 @@ def yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=
     for i in tqdm(range(len(img_list))):
         image_path = os.path.join(img_folder, img_list[i])
         label_path = os.path.join(label_folder, label_list[i])
+        if not os.path.exists(label_path):
+            continue
         # img = cv2.imread(image_path)
         img = Image.open(image_path)
         # img = ImageOps.exif_transpose(img)
