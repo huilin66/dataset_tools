@@ -138,6 +138,12 @@ def mannual_filter(input_dir, output_dir, filter_list):
         if idx not in filter_list:
             shutil.copy(input_path, output_path)
 
+def filter_deduplication(input_dir, output_dir, window_size=10, threshold=0.5):
+    pass
+    image_paths = get_image_paths(input_dir)
+    similarity_matrix = compute_similarity_matrix(image_paths, window_size=window_size)
+    batch_filter_unique_images(image_paths, similarity_matrix, threshold=threshold, output_folder=output_dir)
+
 if __name__ == '__main__':
     pass
     # 主流程
@@ -152,14 +158,15 @@ if __name__ == '__main__':
     #
     # mannual_filter(output1_path, output2_path, list(range(84,98))+list(range(119,278)))
 
-
-
-    folder_path = r"E:\data\202502_signboard\PS\20250616\rectified_image2\selected_img"
-    output1_path = r"E:\data\202502_signboard\PS\20250616\rectified_image2\selected_img_filter1"
-    output2_path = r"E:\data\202502_signboard\PS\20250616\rectified_image2\selected_img_filter2"
-    image_paths = get_image_paths(folder_path)
-    similarity_matrix = compute_similarity_matrix(image_paths, window_size=10)
-    plot_max_similarity_curve(similarity_matrix, threshold=0.5)
-    batch_filter_unique_images(image_paths, similarity_matrix, threshold=0.5, output_folder=output1_path)
+    filter_deduplication(
+        input_dir=r'Y:\ZHL\isds\PS\task0606\angle6\rectified_image_select',
+        output_dir=r'Y:\ZHL\isds\PS\task0606\angle6\rectified_image_filter', window_size=10, threshold=0.5)
+    # folder_path = r"E:\data\202502_signboard\PS\20250616\rectified_image2\selected_img"
+    # output1_path = r"E:\data\202502_signboard\PS\20250616\rectified_image2\selected_img_filter1"
+    # output2_path = r"E:\data\202502_signboard\PS\20250616\rectified_image2\selected_img_filter2"
+    # image_paths = get_image_paths(folder_path)
+    # similarity_matrix = compute_similarity_matrix(image_paths, window_size=10)
+    # plot_max_similarity_curve(similarity_matrix, threshold=0.5)
+    # batch_filter_unique_images(image_paths, similarity_matrix, threshold=0.5, output_folder=output1_path)
 
     # mannual_filter(output1_path, output2_path, list(range(84,98))+list(range(119,278)))

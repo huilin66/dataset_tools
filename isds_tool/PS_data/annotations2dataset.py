@@ -5,7 +5,7 @@ from pathlib import Path
 
 def copy_imgs(dst_dir, ref_dir):
     dst_images_dir = os.path.join(dst_dir, 'images')
-    ref_images_dir = os.path.join(ref_dir, 'image')
+    ref_images_dir = os.path.join(ref_dir, 'images')
     if not os.path.exists(dst_images_dir):
         print(f'copying images from {ref_images_dir} to {dst_images_dir}')
         shutil.copytree(ref_images_dir, dst_images_dir)
@@ -34,7 +34,7 @@ def anno2data(annotations_dir, dataset_dir, class_path, attribute_path):
             elif 'right' in anno_name:
                 dst_image_name = Path(image_name).stem + '_right'+Path(image_name).suffix
             else:
-                dst_image_name = None
+                dst_image_name = image_name
             label_name = Path(image_name).stem + '.txt'
             dst_label_name = Path(dst_image_name).stem + '.txt'
             image_path = os.path.join(images_dir, image_name)
@@ -50,8 +50,8 @@ def anno2data(annotations_dir, dataset_dir, class_path, attribute_path):
 
 if __name__ == '__main__':
     pass
-    annotations_dir = r'E:\data\202502_signboard\data_annotation\task\task0519_anno\annos'
-    dataset_dir = r'E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset'
+    annotations_dir = r'E:\data\202502_signboard\data_annotation\task\task0528_anno\annos'
+    dataset_dir = r'E:\data\202502_signboard\data_annotation\task\task0528_anno\yolo_dataset'
     class_path = r'E:\data\202502_signboard\data_annotation\annotation guide 0510\class.txt'
     attribute_path = r'E:\data\202502_signboard\data_annotation\annotation guide 0510\attribute_v5.yaml'
     anno2data(annotations_dir, dataset_dir, class_path, attribute_path)

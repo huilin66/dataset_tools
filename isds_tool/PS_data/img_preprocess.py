@@ -20,15 +20,12 @@ def select_img(input_dir, output_dir):
 def find_repeated_images(input_dir):
     image_files = sorted([f for f in os.listdir(input_dir) if f.endswith(".jpg")])
 
-
-    # 计算每张图的感知哈希值
     hashes = []
     for file in tqdm(image_files):
         img_path = os.path.join(img_folder, file)
         hash_val = imagehash.phash(Image.open(img_path))
         hashes.append((file, hash_val))
 
-    # 找出相似图片（哈希距离小于等于 threshold）
     threshold = 2
     similar_groups = []
 
@@ -46,6 +43,8 @@ def find_repeated_images(input_dir):
     # 输出结果
     for group in similar_groups:
         print("重复组：", group)
+
+
 
 
 if __name__ == '__main__':
