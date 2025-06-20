@@ -28,7 +28,7 @@ def seg_filter_small(input_dir, output_dir, threshold=0.01, class_list=[2,4,6,7]
         input_label_path = os.path.join(input_label_dir, label_name)
         output_label_path = os.path.join(output_label_dir, label_name)
 
-        # shutil.copy(input_image_path, output_image_path)
+        shutil.copy(input_image_path, output_image_path)
 
         area_poly, area_bbox = filter_yolo_segmentation(input_label_path, output_label_path, threshold=threshold, with_attribute=with_attribute, class_list=class_list)
         areas_poly += area_poly
@@ -185,5 +185,7 @@ if __name__ == '__main__':
     #                  r'E:\data\202502_signboard\data_annotation\annotation_result_merge_f010', with_attribute=True, threshold=0.1)
 
 
-    seg_filter_small(r'E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset',
-                     r'E:\data\202502_signboard\data_annotation\task\task0519_anno\yolo_dataset_f001', with_attribute=True, threshold=0.01)
+    seg_filter_small(r'/localnvme/data/billboard/fused_data/data870_mseg_c6',
+                     r'/localnvme/data/billboard/fused_data/data870_mseg_c6_f010', with_attribute=True, threshold=0.10)
+    seg_filter_small(r'/localnvme/data/billboard/fused_data/data870_seg_c6',
+                     r'/localnvme/data/billboard/fused_data/data870_seg_c6_f010', with_attribute=False, threshold=0.10)
