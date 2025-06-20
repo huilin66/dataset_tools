@@ -1,5 +1,6 @@
 import os
 import cv2
+import ast
 import yaml
 import json
 import numpy as np
@@ -8,6 +9,7 @@ import pandas as pd
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 
+RED_BGR = (0, 0, 255)
 COLOR_MAP = [
     (255, 42, 4),
     # (235, 219, 11),
@@ -36,7 +38,7 @@ COLOR_MAP = [
 
 def get_cats(class_file):
     df = pd.read_csv(class_file, header=None, index_col=None, names=['category'])
-    cats = df['category'].to_dict()
+    cats = df['category'].to_list()
     return cats
 
 def get_atts(attribute_file):
@@ -109,33 +111,95 @@ def calculate_polygon_area(points):
 
 def polygon_swift(record, image):
     image_height, image_width = image.shape[:2]
-    polys = np.array(record['masks'], np.float32)
+    if isinstance(record, str):
+        polys = np.array(ast.literal_eval(record), np.float32)
+    else:
+        polys = np.array(record['masks'], np.float32)
     size = np.array([image_width, image_height] * (len(polys)//2), np.int32)
     polys_sized = polys*size
     polygon_coords = np.array(polys_sized, np.int32).reshape((-1, 2))
     return polygon_coords
 
-def extract_polygon_from_image(image, polygon_coords, crop_method='without_background_keep_shape'):
+def extract_polygon_from_image(image, polygon_coords, crop_method='without_background_keep_shape', color=RED_BGR):
     mask = np.zeros(image.shape[:2], np.uint8)
-
+    top_left_x, top_left_y = np.min(polygon_coords, axis=0)
+    bottom_right_x, bottom_right_y = np.max(polygon_coords, axis=0)
     if crop_method.startswith('without_background'):
-        cv2.polylines(image, [polygon_coords], isClosed=False, color=255)
+        cv2.polylines(image, [polygon_coords], isClosed=True, color=color)
         cv2.fillPoly(mask, [polygon_coords], color=255)
         img_copy = cv2.bitwise_and(image, image, mask=mask)
         if crop_method == 'without_background_image_shape':
             img_crop = img_copy
         elif crop_method == 'without_background_box_shape':
-            top_left_x, top_left_y = np.min(polygon_coords, axis=0)
-            bottom_right_x, bottom_right_y = np.max(polygon_coords, axis=0)
             img_crop = img_copy[int(top_left_y):int(bottom_right_y), int(top_left_x):int(bottom_right_x)]
     elif crop_method.startswith('with_background'):
-        pass
-    return img_crop
+        cv2.polylines(image, [polygon_coords], isClosed=True, color=color)
+        if crop_method == 'with_background_image_shape':
+            img_crop = image
+        elif crop_method == 'with_background_box_shape':
+            img_crop = image[int(top_left_y):int(bottom_right_y), int(top_left_x):int(bottom_right_x)]
+    return img_crop, top_left_x, top_left_y
 
-def xywh2poly_crop(record, image, crop_method='without_background_keep_shape'):
+def xywh2poly_crop(record, image, cats, atts=None, annotation=False, crop_method='without_background_keep_shape',
+                   filter_no=True, alpha=0.5, tf=1, sf=2/3):
     polygon_coords = polygon_swift(record, image)
-    image_crop = extract_polygon_from_image(image, polygon_coords, crop_method=crop_method)
+    cat_id =  int(record['category'])
+    color = COLOR_MAP[cat_id]
+    image_crop, top_left_x, top_left_y = extract_polygon_from_image(image, polygon_coords, crop_method=crop_method, color=color)
+    if crop_method == 'with_background_image_shape' and annotation:
+        text_size = cv2.getTextSize(cats[cat_id], cv2.FONT_HERSHEY_SIMPLEX, sf - 0.1, tf)[0]
+        cv2.rectangle(image_crop, (int(top_left_x), int(top_left_y) + 10),
+                      (int(top_left_x) + text_size[0] - 15, int(top_left_y) + 7 - text_size[1] + 3),
+                      color=COLOR_MAP[cat_id], thickness=-1)
+        cv2.putText(image_crop, cats[cat_id], (int(top_left_x), int(top_left_y) + 7),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+        if atts is not None:
+            count = 0
+            count2 = 0
+            attribute_strs = []
 
+            br_poss = []
+            for idx, (k, vs) in enumerate(atts.items()):
+                v = vs[int(record[k])]
+                text = f'{k}-{v}'
+                if filter_no:
+                    if not v or v == 'no':
+                        continue
+                count += 1
+                color = (255, 0, 0) if v is not False else (0, 0, 0)
+                cv2.putText(image_crop, text, (int(top_left_x), int(top_left_y) + 12 + 10 * count),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+                (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                attribute_strs.append(text)
+                br_poss.append([int(top_left_x) + text_width - 15, int(top_left_y) + 12 + 10 * count])
+
+            if len(br_poss) > 0:
+                br_poss = np.array(br_poss)
+                tl_pos = [int(top_left_x), int(top_left_y) + 10]
+                br_pos = [np.max(br_poss, axis=0)[0], br_poss[-1][1]]
+                box = tl_pos + br_pos
+                p1, p2 = (int(box[0]), int(box[1])), (int(box[2]) + 15, int(box[3] + 2))
+                cv2.rectangle(image_crop, p1, p2, (255, 255, 255))
+                overlay = image_crop.copy()
+                cv2.rectangle(overlay, p1, p2, (255, 255, 255), -1)
+                cv2.addWeighted(overlay, alpha, image_crop, 1 - alpha, 0, image_crop)
+
+                br_poss = []
+                for idx, (k, v) in enumerate(atts.items()):
+                    v = vs[int(record[k])]
+                    text = f'{k}-{v}'
+                    if filter_no:
+                        if not v or v == 'no':
+                            continue
+                    count2 += 1
+                    color = (255, 0, 0) if v is not False else (0, 0, 0)
+                    # text_size = cv2.putText(img, text, (int(top_left_x), int(top_left_y) + 12+10*count), cv2.FONT_HERSHEY_SIMPLEX  , 0.5, color, 1)[0]
+                    cv2.putText(image_crop, text, (int(top_left_x), int(top_left_y) + 12 + 10 * count2),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                0.5, color, 1)
+                    (text_width, text_height), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                    attribute_strs.append(text)
+                    br_poss.append([int(top_left_x) + text_width - 15, int(top_left_y) + 12 + 10 * count2])
     return image_crop
 
 # endregion
@@ -147,8 +211,9 @@ def dict_revert(crop_dict):
         reverted_dict[value].append(key)
     return reverted_dict
 
-def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, seg=True, save_method='attribute', crop_method='without_background_image_shape'):
-    os.makedirs(crop_dir)
+def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, seg=True, annotation=False,
+               save_method='attribute', crop_method='without_background_image_shape'):
+    os.makedirs(crop_dir, exist_ok=True)
     cats = get_cats(class_file)
     atts = get_atts(attribute_file) if attribute_file is not None else None
 
@@ -168,6 +233,8 @@ def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, 
     crop_dict = {}
     image_list = os.listdir(image_dir)
     for img_idx, image_name in enumerate(tqdm(image_list, desc='mask cropping ')):
+        # if img_idx<1035:
+        #     continue
         label_name = Path(image_name).stem + '.txt'
         image_path = os.path.join(image_dir, image_name)
         label_path = os.path.join(label_dir, label_name)
@@ -177,18 +244,18 @@ def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, 
         label = label_read(label_path, seg=seg, atts=atts)
         for idx, record in label.iterrows():
             if seg:
-                image_crop = xywh2poly_crop(record, image.copy(), crop_method=crop_method)
+                image_crop = xywh2poly_crop(record, image.copy(), crop_method=crop_method, annotation=annotation, cats=cats, atts=atts)
                 if image_crop.shape[0]>0 and image_crop.shape[1]>0:
+                    save_name = Path(image_name).stem + f'_{idx}' + Path(image_name).suffix
                     if save_method == 'attribute':
                         for att, levels in atts.items():
                             att_level = levels[int(record[att])]
-                            save_path = os.path.join(crop_dir, att, att_level, Path(image_name).stem + f'_{idx}' + Path(image_name).suffix)
+                            save_path = os.path.join(crop_dir, att, att_level, save_name)
                             image_save(save_path, image_crop)
                     else:
-                        save_name = Path(image_name).stem + f'_{idx}' + Path(image_name).suffix
                         save_path = os.path.join(crop_dir,  save_name)
                         image_save(save_path, image_crop)
-                        crop_dict[save_name] = image_name
+                    crop_dict[save_name] = image_name
             else:
                 pass
     crop_result_path = crop_dir+'.json'
@@ -216,14 +283,15 @@ if __name__ == '__main__':
     #            save_method='all',
     #            crop_method='without_background_box_shape')
 
-    root_dir = r'/data/huilin/data/isds/ps_data/0606'
-    image_folder = os.path.join(root_dir, 'merge_dir')
-    yolo_infer_folder = os.path.join(root_dir, 'merge_dir_seg_infer', 'labels')
-    crop_folder = os.path.join(root_dir, 'merge_dir_crop')
-    caption_folder = os.path.join(root_dir, 'caption')
-    class_file = os.path.join(root_dir, 'class.txt')
-    llava_caption5_crop = os.path.join(caption_folder, 'signboard_caption5_crop.json')
-    myolo_crop(image_folder, yolo_infer_folder, crop_folder, class_file,
-               attribute_file=None, seg=True,
-               save_method='all',
-               crop_method='without_background_box_shape')
+    # root_dir = r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6'
+    root_dir = r'/localnvme/data/billboard/fused_data/data1361_mseg_c6_check0618_update'
+    dataset_dir = root_dir
+    image_dir = os.path.join(dataset_dir, 'images')
+    labels_dir = os.path.join(dataset_dir, 'labels')
+    image_crop_dir = os.path.join(dataset_dir, 'images_crop_object')
+    class_file = os.path.join(dataset_dir, 'class.txt')
+    attribute_file = os.path.join(dataset_dir, 'attribute.yaml')
+    myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
+               attribute_file=attribute_file, seg=True, annotation=True,
+               save_method='attribute',
+               crop_method='with_background_image_shape')
