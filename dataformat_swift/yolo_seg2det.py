@@ -1,6 +1,8 @@
 import cv2
 import os
+import shutil
 from tqdm import tqdm
+from pathlib import Path
 
 def convert_mask_to_bbox(mask_label):
     bboxes = mask_label
@@ -16,7 +18,7 @@ def normalize_bbox(bbox, img_width, img_height):
     return x_center, y_center, width, height
 
 
-def convert_instance_segmentation_to_detection(input_dir, output_dir):
+def seg2det(input_dir, output_dir):
     os.makedirs(output_dir, exist_ok=True)
     input_files = [f for f in os.listdir(input_dir) if f.endswith('.txt')]
 
@@ -44,10 +46,32 @@ def convert_instance_segmentation_to_detection(input_dir, output_dir):
         with open(output_path, 'w') as file:
             file.writelines(new_annotations)
 
+def mseg2seg(input_dir, output_dir):
+    input_label_dir = input_dir
+    output_label_dir = output_dir
+    label_list = os.listdir(input_label_dir)
+    os.makedirs(output_label_dir, exist_ok=True)
+    for label_name in tqdm(label_list):
+        input_label_path = os.path.join(input_label_dir, label_name)
+        output_label_path = os.path.join(output_label_dir, label_name)
+        with open(input_label_path, 'r') as f_in, open(output_label_path, 'w+') as f_out:
+            lines = f_in.readlines()
+            for line in lines:
+                num_list = line.split(' ')
+                attribute_num = int(num_list[1])
+                num_list_seg = num_list[:1]+num_list[1+attribute_num+1:]
+                line_seg = ' '.join(num_list_seg)
+                f_out.write(line_seg)
+
 
 if __name__ == '__main__':
-    # Example usage:
-    convert_instance_segmentation_to_detection(
-        r'E:\data\1123_thermal\thermal data\datasets\moisture\seg\labels',
-        r'E:\data\1123_thermal\thermal data\datasets\moisture\det\labels',
-        )
+    pass
+
+    # mseg2seg(
+    #     r'E:\data\202502_signboard\annotation_result_merge\labels_update',
+    #     r'E:\data\202502_signboard\annotation_result_merge\labels_update_seg',
+    #     )
+    # seg2det(
+    #     r'E:\data\202502_signboard\annotation_result_merge\labels_update_seg',
+    #     r'E:\data\202502_signboard\annotation_result_merge\labels_update_det'
+    #     )

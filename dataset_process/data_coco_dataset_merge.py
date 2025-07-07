@@ -1,11 +1,4 @@
-import os
-import json
-import shutil
-import pandas as pd
-from tqdm import tqdm
-from json_split import *
-from data_vis.json_vis import anno_vis
-
+# region coco datasets
 ROOT_PATH = r'E:\data\2024_defect\2024_defect_det'
 
 error_set = {
@@ -73,6 +66,10 @@ categories_final = [
     }
 ]
 
+# endregion
+
+# region coco tools
+
 def json_load(js_path):
     with open(js_path, 'r') as load_f:
         data = json.load(load_f)
@@ -82,7 +79,8 @@ def json_save(js_path, data):
     with open(js_path, 'w') as save_f:
         json.dump(data, save_f)
 
-def dataset_merge(dst_dir, data_prefixs=None, merge_dir='train', img_gap=10000, anno_gap=10000):
+
+def dataset_merge_coco(dst_dir, data_prefixs=None, merge_dir='train', img_gap=10000, anno_gap=10000):
     dst_dir = os.path.join(dst_dir, merge_dir)
     if not os.path.exists(dst_dir):
         os.makedirs(os.path.join(dst_dir, merge_dir))
@@ -150,7 +148,7 @@ def dataset_merge(dst_dir, data_prefixs=None, merge_dir='train', img_gap=10000, 
     json_save(dst_json, data_new)
 
 
-def dataset_sta(root_dir, save_path):
+def dataset_sta_coco(root_dir, save_path):
     pass
 
     df = pd.DataFrame(None, columns=['name', 'train_img', 'train_box', 'val_img', 'val_num', 'test_img','test_num', 'cats'])
@@ -181,7 +179,8 @@ def dataset_sta(root_dir, save_path):
     print(df)
     df.to_csv(save_path)
 
-def dataset_vis(root_dir):
+
+def dataset_vis_coco(root_dir):
     dir_list = os.listdir(root_dir)
     dir_list.remove('00data_fuse')
     for data_name in dir_list:
@@ -193,16 +192,19 @@ def dataset_vis(root_dir):
         train_vis_dir = os.path.join(data_dir, 'train_vis')
         anno_vis(os.path.join(train_dir, '_annotations.coco.json'), img_dir=train_dir, vis_dir=train_vis_dir)
 
-if __name__ == '__main__':
-    pass
-    # dataset_split()
-    # dataset_merge(r'E:\Huilin\2308_concretespalling\data\merge_data', merge_dir='train')
-    # dataset_merge(r'E:\Huilin\2308_concretespalling\data\merge_data', merge_dir='valid')
 
-    data_dir = r'E:\data\2024_defect\2024_defect_det'
-    save_path = r'E:\data\2024_defect\2024_defect_det\00data_fuse\sta.csv'
-    # dataset_sta(data_dir, save_path)
-    dataset_vis(data_dir)
-    # val_dir = r'E:\data\2024_defect\2024_defect_det\walldefect\train'
-    # val_vis_dir = r'E:\data\2024_defect\2024_defect_det\walldefect\val_vis_select'
-    # anno_vis(os.path.join(val_dir, '_annotations.coco.json'), img_dir=val_dir, vis_dir=val_vis_dir, cat_ids=[2])
+def get_root_csv_coco(data_root, save_dir):
+    os.makedirs(save_dir, exist_ok=True)
+    dir_list = os.listdir(data_root)
+    for data_name in dir_list:
+        data_dir = os.path.join(data_root, data_name)
+        if os.path.isdir(data_dir):
+            data_path = os.path.join(data_dir, r'README.dataset.txt')
+            if os.path.exists(data_path):
+                save_path = os.path.join(save_dir, data_name+'_url.txt')
+                shutil.copy(data_path, save_path)
+                print('save to',save_path)
+            else:
+                print(data_name, 'not exist')
+
+# endregion

@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 def img_cat(img_list, dst_path):
     imgs = [io.imread(img_path) for img_path in img_list]
-    img = np.concatenate(imgs, axis=-1)
+    img = np.concatenate(imgs, axis=1)
     print(img.shape)
     io.imsave(dst_path, img)
 
@@ -15,6 +15,8 @@ def imgs_cat(dir_list, dst_dir):
         os.makedirs(dst_dir)
     file_list = os.listdir(dir_list[0])
     for file_name in tqdm(file_list):
+        if not file_name.endswith(".jpg"):
+            continue
         img_list = [os.path.join(img_dir, file_name) for img_dir in dir_list]
         dst_path = os.path.join(dst_dir, file_name.replace('.jpg','.tif'))
         img_cat(img_list, dst_path)
@@ -39,15 +41,15 @@ if __name__ == '__main__':
     #     r'E:\data\0111_testdata\data_labeled4254\coco5_wt\images_val_t'
     # ]
     # dst_dir = r'E:\data\0111_testdata\data_labeled4254\coco5_wt\images_val_wt'
-    # dir_list = [
-    #     r'E:\data\0111_testdata\data_labeled4254\coco5_wt\images_train_w',
-    #     r'E:\data\0111_testdata\data_labeled4254\coco5_wt\images_train_t'
-    # ]
-    # dst_dir = r'E:\data\0111_testdata\data_labeled4254\coco5_wt\images_train_wt'
-    # imgs_cat(dir_list, dst_dir)
+    dir_list = [
+        r'E:\data\202502_signboard\PS\20250516\demo_data\images_with_signboards_rename_seg_result1',
+        r'E:\data\202502_signboard\PS\20250516\demo_data\images_with_signboards_rename_seg_result2'
+    ]
+    dst_dir = r'E:\data\202502_signboard\PS\20250516\demo_data\images_with_signboards_rename_seg_result12'
+    imgs_cat(dir_list, dst_dir)
 
     # json_path = r'E:\data\0111_testdata\data_labeled4254\coco5_wt\annotations\instance_train.json'
     # dst_path = r'E:\data\0111_testdata\data_labeled4254\coco5_wt\annotations\instance_train_wt.json'
-    json_path = r'E:\data\0111_testdata\data_labeled4254\coco5_wt\annotations\instance_val.json'
-    dst_path = r'E:\data\0111_testdata\data_labeled4254\coco5_wt\annotations\instance_val_wt.json'
-    json_img_replace(json_path, dst_path)
+    # json_path = r'E:\data\0111_testdata\data_labeled4254\coco5_wt\annotations\instance_val.json'
+    # dst_path = r'E:\data\0111_testdata\data_labeled4254\coco5_wt\annotations\instance_val_wt.json'
+    # json_img_replace(json_path, dst_path)

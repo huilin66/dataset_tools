@@ -56,7 +56,10 @@ class_merge_dict = {
     0: 0,
     1: 1,
     2: 1,
+    3: 2,
+    4: 1,
 }
+class_del_list = [2]
 
 def yolo_idmerge(gt_dir, merge_dict):
     gt_list = os.listdir(gt_dir)
@@ -70,6 +73,35 @@ def yolo_idmerge(gt_dir, merge_dict):
         df.to_csv(gt_path, header=None, index=None, sep=' ')
 
 def yolo_classmerge(input_dir, copy_dir):
+    '''
+
+    :param input_dir:
+    :param copy_dir:
+    :return:
+    '''
+    os.makedirs(copy_dir, exist_ok=True)
+    file_list = os.listdir(input_dir)
+    for file_name in tqdm(file_list):
+        input_file = osp.join(input_dir, file_name)
+        copy_file = osp.join(copy_dir, file_name)
+
+        with open(input_file, 'r') as file:
+            lines = file.readlines()
+        filtered_lines = []
+        for line in lines:
+            numbers_str = line.split()
+            numbers = [int(float(num_str)) if '.' not in num_str else float(num_str) for num_str in numbers_str]
+            numbers[0] = class_merge_dict[numbers[0]]
+            if numbers[0] in class_del_list:
+                continue
+            else:
+                numbers_str = [str(num) for num in numbers]
+                new_line = ' '.join(numbers_str)+'\n'
+                filtered_lines.append(new_line)
+        with open(copy_file, 'w') as file:
+            file.writelines(filtered_lines)
+
+def yolo_classdel(input_dir, copy_dir):
     '''
 
     :param input_dir:
@@ -104,5 +136,9 @@ if __name__ == '__main__':
     # labels_dir = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection2\labels'
     # yolo_idmerge(labels_dir, id_merge_dict)
 
-    yolo_classmerge(input_dir=r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5\labels',
-                    copy_dir=r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection6\labels')
+    # yolo_classmerge(input_dir=r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5\labels',
+    #                 copy_dir=r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection6\labels')
+    # yolo_classmerge(input_dir=r'E:\data\0111_testdata\data_new\yolo_src\labels_src',
+    #                 copy_dir=r'E:\data\0111_testdata\data_new\yolo_src\labels')
+    yolo_classmerge(input_dir=r'E:\data\0111_testdata\data_new\yolo_src\labels',
+                    copy_dir=r'E:\data\0111_testdata\data_new\yolo_src\labels')
