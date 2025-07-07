@@ -10,7 +10,7 @@ import numpy as np
 
 def img2png(input_dir, output_dir):
     os.makedirs(output_dir, exist_ok=True)
-    img_list = os.listdir(input_dir)[580:]
+    img_list = os.listdir(input_dir)
     for img_name in tqdm(img_list):
         png_name = Path(img_name).stem + '.png'
         img_path = os.path.join(input_dir, img_name)

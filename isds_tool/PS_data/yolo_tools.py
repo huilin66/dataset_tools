@@ -484,28 +484,29 @@ def ref_split(ref_path, img_dir, label_dir=None, save_dir=None, full_path=True, 
     df_all.to_csv(all_path, header=None, index=None)
     print('%d save to %s,\n%d save to %s!'%(len(train_list), train_path, len(val_list), val_path))
 
-def data_merge(input_dir1, input_dir2, output_dir):
+def data_merge(input_dir1, input_dir2, output_dir, cp_split=True):
     print(f'merging {input_dir1} + {input_dir2} --> {output_dir}...')
     data_copy(input_dir1, output_dir)
     data_copy(input_dir2, output_dir)
-    input_train_path1 = os.path.join(input_dir1, 'train.txt')
-    input_train_path2 = os.path.join(input_dir2, 'train.txt')
-    output_train_path = os.path.join(output_dir, 'train.txt')
-    input_val_path1 = os.path.join(input_dir1, 'val.txt')
-    input_val_path2 = os.path.join(input_dir2, 'val.txt')
-    output_val_path = os.path.join(output_dir, 'val.txt')
-    df_input_train1 = pd.read_csv(input_train_path1, names=['file_name'],header=None, index_col=False)
-    df_input_train1['file_name'] = df_input_train1['file_name'].str.replace(input_dir1, output_dir)
-    df_input_train2 = pd.read_csv(input_train_path2, names=['file_name'], header=None, index_col=False)
-    df_input_train2['file_name'] = df_input_train2['file_name'].str.replace(input_dir2, output_dir)
-    df_output_train = pd.concat([df_input_train1, df_input_train2])
-    df_output_train.to_csv(output_train_path, index=False, header=False)
-    df_input_val1 = pd.read_csv(input_val_path1, names=['file_name'], header=None, index_col=False)
-    df_input_val1['file_name'] = df_input_val1['file_name'].str.replace(input_dir1, output_dir)
-    df_input_val2 = pd.read_csv(input_val_path2, names=['file_name'], header=None, index_col=False)
-    df_input_val2['file_name'] = df_input_val2['file_name'].str.replace(input_dir2, output_dir)
-    df_output_val = pd.concat([df_input_val1, df_input_val2])
-    df_output_val.to_csv(output_val_path, index=False, header=False)
+    if cp_split:
+        input_train_path1 = os.path.join(input_dir1, 'train.txt')
+        input_train_path2 = os.path.join(input_dir2, 'train.txt')
+        output_train_path = os.path.join(output_dir, 'train.txt')
+        input_val_path1 = os.path.join(input_dir1, 'val.txt')
+        input_val_path2 = os.path.join(input_dir2, 'val.txt')
+        output_val_path = os.path.join(output_dir, 'val.txt')
+        df_input_train1 = pd.read_csv(input_train_path1, names=['file_name'],header=None, index_col=False)
+        df_input_train1['file_name'] = df_input_train1['file_name'].str.replace(input_dir1, output_dir)
+        df_input_train2 = pd.read_csv(input_train_path2, names=['file_name'], header=None, index_col=False)
+        df_input_train2['file_name'] = df_input_train2['file_name'].str.replace(input_dir2, output_dir)
+        df_output_train = pd.concat([df_input_train1, df_input_train2])
+        df_output_train.to_csv(output_train_path, index=False, header=False)
+        df_input_val1 = pd.read_csv(input_val_path1, names=['file_name'], header=None, index_col=False)
+        df_input_val1['file_name'] = df_input_val1['file_name'].str.replace(input_dir1, output_dir)
+        df_input_val2 = pd.read_csv(input_val_path2, names=['file_name'], header=None, index_col=False)
+        df_input_val2['file_name'] = df_input_val2['file_name'].str.replace(input_dir2, output_dir)
+        df_output_val = pd.concat([df_input_val1, df_input_val2])
+        df_output_val.to_csv(output_val_path, index=False, header=False)
     print(f'merging {input_dir1} + {input_dir2} --> {output_dir} finished!')
 
 def data_copy(input_dir, output_dir):
@@ -542,7 +543,7 @@ def get_attributes(attribute_path):
     attribute_keys = list(attribute_dict.keys())
     return attribute_keys
 
-def get_yolo_label_df(gt_path, mdet=False, attributes=None):
+def get_yolo_label_df(gt_path, mdet=False, attributes=None, all_info=False):
     if mdet:
         assert attributes is not None, 'attribute_path must be provided, which is "%s"' % attributes
         if isinstance(attributes, str):
@@ -552,6 +553,9 @@ def get_yolo_label_df(gt_path, mdet=False, attributes=None):
         names = ['category'] + ['attribute_len'] + attribute_keys + [ 'center_x', 'center_y', 'width', 'height']
     else:
         names = ['category', 'center_x', 'center_y', 'width', 'height']
+
+    if all_info:
+        names = ['file_name', 'obj_id']+names
 
     df = pd.DataFrame(None, columns=names + ['image'])
     with open(gt_path, 'r') as f:
@@ -565,11 +569,14 @@ def get_yolo_label_df(gt_path, mdet=False, attributes=None):
                 atts = list(map(float, parts[2:2 + att_len]))
                 polygons = list(map(float, parts[2 + att_len:]))
                 xywh = poly2xywh(polygons)
-                df.loc[len(df)] = [category, att_len] + atts + xywh + [image_name]
+                info = [category, att_len] + atts + xywh + [image_name]
             else:
                 polygons = list(map(float, parts[1:]))
                 xywh = poly2xywh(polygons)
-                df.loc[len(df)] = [category] + xywh + [image_name]
+                info = [category] + xywh + [image_name]
+            if all_info:
+                info = [Path(gt_path).stem, id_line] + info
+            df.loc[len(df)] = info
     return df
 
 def data_check(label_dir, attribute_path=None, mdet=False, check_item='category'):
@@ -627,11 +634,11 @@ def copy_dataset(input_dir, output_dir, class_file=None, attribute_file=None):
 
 if __name__ == '__main__':
     pass
-    src_dir = r'/localnvme/data/billboard/ps_data/psdata118'
-    mseg_dir = src_dir + '_mseg'
-    mseg_c6_dir = src_dir + '_mseg_c6'
-    seg_dir = src_dir + '_seg'
-    seg_c6_dir = src_dir + '_seg_c6'
+    # src_dir = r'/localnvme/data/billboard/ps_data/psdata118'
+    # mseg_dir = src_dir + '_mseg'
+    # mseg_c6_dir = src_dir + '_mseg_c6'
+    # seg_dir = src_dir + '_seg'
+    # seg_c6_dir = src_dir + '_seg_c6'
 
     # if os.path.exists(src_dir):
     #     os.rename(src_dir, mseg_dir)
@@ -688,3 +695,35 @@ if __name__ == '__main__':
     # data_merge(r'/localnvme/data/billboard/bd_data/data626_seg_c6',
     #            r'/localnvme/data/billboard/ps_data/psdata735_seg_c6',
     #            r'/localnvme/data/billboard/fused_data/data1361_seg_c6')
+
+
+
+    # data_merge(r'/localnvme/data/billboard/bd_data_add/bd_data_add1_c6',
+    #            r'/localnvme/data/billboard/fused_data/data1361_mseg_c6',
+    #            r'/localnvme/data/billboard/fused_data/data1422_mseg_c6',
+    #            cp_split=False)
+
+    # mseg2seg(
+    #     r'/localnvme/data/billboard/fused_data/data1422_mseg_c6',
+    #     r'/localnvme/data/billboard/fused_data/data1422_seg_c6',
+    # )
+
+    ref_split(
+        r'/localnvme/data/billboard/fused_data/data1361_mseg_c6_check0624/val.txt',
+        r'/localnvme/data/billboard/fused_data/data1422_seg_c6/images',
+        r'/localnvme/data/billboard/fused_data/data1422_seg_c6/labels',
+        add_suffix=''
+    )
+
+    ref_split(
+        r'/localnvme/data/billboard/fused_data/data1361_mseg_c6_check0624/val.txt',
+        r'/localnvme/data/billboard/fused_data/data1422_mseg_c6/images',
+        r'/localnvme/data/billboard/fused_data/data1422_mseg_c6/labels',
+        add_suffix=''
+    )
+
+    # mseg_class_update(
+    #     r'/localnvme/data/billboard/bd_data_add/bd_data_add1',
+    #     r'/localnvme/data/billboard/bd_data_add/bd_data_add1_c6'
+    # )
+    #
