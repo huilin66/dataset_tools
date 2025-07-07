@@ -8,6 +8,7 @@ from pathlib import Path
 import pandas as pd
 from matplotlib import pyplot as plt
 from tqdm import tqdm
+import concurrent.futures
 
 RED_BGR = (0, 0, 255)
 COLOR_MAP = [
@@ -212,7 +213,7 @@ def dict_revert(crop_dict):
     return reverted_dict
 
 def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, seg=True, annotation=False,
-               save_method='attribute', crop_method='without_background_image_shape'):
+               only_defect=False, save_method='attribute', crop_method='without_background_image_shape'):
     os.makedirs(crop_dir, exist_ok=True)
     cats = get_cats(class_file)
     atts = get_atts(attribute_file) if attribute_file is not None else None
@@ -233,8 +234,6 @@ def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, 
     crop_dict = {}
     image_list = os.listdir(image_dir)
     for img_idx, image_name in enumerate(tqdm(image_list, desc='mask cropping ')):
-        # if img_idx<1035:
-        #     continue
         label_name = Path(image_name).stem + '.txt'
         image_path = os.path.join(image_dir, image_name)
         label_path = os.path.join(label_dir, label_name)
@@ -249,7 +248,10 @@ def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, 
                     save_name = Path(image_name).stem + f'_{idx}' + Path(image_name).suffix
                     if save_method == 'attribute':
                         for att, levels in atts.items():
-                            att_level = levels[int(record[att])]
+                            att_level_int = int(record[att])
+                            if only_defect and att_level_int == 0:
+                                continue
+                            att_level = levels[att_level_int]
                             save_path = os.path.join(crop_dir, att, att_level, save_name)
                             image_save(save_path, image_crop)
                     else:
@@ -269,29 +271,97 @@ def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, 
     with open(crop_result_revert_path, 'w') as f:
         json.dump(crop_dict_revert, f, ensure_ascii=False, indent=4)
 
+
+def myolo_crop_single(args):
+    image_name, image_dir, label_dir, seg, atts, crop_method, annotation, cats, save_method, crop_dir, only_defect = args
+    label_name = Path(image_name).stem + '.txt'
+    image_path = os.path.join(image_dir, image_name)
+    label_path = os.path.join(label_dir, label_name)
+    if not os.path.exists(label_path):
+        return {}
+    image = image_read(image_path)
+    label = label_read(label_path, seg=seg, atts=atts)
+    crop_dict = {}
+
+    for idx, record in label.iterrows():
+        if seg:
+            if save_method == 'all' and only_defect:
+                att_sum = 0
+                for att, levels in atts.items():
+                    att_level_int = int(record[att])
+                    att_sum += att_level_int
+                if att_sum ==0:
+                    continue
+            image_crop = xywh2poly_crop(record, image.copy(), crop_method=crop_method, annotation=annotation, cats=cats, atts=atts)
+            if image_crop.shape[0]>0 and image_crop.shape[1]>0:
+                save_name = Path(image_name).stem + f'_{idx}' + Path(image_name).suffix
+                if save_method == 'attribute':
+                    for att, levels in atts.items():
+                        att_level_int = int(record[att])
+                        att_level = levels[att_level_int]
+                        if only_defect and att_level_int == 0:
+                            continue
+                        save_path = os.path.join(crop_dir, att, att_level, save_name)
+                        image_save(save_path, image_crop)
+                else:
+                    save_path = os.path.join(crop_dir,  save_name)
+                    image_save(save_path, image_crop)
+                crop_dict[save_name] = image_name
+        else:
+            pass
+    return crop_dict
+
+def myolo_crop_mp(image_dir, label_dir, crop_dir, class_file, attribute_file=None, seg=True, annotation=False,
+               only_defect=False, save_method='attribute', crop_method='without_background_image_shape'):
+    os.makedirs(crop_dir, exist_ok=True)
+    cats = get_cats(class_file)
+    atts = get_atts(attribute_file) if attribute_file is not None else None
+
+    if save_method == 'attribute' and atts is not None:
+        for att in atts:
+            att_dir = os.path.join(crop_dir, att)
+            for idx, level in enumerate(atts[att]):
+                att_level_dir = os.path.join(att_dir, level)
+                os.makedirs(att_level_dir, exist_ok=True)
+    elif save_method == 'category':
+        for cat in cats:
+            cat_dir = os.path.join(crop_dir, cat)
+            os.makedirs(cat_dir, exist_ok=True)
+    elif save_method == 'attribute_category' and atts is not None:
+        pass
+
+    crop_dict = {}
+    image_list = os.listdir(image_dir)
+
+    arg_list = [(image_name, image_dir, label_dir, seg, atts, crop_method, annotation, cats, save_method, crop_dir, only_defect) for image_name in image_list]
+
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        results = list(tqdm(executor.map(myolo_crop_single, arg_list), total=len(image_list), desc='mask cropping '))
+
+    for result in results:
+        crop_dict.update(result)
+
+    crop_result_path = crop_dir+'.json'
+    with open(crop_result_path, 'w') as f:
+        json.dump(crop_dict, f, ensure_ascii=False, indent=4)
+
+    with open(crop_result_path, 'r') as f:
+        crop_dict = json.load(f)
+    crop_result_revert_path = crop_dir+'_revert.json'
+    crop_dict_revert = dict_revert(crop_dict)
+    with open(crop_result_revert_path, 'w') as f:
+        json.dump(crop_dict_revert, f, ensure_ascii=False, indent=4)
+
 if __name__ == '__main__':
     pass
-    # root_dir = r'/data/huilin/data/isds/ps_data/0527'
-    # image_dir = os.path.join(root_dir, 'images')
-    # label_dir = os.path.join(root_dir, 'images_seg_infer', 'labels')
-    # attribute_file = os.path.join(root_dir, 'attribute.yaml')
-    # class_file = os.path.join(root_dir, 'class.txt')
-    #
-    # crop_dir = os.path.join(root_dir, 'images_crop_box')
-    # myolo_crop(image_dir, label_dir, crop_dir, class_file,
-    #            attribute_file=None, seg=True,
-    #            save_method='all',
-    #            crop_method='without_background_box_shape')
-
-    # root_dir = r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6'
-    root_dir = r'/localnvme/data/billboard/fused_data/data1361_mseg_c6_check0618_update'
+    root_dir = r'/localnvme/data/billboard/fused_data/data1422_mseg_c6'
     dataset_dir = root_dir
     image_dir = os.path.join(dataset_dir, 'images')
     labels_dir = os.path.join(dataset_dir, 'labels')
-    image_crop_dir = os.path.join(dataset_dir, 'images_crop_object')
+    image_crop_dir = os.path.join(dataset_dir, 'images_crop')
     class_file = os.path.join(dataset_dir, 'class.txt')
     attribute_file = os.path.join(dataset_dir, 'attribute.yaml')
-    myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
+    myolo_crop_mp(image_dir, labels_dir, image_crop_dir, class_file,
                attribute_file=attribute_file, seg=True, annotation=True,
-               save_method='attribute',
+               save_method='all', only_defect=True,
                crop_method='with_background_image_shape')

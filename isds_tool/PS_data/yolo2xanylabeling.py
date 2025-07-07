@@ -8,7 +8,7 @@ from skimage import io
 import pandas as pd
 import yaml
 from tqdm import tqdm
-
+from isds_tool.BD_data.image_re import img2png
 
 def get_cats(class_file):
     df = pd.read_csv(class_file, header=None, index_col=None, names=['category'])
@@ -105,7 +105,7 @@ def yolo_to_xanylabeling_dir(yolo_label_dir, images_dir, xanylabeling_label_dir,
     label_list = os.listdir(yolo_label_dir)
     for label_name in tqdm(label_list):
         json_name = Path(label_name).stem + ".json"
-        image_name = Path(label_name).stem + ".jpg"
+        image_name = Path(label_name).stem + ".png"
         label_path = osp.join(yolo_label_dir, label_name)
         image_path = osp.join(images_dir, image_name)
         json_path = osp.join(xanylabeling_label_dir, json_name)
@@ -113,13 +113,19 @@ def yolo_to_xanylabeling_dir(yolo_label_dir, images_dir, xanylabeling_label_dir,
 
 if __name__ == "__main__":
     pass
-    yolo_label_dir = r"E:\data\202502_signboard\data_annotation\task\task0528\pseudo_label_data\ps_task_batch_1\label"
-    images_dir = r'E:\data\202502_signboard\data_annotation\task\task0528\pseudo_label_data\ps_task_batch_1\image'
-    xanylabeling_labeing_dir = r'E:\data\202502_signboard\data_annotation\task\task0528\pseudo_label_data\ps_task_batch_1\json'
-    class_file = r'E:\data\202502_signboard\data_annotation\task\task0528\pseudo_label_data\ps_task_batch_1\class.txt'
-    # yolo_label_dir = r"E:\data\202502_signboard\data_annotation\task\task0528\pseudo_label_data\ps_task_batch_2\label"
-    # images_dir = r'E:\data\202502_signboard\data_annotation\task\task0528\pseudo_label_data\ps_task_batch_2\image'
-    # xanylabeling_labeing_dir = r'E:\data\202502_signboard\data_annotation\task\task0528\pseudo_label_data\ps_task_batch_2\json'
-    # class_file = r'E:\data\202502_signboard\data_annotation\task\task0528\pseudo_label_data\ps_task_batch_2\class.txt'
-    attribute_file = r'E:\data\202502_signboard\data_annotation\annotation guide 0510\attribute_v5.yaml'
-    yolo_to_xanylabeling_dir(yolo_label_dir, images_dir, xanylabeling_labeing_dir, class_file, attribute_file)
+    class_file = r'/localnvme/data/billboard/bd_data_add/class.txt'
+    attribute_file = r'/localnvme/data/billboard/bd_data_add/attribute.yaml'
+
+
+    # images_dir = r'/localnvme/data/billboard/bd_data_add/bd_data_add1/Deformation'
+    # images_re_dir = r'/localnvme/data/billboard/bd_data_add/bd_data_add1/Deformation_data/images'
+    # yolo_label_dir = r"/localnvme/data/billboard/bd_data_add/bd_data_add1/Deformation_labels/labels"
+    # xanylabeling_labeing_dir = r'/localnvme/data/billboard/bd_data_add/bd_data_add1/Deformation_data/json'
+
+    images_dir = r'/localnvme/data/billboard/bd_data_add/bd_data_add1/Abandonment'
+    images_re_dir = r'/localnvme/data/billboard/bd_data_add/bd_data_add1/Abandonment_data/images'
+    yolo_label_dir = r"/localnvme/data/billboard/bd_data_add/bd_data_add1/Abandonment_labels/labels"
+    xanylabeling_labeing_dir = r'/localnvme/data/billboard/bd_data_add/bd_data_add1/Abandonment_data/json'
+
+    # img2png(images_dir, images_re_dir)
+    yolo_to_xanylabeling_dir(yolo_label_dir, images_re_dir, xanylabeling_labeing_dir, class_file, attribute_file)

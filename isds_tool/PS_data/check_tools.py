@@ -41,9 +41,19 @@ def update_check_result(src_labels_dir, dst_labels_dir, check_csv_path, category
 
 if __name__ == '__main__':
     pass
-    src_labels_dir = r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6/labels'
-    dst_labels_dir = r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6_check0618/labels'
-    check_csv_path = r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6_check0618/info_PS_check_zys_result0618.xlsx'
+    # src_labels_dir = r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6/labels'
+    # dst_labels_dir = r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6_check0618/labels'
+    # check_csv_path = r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6_check0618/info_PS_check_zys_result0618.xlsx'
+
+    src_data_dir = r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6_check0618'
+    src_class_file = os.path.join(src_data_dir, 'class.txt')
+    src_attribute_file = os.path.join(src_data_dir, 'attribute.yaml')
+    src_labels_dir = os.path.join(src_data_dir, 'labels')
+
+    dst_data_dir = r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6_check0624/'
+    dst_labels_dir = os.path.join(dst_data_dir, 'labels')
+
+    check_csv_path = os.path.join(dst_data_dir, 'info_PS_check_tjl_result0624.xlsx')
     defect_list = ['deformation', 'broken', 'abandonment', 'corrosion']
     level_list = ['no', 'medium', 'high']
     category_list = ['wall frame',

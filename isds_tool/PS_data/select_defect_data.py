@@ -137,7 +137,7 @@ def obj_record(attribute_path, box_path, obj2img_path=None, info_path=None):
         df_info['object_name_full'] = df_info['object_name'].apply(lambda x: stem2obj_dict.get(x))
     df_info['area'] = df_info['width'] * df_info['height']
     df_info['small_obj'] = df_info['area']<0.01
-    df_info.to_csv(info_path)
+    df_info.to_csv(info_path, encoding='utf-8-sig')
     print(f'merge {attribute_path}+{box_path} --> {info_path} finished!')
 
 if __name__ == '__main__':
@@ -169,7 +169,7 @@ if __name__ == '__main__':
     # info_path = r'/localnvme/data/billboard/bd_data/data626_mseg_c6/labels_sta/info.csv'
     # obj_record(attribute_path, box_path, info_path)
 
-    dataset_dir = r'/localnvme/data/billboard/fused_data/data1361_mseg_c6_check0618'
+    dataset_dir = r'/localnvme/data/billboard/fused_data/data1422_mseg_c6'
     gt_dir = os.path.join(dataset_dir, "labels")
     sta_dir = os.path.join(dataset_dir, "labels_sta")
     obj2img_path = os.path.join(dataset_dir, "images_crop.json")
