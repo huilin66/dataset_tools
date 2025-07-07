@@ -5,13 +5,47 @@ import pandas as pd
 from tqdm import tqdm
 import seaborn as sns
 import matplotlib.pyplot as plt
-
-
+import numpy as np
+from data_sta import dir_shape_sta
+from matplotlib import rcParams
+# rcParams['font.family'] = 'Times New Roman'
+rcParams['font.family'] = 'serif'
 shp_rate_bins = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2, 2.1, 2.2, 2.4, 2.6, 3, 3.5, 4, 5]
 
 # center_x center_y width height
-def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None):
+def segmented_bar(df, save_path):
+    plt.figure(figsize=(12, 6))
+    box_cats = df.columns.to_list()
+    assert box_cats[-1] == 'total'
+    for cat in box_cats:
+        plt.bar(df.index, df[cat], label=cat, color='skyblue')
+
+    # 添加总数标签
+    for i, tot in enumerate(df['total']):
+        plt.text(i, tot + 5, f'{tot}', ha='center', va='bottom', fontsize=10)
+
+    # 添加标题和标签
+    plt.title('Distribution of Signboard Defect by Category', fontsize=16)
+    plt.xlabel('Categories', fontsize=14)
+    plt.ylabel('Count', fontsize=14)
+
+    # 添加图例
+    plt.legend(title='box Type', bbox_to_anchor=(1.05, 1), loc='upper left')
+
+    # 旋转 x 轴标签，避免重叠
+    plt.xticks(rotation=45, ha='right')
+    plt.savefig(save_path, bbox_inches='tight')
+    # plt.show()
+
+
+
+def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None, img_dir=None, seg=False):
     os.makedirs(result_dir, exist_ok=True)
+
+    if img_dir is not None:
+        img_shape_df = dir_shape_sta(img_dir, os.path.join(result_dir, 'image_shape.png'))
+    else:
+        img_shape_df = None
 
     df_class = pd.read_csv(class_path, header=None, index_col=None, names=['class_name'])
     classes = df_class['class_name'].to_list()
@@ -19,22 +53,31 @@ def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None):
     if attribute_path is None:
         df_box, _ = get_df_yolo(gt_dir, ref_txt=ref_txt, classes=classes)
     else:
-        df_box, df_attribute = get_df_yolo(gt_dir, ref_txt=ref_txt, classes=classes, attribute_path=attribute_path, mdet=True)
+        df_box, df_attribute = get_df_yolo(gt_dir, ref_txt=ref_txt, classes=classes, attribute_path=attribute_path, mdet=True, seg=seg)
 
         # region
         csv_path = os.path.join(result_dir, 'sta_attribute.csv')
         df_attribute.to_csv(csv_path)
         print('csv save to', csv_path)
 
-
-        image_count = df_attribute['image'].nunique()
-        count = (df_attribute['attribute sum'] == 0).sum()
         print('+'*100)
         no_defect_boxes = df_attribute[df_attribute['attribute sum'] == 0].shape[0]
         defect_boxes = df_attribute[df_attribute['attribute sum'] > 0].shape[0]
         print(f"总box数: {len(df_attribute)}")
         print(f"没有缺陷的box数: {no_defect_boxes}")
         print(f"有缺陷的box数: {defect_boxes}")
+
+        png_defect_num_path = os.path.join(result_dir, 'defects_num.png')
+        plt.figure(figsize=(10, 8))
+        defect_num = df_attribute['attribute sum'].value_counts().sort_index()
+        ax = defect_num.plot(kind='bar', title='defects number per box')
+        for p in ax.patches:
+            ax.annotate(f'{p.get_height()}', (p.get_x() + p.get_width() / 2., p.get_height()),
+                        ha='center', va='center', xytext=(0, 10), textcoords='offset points')
+        plt.xticks(rotation=0)
+        plt.savefig(png_defect_num_path)
+        plt.close()
+
 
         unique_image_count = df_attribute['image'].nunique()
         defect_images = df_attribute.groupby('image')['attribute sum'].sum()
@@ -49,11 +92,31 @@ def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None):
         category_defects.loc['total'] = total_defects
         category_defects = category_defects.T
 
-        plt.figure(figsize=(12, 8))
-        category_defects.drop(index=['attribute sum', 'with attribute']).plot(kind='bar')
+
+        cats = category_defects.drop(index=['attribute sum', 'with attribute'])
+        cats = cats.sort_index()
+        plt.rcParams.update({
+            'font.size': 12,  # 增大字体
+            'axes.titlesize': 14,  # 标题字体
+            'xtick.labelsize': 11,  # X轴标签字体
+            'ytick.labelsize': 11,  # Y轴标签字体
+            'legend.fontsize': 10,  # 图例字体
+        })
+        fig, ax = plt.subplots(figsize=(10, 6), tight_layout=True)
+        colors = ['#6baed6', '#fdae6b', '#74c476']
+        bars = cats.plot(
+            kind='bar',
+            title='distribution of defective signboard',
+            ax=ax,
+            color=colors,
+            width=0.7,
+        )
+        # category_defects.drop(index=['attribute sum', 'with attribute']).plot(kind='bar', title='defects distribution')
         plt.xticks(rotation=15)
-        plt.savefig(png_att_path)
+        plt.savefig(png_att_path, bbox_inches='tight', dpi=600)
         plt.close()
+        category_defects.to_csv(csv_path.replace('.csv', '_distributions.csv'))
+        segmented_bar(category_defects, csv_path.replace('.csv', '_distributions.png'))
         print('+'*100)
         print(category_defects)
         print('+'*100)
@@ -69,15 +132,29 @@ def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None):
     plt.figure(figsize=(12, 8))
     cat_sta = df_box['category'].value_counts().sort_index()
     ax = cat_sta.plot(kind='bar', title='obj category')
+    plt.xticks(rotation=30)
     for p in ax.patches:
         ax.annotate(f'{p.get_height()}', (p.get_x() + p.get_width() / 2., p.get_height()),
                     ha='center', va='center', xytext=(0, 10), textcoords='offset points')
     plt.savefig(png_cat_path)
     plt.close()
+    cat_sta.to_csv(png_cat_path.replace('.png', '.csv'))
     print('+'*100)
     print(cat_sta)
     print('+'*100)
     print('sta result save to', png_cat_path)
+
+
+
+    if img_dir is not None:
+        df_box = pd.merge(df_box, img_shape_df, on='image', how='left')
+        df_box['box_width_pix'] = df_box['width'] * df_box['img_width']
+        df_box['box_height_pix'] = df_box['height'] - df_box['img_width']
+        png_shape_path = os.path.join(result_dir, 'box_shape_pix.png')
+        sns.jointplot(x='box_height_pix', y='box_width_pix', data=df_box, kind='hex')
+        plt.savefig(png_shape_path)
+        plt.close()
+        print('sta result save to', png_shape_path)
 
     png_shape_path = os.path.join(result_dir, 'box_shape.png')
     sns.jointplot(x='height', y='width', data=df_box, kind='hex')
@@ -128,6 +205,16 @@ def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None):
     print('sta result save to', png_num_path)
     # endregion
 
+def poly2xywh(mask):
+    mask = np.array([mask[::2], mask[1::2]])
+    x_min,y_min = np.min(mask, axis=1)
+    x_max,y_max = np.max(mask, axis=1)
+    x_center = (x_max + x_min) / 2
+    y_center = (y_max + y_min) / 2
+    width = x_max - x_min
+    height = y_max - y_min
+    return [x_center, y_center, width, height]
+
 def get_df_yolo(gt_dir, classes, attribute_path=None, ref_txt=None, mdet=False, seg=False):
     category_dict = {i: name for i, name in enumerate(classes)}
 
@@ -137,16 +224,16 @@ def get_df_yolo(gt_dir, classes, attribute_path=None, ref_txt=None, mdet=False, 
         img_list = pd.read_csv(ref_txt, header=None, index_col=None)[0].tolist()
         gt_list = [Path(img_path).stem+'.txt' for img_path in img_list]
 
-    if not seg:
-        if mdet:
-            assert attribute_path is not None, 'attribute_path must be provided, which is "%s"'%attribute_path
-            with open(attribute_path, 'r') as file:
-                attribute_dict = yaml.safe_load(file)['attributes']
-            attribute_keys = list(attribute_dict.keys())
-            names = ['category'] + ['attribute_len'] + attribute_keys + [ 'center_x', 'center_y', 'width', 'height']
-        else:
-            names = ['category', 'center_x', 'center_y', 'width', 'height']
 
+    if mdet:
+        assert attribute_path is not None, 'attribute_path must be provided, which is "%s"'%attribute_path
+        with open(attribute_path, 'r') as file:
+            attribute_dict = yaml.safe_load(file)['attributes']
+        attribute_keys = list(attribute_dict.keys())
+        names = ['category'] + ['attribute_len'] + attribute_keys + [ 'center_x', 'center_y', 'width', 'height']
+    else:
+        names = ['category', 'center_x', 'center_y', 'width', 'height']
+    if not seg:
         dfs = []
         for gt_name in tqdm(gt_list):
             gt_path = os.path.join(gt_dir, gt_name)
@@ -162,34 +249,95 @@ def get_df_yolo(gt_dir, classes, attribute_path=None, ref_txt=None, mdet=False, 
             df_attribute['with attribute'] = df_attribute['attribute sum'].apply(lambda x: 0 if x == 0 else 1)
         else:
             df_attribute = None
-        # if mdet:
-        #     attribute_num = dfs.iat[0, 1]
-        #     cols = list(range(2, 2+attribute_num))
-        #     dfs_attribute = dfs[cols]
-        #     mean_value = dfs_attribute.mean()
-        #     sum_value = dfs_attribute.sum()
-        #     count = (dfs_attribute.sum(axis=1) == 0).sum()
-        #     print(len(gt_list))
-        #     print(len(dfs_attribute), count, len(dfs_attribute)-count)
-        #     print(mean_value)
-        #     print(sum_value)
         return df_box, df_attribute
+    else:
+        dfs = []
+        for gt_name in tqdm(gt_list):
+            gt_path = os.path.join(gt_dir, gt_name)
+            df = pd.DataFrame(None, columns=names+['image'])
+            with open(gt_path, 'r') as f:
+                data = f.readlines()
+                if len(data)>100:
+                    print(gt_path, len(data))
+                for id_line, line in enumerate(data):
+                    parts = line.strip().split(' ')
+                    category = int(parts[0])
+                    image_name = Path(gt_path).stem
+                    if mdet:
+                        att_len = int(parts[1])
+                        atts = list(map(float, parts[2:2+att_len]))
+                        polygons = list(map(float, parts[2+att_len:]))
+                        xywh = poly2xywh(polygons)
+                        df.loc[len(df)] = [category,att_len]+atts+xywh + [image_name]
+                    else:
+                        polygons = list(map(float, parts[1:]))
+                        xywh = poly2xywh(polygons)
+                        df.loc[len(df)] = [category]+xywh + [image_name]
+                dfs.append(df)
+        dfs = pd.concat(dfs)
+        dfs['category'] = dfs['category'].map(category_dict)
+        df_box = dfs[['category', 'center_x', 'center_y', 'width', 'height', 'image']].copy()
+        if mdet:
+            df_attribute = dfs[['category', 'image']+attribute_keys].copy()
+            df_attribute['attribute sum'] = df_attribute.iloc[:, 2:].sum(axis=1)
+            df_attribute['with attribute'] = df_attribute['attribute sum'].apply(lambda x: 0 if x == 0 else 1)
+        else:
+            df_attribute = None
+        return df_box, df_attribute
+def info_vis(info_path):
+    df = pd.read_csv(info_path, header=0, index_col=0)
+    class_counts = df['class_id'].value_counts().sort_index()
+    plt.style.use('seaborn')
+    plt.figure()
 
-
+    # 绘制柱状图
+    ax1 = plt.subplot()
+    sns.barplot(x=class_counts.index, y=class_counts.values,
+                palette='viridis', ax=ax1)
+    ax1.set_title('类别分布柱状图', fontsize=14, pad=20)
+    ax1.set_xlabel('样本数量', fontsize=12)
+    ax1.set_ylabel('类别名称', fontsize=12)
+    ax1.tick_params(axis='y', labelsize=10)
+    plt.show()
 
 if __name__ == '__main__':
     pass
     # yolo_sta(
-    #     gt_dir=r"E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\labels",
-    #     result_dir=r"E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\labels_sta",
-    #     class_path=r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\class.txt'
-    #     # val_path = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\val.txt',
+    #     # img_dir=r"/localnvme/data/billboard/ps_data/psdata735_mseg_c6/images",
+    #     img_dir=None,
+    #     gt_dir=r"/localnvme/data/billboard/ps_data/psdata735_mseg_c6/labels",
+    #     result_dir=r"/localnvme/data/billboard/ps_data/psdata735_mseg_c6/labels_sta",
+    #     class_path=r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6/class.txt',
+    #     attribute_path=r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6/attribute.yaml',
+    #     seg=True,
     # )
 
+    data_dir = r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6_check0618'
     yolo_sta(
-        gt_dir=r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10\labels",
-        result_dir=r"E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10\labels_sta",
-        class_path=r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10\class.txt',
-        attribute_path=r'E:\data\0417_signboard\data0806_m\dataset\yolo_rgb_detection5_10\attribute.yaml',
-        # val_path = r'E:\data\0417_signboard\data0521_m\yolo_rgb_detection5_det\val.txt',
+        img_dir=None,
+        gt_dir=os.path.join(data_dir, "labels"),
+        result_dir=os.path.join(data_dir, "labels_sta"),
+        class_path=os.path.join(data_dir, "class.txt"),
+        attribute_path=os.path.join(data_dir, "attribute.yaml"),
+        seg=True,
+    )
+
+    data_dir = r'/localnvme/data/billboard/bd_data/data626_mseg_c6_check0618'
+    yolo_sta(
+        img_dir=None,
+        gt_dir=os.path.join(data_dir, "labels"),
+        result_dir=os.path.join(data_dir, "labels_sta"),
+        class_path=os.path.join(data_dir, "class.txt"),
+        attribute_path=os.path.join(data_dir, "attribute.yaml"),
+        seg=True,
+    )
+
+    data_dir = r'/localnvme/data/billboard/fused_data/data1361_mseg_c6_check0618'
+    yolo_sta(
+        img_dir=None,
+        gt_dir=os.path.join(data_dir, "labels"),
+        result_dir=os.path.join(data_dir, "labels_sta"),
+        class_path=os.path.join(data_dir, "class.txt"),
+        attribute_path=os.path.join(data_dir, "attribute.yaml"),
+        seg=True,
     )

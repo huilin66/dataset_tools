@@ -47,7 +47,7 @@ def train_test_val_split_by_files(img_paths, root_dir):
 
 
 def yolo2coco_arg(arg):
-    root_path = arg.root_dir
+    root_path = arg.root_dir_mdet
     print("Loading data from ", root_path)
 
     assert os.path.exists(root_path)
