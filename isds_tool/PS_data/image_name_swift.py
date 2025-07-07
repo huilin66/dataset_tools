@@ -30,6 +30,6 @@ def image_name_swift(src_dir, dst_dir, prefix=PREFIX, timestamp_gap_num=TIMESTAM
 
 if __name__ == '__main__':
     pass
-    src_dir = r'E:\data\202502_signboard\data_annotation\task\task0528\cdu_test\demo_images_1000'
-    dst_dir = r'E:\data\202502_signboard\data_annotation\task\task0528\cdu_test\demo_images_1000_rename'
+    src_dir = r'E:\data\202502_signboard\PS\20250516\demo_data\images_with_signboards'
+    dst_dir = r'E:\data\202502_signboard\PS\20250516\demo_data\images_with_signboards_rename'
     image_name_swift(src_dir, dst_dir)

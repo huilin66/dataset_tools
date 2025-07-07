@@ -50,8 +50,8 @@ def anno2data(annotations_dir, dataset_dir, class_path, attribute_path):
 
 if __name__ == '__main__':
     pass
-    annotations_dir = r'E:\data\202502_signboard\data_annotation\task\task0528_anno\annos'
-    dataset_dir = r'E:\data\202502_signboard\data_annotation\task\task0528_anno\yolo_dataset'
+    annotations_dir = r'E:\data\202502_signboard\data_annotation\task\task0609_anno\annos'
+    dataset_dir = r'E:\data\202502_signboard\data_annotation\task\task0609_anno\yolo_dataset'
     class_path = r'E:\data\202502_signboard\data_annotation\annotation guide 0510\class.txt'
     attribute_path = r'E:\data\202502_signboard\data_annotation\annotation guide 0510\attribute_v5.yaml'
     anno2data(annotations_dir, dataset_dir, class_path, attribute_path)
