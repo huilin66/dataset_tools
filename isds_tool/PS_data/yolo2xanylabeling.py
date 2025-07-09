@@ -8,6 +8,8 @@ from skimage import io
 import pandas as pd
 import yaml
 from tqdm import tqdm
+import sys
+sys.path.append(r'E:\repository\dataset_tools')
 from isds_tool.BD_data.image_re import img2png
 
 def get_cats(class_file):
@@ -102,10 +104,14 @@ def yolo_to_xanylabeling_dir(yolo_label_dir, images_dir, xanylabeling_label_dir,
     atts = get_atts(attribute_file) if attribute_file is not None else None
     os.makedirs(xanylabeling_label_dir, exist_ok=True)
 
+    img_list = os.listdir(images_dir)
+    img_stem_list = [Path(img).stem for img in img_list]
+    stem2img_dict = dict(zip(img_stem_list, img_list))
+
     label_list = os.listdir(yolo_label_dir)
     for label_name in tqdm(label_list):
         json_name = Path(label_name).stem + ".json"
-        image_name = Path(label_name).stem + ".png"
+        image_name = stem2img_dict[Path(label_name).stem]
         label_path = osp.join(yolo_label_dir, label_name)
         image_path = osp.join(images_dir, image_name)
         json_path = osp.join(xanylabeling_label_dir, json_name)
