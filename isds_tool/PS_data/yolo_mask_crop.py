@@ -210,7 +210,7 @@ def dict_revert(crop_dict):
         reverted_dict[value].append(key)
     return reverted_dict
 
-def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, seg=True, annotation=False,
+def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, seg=True, annotation=False, ref_list=None,
                only_defect=False, save_method='attribute', crop_method='without_background_image_shape'):
     os.makedirs(crop_dir, exist_ok=True)
     cats = get_cats(class_file)
@@ -240,6 +240,9 @@ def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, 
         image = image_read(image_path)
         label = label_read(label_path, seg=seg, atts=atts)
         for idx, record in label.iterrows():
+            image_object_name_stem = f'{Path(image_name).stem}_{idx}'
+            if ref_list is not None and image_object_name_stem not in ref_list:
+                continue
             if seg:
                 if save_method == 'all' and only_defect:
                     att_sum = 0
@@ -366,7 +369,7 @@ if __name__ == '__main__':
     image_crop_dir = os.path.join(dataset_dir, 'images_crop')
     class_file = os.path.join(dataset_dir, 'class.txt')
     attribute_file = os.path.join(dataset_dir, 'attribute.yaml')
-    myolo_crop_mp(image_dir, labels_dir, image_crop_dir, class_file,
+    myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
                attribute_file=attribute_file, seg=True, annotation=True,
                save_method='all', only_defect=True,
                crop_method='with_background_image_shape')
