@@ -202,7 +202,7 @@ def xywh2xyxy(x, w1, h1, img, img_vis, cats, crop=True, attributes=None, filter_
         attribute_strs = None
     return img_vis, img_crop, attribute_strs
 
-def xywh2poly(x, w, h, img, img_vis, cats, crop=True, attributes=None, filter_no=False, alpha=0.5, tf=1, sf=2/3):
+def xywh2poly(x, w, h, img, img_vis, cats, crop=True, attributes=None, filter_no=False, alpha=0.3, tf=1, sf=2/3, add_mask=True):
     label, polypos = int(float(x[0])),x[1:]
     polys = []
     for i in range(0, len(polypos), 2):
@@ -215,7 +215,8 @@ def xywh2poly(x, w, h, img, img_vis, cats, crop=True, attributes=None, filter_no
     if crop:
         mask = np.zeros(img.shape[:2], np.uint8)
         cv2.polylines(mask, [polys], isClosed=True, color=255)
-        cv2.fillPoly(mask, [polys], color=255)
+        if add_mask:
+            cv2.fillPoly(mask, [polys], color=255)
         img_crop = cv2.bitwise_and(img, img, mask=mask)
         top_left_x, top_left_y = np.min(polys, axis=0)
         bottom_right_x, bottom_right_y = np.max(polys, axis=0)
@@ -226,7 +227,8 @@ def xywh2poly(x, w, h, img, img_vis, cats, crop=True, attributes=None, filter_no
 
     cv2.polylines(img_vis, [polys], isClosed=True, color=colormap[int(label)], thickness=2)
     mask = img_vis.copy()
-    cv2.fillPoly(mask, [polys], color=colormap[int(label)])
+    if add_mask:
+        cv2.fillPoly(mask, [polys], color=colormap[int(label)])
     cv2.addWeighted(mask, alpha, img_vis, 1 - alpha, 0, img_vis)
 
     text_size = cv2.getTextSize(cats[int(label)], cv2.FONT_HERSHEY_SIMPLEX  , sf - 0.1, tf)[0]
@@ -340,7 +342,7 @@ def yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=
             cv2.imwrite(save_path, img_vis)
 
 def yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=None, attribute_file=None,
-                  filter_no=True, seg=False, crop_keep_shape=False, det_crop=True, seg_crop=False, single_save=False):
+                  filter_no=True, seg=False, crop_keep_shape=False, det_crop=True, seg_crop=False, single_save=False, add_mask=True):
     cats = get_cats(class_file)
     if attribute_file is not None:
         with open(attribute_file, 'r') as file:
@@ -406,9 +408,9 @@ def yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=
                             cv2.imwrite(save_path, img_crop)
                 else:
                     if crop_dir is None:
-                        img_vis, _, _ = xywh2poly(x, w, h, img, img_vis, cats=cats, attributes=attribute, filter_no=filter_no)
+                        img_vis, _, _ = xywh2poly(x, w, h, img, img_vis, cats=cats, attributes=attribute, filter_no=filter_no, add_mask=add_mask)
                     else:
-                        img_vis, img_crop, attribute_strs = xywh2poly(x, w, h, img, img_vis, cats=cats, crop=True, attributes=attribute, filter_no=filter_no)
+                        img_vis, img_crop, attribute_strs = xywh2poly(x, w, h, img, img_vis, cats=cats, crop=True, attributes=attribute, filter_no=filter_no, add_mask=add_mask)
                         cat = cats[int(x[0])]
                         save_path = os.path.join(crop_dir, cat, os.path.basename(image_path).replace('.jpg', '_%d.jpg'%idx).replace('.png', '_%d.jpg'%idx))
                         if img_crop.shape[0]>0 and img_crop.shape[1]>0:
@@ -436,7 +438,7 @@ if __name__ == '__main__':
     # root_dir = r'E:\data\tp\sar_det'
     # root_dir = r'E:\data\0111_testdata\data_new\yolo_src'
     # root_dir = r'E:\cp_dir\data'
-    root_dir = r'/localnvme/data/billboard/ps_data/psdata_add178_0708_mseg_c6'
+    root_dir = r'Y:\ZHL\isds\PS\task0725\results\290\yolo_dataset_select'
     # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\bd1-9hgll-94afa\train'
     # root_dir = r'E:\data\20241113_road_veg\dataset'
     # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\crack-bpxku-hcu46\train'

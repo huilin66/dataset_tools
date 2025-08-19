@@ -36,7 +36,10 @@ def yolo_to_custom(input_file, output_file, image_file, classes, atts=None):
     }
     with open(input_file, "r", encoding="utf-8") as f:
         lines = f.readlines()
-    img_w, img_h = get_image_size(image_file)
+    try:
+        img_w, img_h = get_image_size(image_file)
+    except:
+        print(image_file, input_file)
     image_size = np.array([img_w, img_h], np.float64)
     for line in lines:
         line = line.strip().split(" ")

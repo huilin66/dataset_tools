@@ -5,10 +5,10 @@ from PIL import Image
 import imagehash
 from tqdm import tqdm
 
-def select_img(input_dir, output_dir):
+def select_img(input_dir, output_dir, gap=10):
     os.makedirs(output_dir, exist_ok=True)
     img_list = os.listdir(input_dir)
-    img_list = img_list[::10]
+    img_list = img_list[::gap]
     for img_name in tqdm(img_list):
         input_path = os.path.join(input_dir, img_name)
         output_path = os.path.join(output_dir, img_name)
