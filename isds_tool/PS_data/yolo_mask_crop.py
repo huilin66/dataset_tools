@@ -359,7 +359,7 @@ def myolo_crop_mp(image_dir, label_dir, crop_dir, class_file, attribute_file=Non
 
 if __name__ == '__main__':
     pass
-    root_dir = r'E:\data\202502_signboard\data_annotation\dataset\data1422'
+    root_dir = r'/localnvme/data/billboard/ps_data/psdata_add178_0708_mseg_c6'
     dataset_dir = root_dir
     image_dir = os.path.join(dataset_dir, 'images')
     labels_dir = os.path.join(dataset_dir, 'labels')
@@ -367,6 +367,6 @@ if __name__ == '__main__':
     class_file = os.path.join(dataset_dir, 'class.txt')
     attribute_file = os.path.join(dataset_dir, 'attribute.yaml')
     myolo_crop_mp(image_dir, labels_dir, image_crop_dir, class_file,
-               attribute_file=attribute_file, seg=True, annotation=True,
-               save_method='all', only_defect=True,
+               attribute_file=attribute_file, seg=True, annotation=False,
+               save_method='attribute', only_defect=True,
                crop_method='with_background_image_shape')
