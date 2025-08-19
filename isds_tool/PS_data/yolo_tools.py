@@ -10,6 +10,12 @@ import os.path as osp
 from scipy import stats
 import pandas as pd
 import yaml
+from sklearn.model_selection import KFold
+
+ATT_FILE = r'/localnvme/data/billboard/attribute.yaml'
+ATT_L2_FILE = r'/localnvme/data/billboard/attribute_l2.yaml'
+CLASS_C6_FILE = r'/localnvme/data/billboard/class_c6.txt'
+CLASS_C5_FILE = r'/localnvme/data/billboard/class_c5.txt'
 
 def mseg2seg_gt(input_dir, output_dir):
     label_list = os.listdir(input_dir)
@@ -25,6 +31,7 @@ def mseg2seg_gt(input_dir, output_dir):
                 num_list_seg = num_list[:1]+num_list[1+attribute_num+1:]
                 line_seg = ' '.join(num_list_seg)
                 f_out.write(line_seg)
+
 def mseg2seg(input_dir, output_dir, cp_img=True):
     input_label_dir = os.path.join(input_dir, 'labels')
     output_label_dir = os.path.join(output_dir, 'labels')
@@ -33,7 +40,7 @@ def mseg2seg(input_dir, output_dir, cp_img=True):
     image_list = os.listdir(input_image_dir)
     os.makedirs(output_label_dir, exist_ok=True)
     os.makedirs(output_image_dir, exist_ok=True)
-    for image_name in tqdm(image_list):
+    for image_name in tqdm(image_list, desc='mseg2seg:'):
         label_name = Path(image_name).stem + '.txt'
         input_label_path = os.path.join(input_label_dir, label_name)
         output_label_path = os.path.join(output_label_dir, label_name)
@@ -59,7 +66,7 @@ def mseg_class_update(input_dir, output_dir, cp_img=True):
     image_list = os.listdir(input_image_dir)
     os.makedirs(output_label_dir, exist_ok=True)
     os.makedirs(output_image_dir, exist_ok=True)
-    for image_name in tqdm(image_list):
+    for image_name in tqdm(image_list, desc='change to c6:'):
         label_name = Path(image_name).stem + '.txt'
         input_label_path = os.path.join(input_label_dir, label_name)
         output_label_path = os.path.join(output_label_dir, label_name)
@@ -71,6 +78,33 @@ def mseg_class_update(input_dir, output_dir, cp_img=True):
                     continue
                 else:
                     lines[idx] = str(int(lines[idx][0])-1)+lines[idx][1:]
+        with open(output_label_path, 'w') as f:
+            f.writelines(lines)
+        if cp_img:
+            input_image_path = os.path.join(input_image_dir, image_name)
+            output_image_path = os.path.join(output_image_dir, image_name)
+            shutil.copy(input_image_path, output_image_path)
+
+def mseg_class_update2(input_dir, output_dir, cp_img=True):
+    input_label_dir = os.path.join(input_dir, 'labels')
+    output_label_dir = os.path.join(output_dir, 'labels')
+    input_image_dir = os.path.join(input_dir, 'images')
+    output_image_dir = os.path.join(output_dir, 'images')
+    image_list = os.listdir(input_image_dir)
+    os.makedirs(output_label_dir, exist_ok=True)
+    os.makedirs(output_image_dir, exist_ok=True)
+    for image_name in tqdm(image_list, desc='change to c5:'):
+        label_name = Path(image_name).stem + '.txt'
+        input_label_path = os.path.join(input_label_dir, label_name)
+        output_label_path = os.path.join(output_label_dir, label_name)
+
+        with open(input_label_path, 'r') as f:
+            lines = f.readlines()
+            for idx, line in enumerate(lines):
+                if line[0] == '4':
+                    lines[idx] = str(int(lines[idx][0])-2)+lines[idx][1:]
+                else:
+                    continue
         with open(output_label_path, 'w') as f:
             f.writelines(lines)
         if cp_img:
@@ -111,6 +145,85 @@ def mseg_attribute_update_gt(input_label_dir, output_label_dir):
                     lines[idx] = '6 4 0 0 0 0'+lines[idx][len('6 4 0 0 0 0'):]
         with open(output_label_path, 'w') as f:
             f.writelines(lines)
+
+def mseg_attribute_update2(input_dir, output_dir):
+    input_image_dir = os.path.join(input_dir, 'images')
+    input_label_dir = os.path.join(input_dir, 'labels')
+    output_image_dir = os.path.join(output_dir, 'images')
+    output_label_dir = os.path.join(output_dir, 'labels')
+    os.makedirs(output_image_dir, exist_ok=True)
+    os.makedirs(output_label_dir, exist_ok=True)
+    image_list = os.listdir(input_image_dir)
+    for image_name in tqdm(image_list, desc='risk to l2'):
+        label_name = Path(image_name).stem + '.txt'
+        input_image_path = os.path.join(input_image_dir, image_name)
+        input_label_path = os.path.join(input_label_dir, label_name)
+        output_image_path = os.path.join(output_image_dir, image_name)
+        output_label_path = os.path.join(output_label_dir, label_name)
+
+        with open(input_label_path, 'r') as f:
+            lines = f.readlines()
+            for idx, line in enumerate(lines):
+                parts = line.strip().split(' ')
+                parts = list(map(float, parts))
+                for i in range(2, 6):
+                    parts[i] = int(parts[i]>0)
+                parts[0] = int(parts[0])
+                parts[1] = int(parts[1])
+                parts = list(map(str, parts))
+                lines[idx] = ' '.join(parts)+'\n'
+        with open(output_label_path, 'w') as f:
+            f.writelines(lines)
+        shutil.copy(input_image_path, output_image_path)
+
+def compute_polygon_area(uv_list):
+    u_coords = uv_list[::2]  # 偶数索引是 u
+    v_coords = uv_list[1::2]  # 奇数索引是 v
+
+    # 计算 min/max
+    umin, umax = min(u_coords), max(u_coords)
+    vmin, vmax = min(v_coords), max(v_coords)
+
+    # 计算面积
+    width = umax - umin
+    height = vmax - vmin
+    area = width * height
+
+    return area
+
+def mseg_line2boxarea(line):
+    parts = line.strip().split(' ')
+    att_len = int(parts[1])
+    uvs = parts[2+att_len:]
+    uvs = list(map(float, uvs))
+    area = compute_polygon_area(uvs)*960*960
+    return area
+
+def mseg_get_large_object(input_dir, output_dir, cp_img=True):
+    input_label_dir = os.path.join(input_dir, 'labels')
+    output_label_dir = os.path.join(output_dir, 'labels')
+    input_image_dir = os.path.join(input_dir, 'images')
+    output_image_dir = os.path.join(output_dir, 'images')
+    os.makedirs(output_image_dir, exist_ok=True)
+    os.makedirs(output_label_dir, exist_ok=True)
+    mseg_get_large_object_gt(input_label_dir, output_label_dir)
+    if cp_img:
+        shutil.copytree(input_image_dir, output_image_dir, dirs_exist_ok=True)
+
+def mseg_get_large_object_gt(input_label_dir, output_label_dir):
+    label_list = os.listdir(input_label_dir)
+    os.makedirs(output_label_dir, exist_ok=True)
+    for label_name in tqdm(label_list):
+        input_label_path = os.path.join(input_label_dir, label_name)
+        output_label_path = os.path.join(output_label_dir, label_name)
+        new_lines = []
+        with open(input_label_path, 'r') as f:
+            lines = f.readlines()
+            for idx, line in enumerate(lines):
+                if mseg_line2boxarea(line) > 96*96:
+                    new_lines.append(line)
+        with open(output_label_path, 'w') as f:
+            f.writelines(new_lines)
 
 def seg_class_update_gt(input_dir, output_dir):
     label_list = os.listdir(input_dir)
@@ -374,7 +487,7 @@ def filter_yolo_segmentation(input_file, output_file, threshold, with_attribute=
                 f_out.write(line + '\n')
     return areas_poly, areas_bbox
 
-def random_select(data_dir, save_dir=None, train_ratio=0.9, random_seed=1010, full_path=True):
+def random_select(data_dir, save_dir=None, train_ratio=0.9, random_seed=1010, full_path=True, suffix=''):
     image_dir = os.path.join(data_dir, 'images')
     label_dir = os.path.join(data_dir, 'labels')
     file_list = os.listdir(image_dir)
@@ -402,8 +515,8 @@ def random_select(data_dir, save_dir=None, train_ratio=0.9, random_seed=1010, fu
     df_train = pd.DataFrame({'filename': train_list})
     df_val = pd.DataFrame({'filename': val_list})
     df_all = pd.DataFrame({'filename': train_list+val_list})
-    df_train.to_csv(os.path.join(save_dir, 'train.txt'), header=None, index=None)
-    df_val.to_csv(os.path.join(save_dir, 'val.txt'), header=None, index=None)
+    df_train.to_csv(os.path.join(save_dir, f'train{suffix}.txt'), header=None, index=None)
+    df_val.to_csv(os.path.join(save_dir, f'val{suffix}.txt'), header=None, index=None)
     df_all.to_csv(os.path.join(save_dir, 'all.txt'), header=None, index=None)
     print('%d save to %s,\n%d save to %s!'%(len(train_list), os.path.join(save_dir, 'train.txt'),
                                            len(val_list), os.path.join(save_dir, 'val.txt')))
@@ -484,7 +597,7 @@ def ref_split(ref_path, img_dir, label_dir=None, save_dir=None, full_path=True, 
     df_all.to_csv(all_path, header=None, index=None)
     print('%d save to %s,\n%d save to %s!'%(len(train_list), train_path, len(val_list), val_path))
 
-def data_merge(input_dir1, input_dir2, output_dir, cp_split=True):
+def data_merge(input_dir1, input_dir2, output_dir, cp_split=True, cp_split80=True):
     print(f'merging {input_dir1} + {input_dir2} --> {output_dir}...')
     data_copy(input_dir1, output_dir)
     data_copy(input_dir2, output_dir)
@@ -507,6 +620,25 @@ def data_merge(input_dir1, input_dir2, output_dir, cp_split=True):
         df_input_val2['file_name'] = df_input_val2['file_name'].str.replace(input_dir2, output_dir)
         df_output_val = pd.concat([df_input_val1, df_input_val2])
         df_output_val.to_csv(output_val_path, index=False, header=False)
+    if cp_split80:
+        input_train_path1 = os.path.join(input_dir1, 'train_80p.txt')
+        input_train_path2 = os.path.join(input_dir2, 'train_80p.txt')
+        output_train_path = os.path.join(output_dir, 'train_80p.txt')
+        input_val_path1 = os.path.join(input_dir1, 'val_80p.txt')
+        input_val_path2 = os.path.join(input_dir2, 'val_80p.txt')
+        output_val_path = os.path.join(output_dir, 'val_80p.txt')
+        df_input_train1 = pd.read_csv(input_train_path1, names=['file_name'], header=None, index_col=False)
+        df_input_train1['file_name'] = df_input_train1['file_name'].str.replace(input_dir1, output_dir)
+        df_input_train2 = pd.read_csv(input_train_path2, names=['file_name'], header=None, index_col=False)
+        df_input_train2['file_name'] = df_input_train2['file_name'].str.replace(input_dir2, output_dir)
+        df_output_train = pd.concat([df_input_train1, df_input_train2])
+        df_output_train.to_csv(output_train_path, index=False, header=False)
+        df_input_val1 = pd.read_csv(input_val_path1, names=['file_name'], header=None, index_col=False)
+        df_input_val1['file_name'] = df_input_val1['file_name'].str.replace(input_dir1, output_dir)
+        df_input_val2 = pd.read_csv(input_val_path2, names=['file_name'], header=None, index_col=False)
+        df_input_val2['file_name'] = df_input_val2['file_name'].str.replace(input_dir2, output_dir)
+        df_output_val = pd.concat([df_input_val1, df_input_val2])
+        df_output_val.to_csv(output_val_path, index=False, header=False)
     print(f'merging {input_dir1} + {input_dir2} --> {output_dir} finished!')
 
 def data_copy(input_dir, output_dir):
@@ -517,7 +649,7 @@ def data_copy(input_dir, output_dir):
     os.makedirs(output_image_dir, exist_ok=True)
     os.makedirs(output_label_dir, exist_ok=True)
     image_list = os.listdir(input_image_dir)
-    for image_name in tqdm(image_list):
+    for image_name in tqdm(image_list, desc='data copying:'):
         label_name = Path(image_name).stem + '.txt'
         input_image_path = os.path.join(input_image_dir, image_name)
         input_label_path = os.path.join(input_label_dir, label_name)
@@ -632,98 +764,424 @@ def copy_dataset(input_dir, output_dir, class_file=None, attribute_file=None):
         output_attribute_file = os.path.join(output_dir, Path(attribute_file).name)
         shutil.copy(attribute_file, output_attribute_file)
 
+
+def new_psdata_add_pipline(input_ps_mseg_dir, src_fused_mseg_c6_dir, dst_fused_mseg_c6_dir):
+    pass
+    input_ps_mseg_c6_dir = input_ps_mseg_dir + '_c6'
+    dst_fused_seg_c6_dir = dst_fused_mseg_c6_dir.replace('_mseg', '_seg')
+    dst_fused_mseg_c5_dir = dst_fused_mseg_c6_dir.replace('_c6', '_c5')
+    dst_fused_mseg_c5_large_dir = dst_fused_mseg_c5_dir.replace('_c5', '_c5_large')
+    dst_fused_mseg_c5_l2_dir = dst_fused_mseg_c5_dir.replace('_c5', '_c5_l2')
+    dst_fused_seg_c5_dir = dst_fused_mseg_c5_dir.replace('_mseg', '_seg')
+
+    # get ps mseg c6 dataset
+    mseg_class_update(
+        input_ps_mseg_dir,
+        input_ps_mseg_c6_dir
+    )
+    random_select(input_ps_mseg_c6_dir)
+    shutil.copy(ATT_FILE, os.path.join(input_ps_mseg_c6_dir, 'attribute.yaml'))
+    shutil.copy(CLASS_C6_FILE, os.path.join(input_ps_mseg_c6_dir, 'class.txt'))
+
+    # get fused mseg c6 dataset
+    data_merge(
+        input_ps_mseg_c6_dir,
+        src_fused_mseg_c6_dir,
+        dst_fused_mseg_c6_dir,
+    )
+    shutil.copy(ATT_FILE, os.path.join(dst_fused_mseg_c6_dir, 'attribute.yaml'))
+    shutil.copy(CLASS_C6_FILE, os.path.join(dst_fused_mseg_c6_dir, 'class.txt'))
+
+    # get fused mseg c5 dataset
+    mseg_class_update2(
+        dst_fused_mseg_c6_dir,
+        dst_fused_mseg_c5_dir,
+    )
+    ref_split(
+        os.path.join(dst_fused_mseg_c6_dir, 'val.txt'),
+        os.path.join(dst_fused_mseg_c5_dir, 'images'),
+        os.path.join(dst_fused_mseg_c5_dir, 'labels'),
+        add_suffix=''
+    )
+    shutil.copy(ATT_FILE, os.path.join(dst_fused_mseg_c5_dir, 'attribute.yaml'))
+    shutil.copy(CLASS_C5_FILE, os.path.join(dst_fused_mseg_c5_dir, 'class.txt'))
+
+
+    # get fused mseg c5 l2 dataset
+    mseg_attribute_update2(dst_fused_mseg_c5_dir, dst_fused_mseg_c5_l2_dir)
+    ref_split(
+        os.path.join(dst_fused_mseg_c5_dir, 'val.txt'),
+        os.path.join(dst_fused_mseg_c5_l2_dir, 'images'),
+        os.path.join(dst_fused_mseg_c5_l2_dir, 'labels'),
+        add_suffix=''
+    )
+    shutil.copy(ATT_L2_FILE, os.path.join(dst_fused_mseg_c5_l2_dir, 'attribute.yaml'))
+    shutil.copy(CLASS_C5_FILE, os.path.join(dst_fused_mseg_c5_l2_dir, 'class.txt'))
+
+    # get fused seg c6 dataset
+    mseg2seg(
+        dst_fused_mseg_c6_dir,
+        dst_fused_seg_c6_dir,
+    )
+    ref_split(
+        os.path.join(dst_fused_mseg_c6_dir, 'val.txt'),
+        os.path.join(dst_fused_seg_c6_dir, 'images'),
+        os.path.join(dst_fused_seg_c6_dir, 'labels'),
+        add_suffix=''
+    )
+    shutil.copy(CLASS_C6_FILE, os.path.join(dst_fused_seg_c6_dir, 'class.txt'))
+
+    # get fused seg c5 dataset
+    mseg2seg(
+        dst_fused_mseg_c5_dir,
+        dst_fused_seg_c5_dir,
+    )
+    ref_split(
+        os.path.join(dst_fused_mseg_c5_dir, 'val.txt'),
+        os.path.join(dst_fused_seg_c5_dir, 'images'),
+        os.path.join(dst_fused_seg_c5_dir, 'labels'),
+        add_suffix=''
+    )
+    shutil.copy(CLASS_C5_FILE, os.path.join(dst_fused_seg_c5_dir, 'class.txt'))
+
+    mseg_get_large_object(dst_fused_mseg_c5_dir, dst_fused_mseg_c5_large_dir)
+    ref_split(
+        os.path.join(dst_fused_mseg_c5_dir, 'val.txt'),
+        os.path.join(dst_fused_mseg_c5_large_dir, 'images'),
+        os.path.join(dst_fused_mseg_c5_large_dir, 'labels'),
+        add_suffix=''
+    )
+
+
+
+def new_psdata_add_pipline2(input_ps_mseg_c6_dir, src_fused_mseg_c6_dir, dst_fused_mseg_c6_dir):
+    pass
+    dst_fused_seg_c6_dir = dst_fused_mseg_c6_dir.replace('_mseg', '_seg')
+    dst_fused_mseg_c5_dir = dst_fused_mseg_c6_dir.replace('_c6', '_c5')
+    dst_fused_mseg_c5_large_dir = dst_fused_mseg_c5_dir.replace('_c5', '_c5_large')
+    dst_fused_mseg_c5_l2_dir = dst_fused_mseg_c5_dir.replace('_c5', '_c5_l2')
+    dst_fused_seg_c5_dir = dst_fused_mseg_c5_dir.replace('_mseg', '_seg')
+
+
+    random_select(input_ps_mseg_c6_dir)
+    random_select(input_ps_mseg_c6_dir, train_ratio=0.8, suffix='_80p')
+    # get fused mseg c6 dataset
+    data_merge(
+        input_ps_mseg_c6_dir,
+        src_fused_mseg_c6_dir,
+        dst_fused_mseg_c6_dir,
+    )
+    shutil.copy(ATT_FILE, os.path.join(dst_fused_mseg_c6_dir, 'attribute.yaml'))
+    shutil.copy(CLASS_C6_FILE, os.path.join(dst_fused_mseg_c6_dir, 'class.txt'))
+
+    # get fused mseg c5 dataset
+    mseg_class_update2(
+        dst_fused_mseg_c6_dir,
+        dst_fused_mseg_c5_dir,
+    )
+    ref_split(
+        os.path.join(dst_fused_mseg_c6_dir, 'val.txt'),
+        os.path.join(dst_fused_mseg_c5_dir, 'images'),
+        os.path.join(dst_fused_mseg_c5_dir, 'labels'),
+        add_suffix=''
+    )
+    ref_split(
+        os.path.join(dst_fused_mseg_c6_dir, 'val_80p.txt'),
+        os.path.join(dst_fused_mseg_c5_dir, 'images'),
+        os.path.join(dst_fused_mseg_c5_dir, 'labels'),
+        add_suffix='_80p'
+    )
+    shutil.copy(ATT_FILE, os.path.join(dst_fused_mseg_c5_dir, 'attribute.yaml'))
+    shutil.copy(CLASS_C5_FILE, os.path.join(dst_fused_mseg_c5_dir, 'class.txt'))
+
+
+    # get fused mseg c5 l2 dataset
+    mseg_attribute_update2(dst_fused_mseg_c5_dir, dst_fused_mseg_c5_l2_dir)
+    ref_split(
+        os.path.join(dst_fused_mseg_c5_dir, 'val.txt'),
+        os.path.join(dst_fused_mseg_c5_l2_dir, 'images'),
+        os.path.join(dst_fused_mseg_c5_l2_dir, 'labels'),
+        add_suffix=''
+    )
+    ref_split(
+        os.path.join(dst_fused_mseg_c5_dir, 'val_80p.txt'),
+        os.path.join(dst_fused_mseg_c5_l2_dir, 'images'),
+        os.path.join(dst_fused_mseg_c5_l2_dir, 'labels'),
+        add_suffix='_80p'
+    )
+    shutil.copy(ATT_L2_FILE, os.path.join(dst_fused_mseg_c5_l2_dir, 'attribute.yaml'))
+    shutil.copy(CLASS_C5_FILE, os.path.join(dst_fused_mseg_c5_l2_dir, 'class.txt'))
+
+    # get fused seg c6 dataset
+    mseg2seg(
+        dst_fused_mseg_c6_dir,
+        dst_fused_seg_c6_dir,
+    )
+    ref_split(
+        os.path.join(dst_fused_mseg_c6_dir, 'val.txt'),
+        os.path.join(dst_fused_seg_c6_dir, 'images'),
+        os.path.join(dst_fused_seg_c6_dir, 'labels'),
+        add_suffix=''
+    )
+    shutil.copy(CLASS_C6_FILE, os.path.join(dst_fused_seg_c6_dir, 'class.txt'))
+
+    # get fused seg c5 dataset
+    mseg2seg(
+        dst_fused_mseg_c5_dir,
+        dst_fused_seg_c5_dir,
+    )
+    ref_split(
+        os.path.join(dst_fused_mseg_c5_dir, 'val.txt'),
+        os.path.join(dst_fused_seg_c5_dir, 'images'),
+        os.path.join(dst_fused_seg_c5_dir, 'labels'),
+        add_suffix=''
+    )
+    ref_split(
+        os.path.join(dst_fused_mseg_c5_dir, 'val_80p.txt'),
+        os.path.join(dst_fused_seg_c5_dir, 'images'),
+        os.path.join(dst_fused_seg_c5_dir, 'labels'),
+        add_suffix='_80p'
+    )
+    shutil.copy(CLASS_C5_FILE, os.path.join(dst_fused_seg_c5_dir, 'class.txt'))
+
+    mseg_get_large_object(dst_fused_mseg_c5_dir, dst_fused_mseg_c5_large_dir)
+    ref_split(
+        os.path.join(dst_fused_mseg_c5_dir, 'val.txt'),
+        os.path.join(dst_fused_mseg_c5_large_dir, 'images'),
+        os.path.join(dst_fused_mseg_c5_large_dir, 'labels'),
+        add_suffix=''
+    )
+
+
+
+
+def new_psdata_add_pipline2_80(input_ps_mseg_c6_dir, src_fused_mseg_c6_dir, dst_fused_mseg_c6_dir):
+    pass
+    dst_fused_seg_c6_dir = dst_fused_mseg_c6_dir.replace('_mseg', '_seg')
+    dst_fused_mseg_c5_dir = dst_fused_mseg_c6_dir.replace('_c6', '_c5')
+    dst_fused_mseg_c5_large_dir = dst_fused_mseg_c5_dir.replace('_c5', '_c5_large')
+    dst_fused_mseg_c5_l2_dir = dst_fused_mseg_c5_dir.replace('_c5', '_c5_l2')
+    dst_fused_seg_c5_dir = dst_fused_mseg_c5_dir.replace('_mseg', '_seg')
+
+
+    random_select(input_ps_mseg_c6_dir)
+
+    # get fused mseg c6 dataset
+    data_merge(
+        input_ps_mseg_c6_dir,
+        src_fused_mseg_c6_dir,
+        dst_fused_mseg_c6_dir,
+    )
+    shutil.copy(ATT_FILE, os.path.join(dst_fused_mseg_c6_dir, 'attribute.yaml'))
+    shutil.copy(CLASS_C6_FILE, os.path.join(dst_fused_mseg_c6_dir, 'class.txt'))
+
+    # get fused mseg c5 dataset
+    mseg_class_update2(
+        dst_fused_mseg_c6_dir,
+        dst_fused_mseg_c5_dir,
+    )
+    ref_split(
+        os.path.join(dst_fused_mseg_c6_dir, 'val.txt'),
+        os.path.join(dst_fused_mseg_c5_dir, 'images'),
+        os.path.join(dst_fused_mseg_c5_dir, 'labels'),
+        add_suffix=''
+    )
+    shutil.copy(ATT_FILE, os.path.join(dst_fused_mseg_c5_dir, 'attribute.yaml'))
+    shutil.copy(CLASS_C5_FILE, os.path.join(dst_fused_mseg_c5_dir, 'class.txt'))
+
+
+    # get fused mseg c5 l2 dataset
+    mseg_attribute_update2(dst_fused_mseg_c5_dir, dst_fused_mseg_c5_l2_dir)
+    ref_split(
+        os.path.join(dst_fused_mseg_c5_dir, 'val.txt'),
+        os.path.join(dst_fused_mseg_c5_l2_dir, 'images'),
+        os.path.join(dst_fused_mseg_c5_l2_dir, 'labels'),
+        add_suffix=''
+    )
+    shutil.copy(ATT_L2_FILE, os.path.join(dst_fused_mseg_c5_l2_dir, 'attribute.yaml'))
+    shutil.copy(CLASS_C5_FILE, os.path.join(dst_fused_mseg_c5_l2_dir, 'class.txt'))
+
+    # get fused seg c6 dataset
+    mseg2seg(
+        dst_fused_mseg_c6_dir,
+        dst_fused_seg_c6_dir,
+    )
+    ref_split(
+        os.path.join(dst_fused_mseg_c6_dir, 'val.txt'),
+        os.path.join(dst_fused_seg_c6_dir, 'images'),
+        os.path.join(dst_fused_seg_c6_dir, 'labels'),
+        add_suffix=''
+    )
+    shutil.copy(CLASS_C6_FILE, os.path.join(dst_fused_seg_c6_dir, 'class.txt'))
+
+    # get fused seg c5 dataset
+    mseg2seg(
+        dst_fused_mseg_c5_dir,
+        dst_fused_seg_c5_dir,
+    )
+    ref_split(
+        os.path.join(dst_fused_mseg_c5_dir, 'val.txt'),
+        os.path.join(dst_fused_seg_c5_dir, 'images'),
+        os.path.join(dst_fused_seg_c5_dir, 'labels'),
+        add_suffix=''
+    )
+    shutil.copy(CLASS_C5_FILE, os.path.join(dst_fused_seg_c5_dir, 'class.txt'))
+
+    mseg_get_large_object(dst_fused_mseg_c5_dir, dst_fused_mseg_c5_large_dir)
+    ref_split(
+        os.path.join(dst_fused_mseg_c5_dir, 'val.txt'),
+        os.path.join(dst_fused_mseg_c5_large_dir, 'images'),
+        os.path.join(dst_fused_mseg_c5_large_dir, 'labels'),
+        add_suffix=''
+    )
+
+def att_check(input_dir):
+    label_list = os.listdir(input_dir)
+    for label_name in tqdm(label_list):
+        label_path = os.path.join(input_dir, label_name)
+        with open(label_path, 'r') as f:
+            lines = f.readlines()
+            for idx, line in enumerate(lines):
+                if line[2] == '0':
+                    lines[idx] = lines[idx][0:2] + '4' + lines[idx][3:]
+                else:
+                    continue
+        with open(label_path, 'w') as f:
+            f.writelines(lines)
+
+def img_label_cross_check(file_list, label_list):
+    label_list = [Path(label_name).stem for label_name in label_list]
+    file_list_check = []
+    for img_name in tqdm(file_list, desc='img check', total=len(file_list)):
+        name = Path(img_name).stem
+        if name in label_list:
+            file_list_check.append(img_name)
+    file_list = file_list_check
+    return file_list
+
+
+def split_rmbd(input_dir, bd_dir, train_ratio=0.8, random_seed=1010, add_suffix=True):
+    input_label_dir = os.path.join(input_dir, 'labels')
+    input_image_dir = os.path.join(input_dir, 'images')
+    bd_label_dir = os.path.join(bd_dir, 'labels')
+    bd_image_dir = os.path.join(bd_dir, 'images')
+
+    file_list = os.listdir(input_image_dir)
+    label_list = os.listdir(input_label_dir)
+    bd_file_list = os.listdir(bd_image_dir)
+    bd_label_list = os.listdir(bd_label_dir)
+
+
+    file_list = img_label_cross_check(file_list, label_list)
+    bd_file_list = img_label_cross_check(bd_file_list, bd_label_list)
+    file_list = [x for x in file_list if x not in bd_file_list]
+
+    if add_suffix:
+        add_suffix_str = f'_{int(train_ratio*100)}p'
+    else:
+        add_suffix_str = ''
+
+    np.random.seed(random_seed)
+    np.random.shuffle(file_list)
+    train_num = int(len(file_list)*train_ratio)
+
+
+    train_list = file_list[:train_num] + bd_file_list
+    val_list = file_list[train_num:]
+    train_list = [os.path.join(input_image_dir, file_name) for file_name in train_list]
+    val_list = [os.path.join(input_image_dir, file_name) for file_name in val_list]
+
+    df_train = pd.DataFrame({'filename': train_list})
+    df_val = pd.DataFrame({'filename': val_list})
+    df_all = pd.DataFrame({'filename': train_list+val_list})
+    train_path = os.path.join(input_dir, f'train{add_suffix_str}.txt')
+    val_path = os.path.join(input_dir, f'val{add_suffix_str}.txt')
+    all_path = os.path.join(input_dir, 'all.txt')
+    df_train.to_csv(train_path, header=None, index=None)
+    df_val.to_csv(val_path, header=None, index=None)
+    df_all.to_csv(all_path, header=None, index=None)
+    print('%d save to %s,\n%d save to %s!'%(len(train_list), train_path, len(val_list), val_path))
+
+
+def ref_k_fold(input_dir, k=5):
+    val_path = os.path.join(input_dir, "val.txt")
+    images_dir = os.path.join(input_dir, "images")
+    # 1. 读取 val.txt 中的图像路径（20% 数据）
+    with open(val_path, "r") as f:
+        val_images = f.read().splitlines()  # 每行是图像路径，如 "images/img1.jpg"
+
+    # 2. 获取所有图像路径（排除 val.txt 中的图像）
+    all_images = []
+    for img_file in os.listdir(images_dir):
+        img_path = os.path.join("images", img_file)  # "images/img1.jpg"
+        if img_path not in val_images:  # 排除 val.txt 中的图像
+            all_images.append(img_path)
+
+    # 3. 随机打乱剩余数据
+    np.random.shuffle(all_images)
+
+    # 4. 划分 4-Fold（每个 Fold 占 20% 原始数据）
+    kf = KFold(n_splits=k, shuffle=True, random_state=1010)
+    folds = list(kf.split(all_images))  # 返回 (train_idx, test_idx) 对
+
+    # 5. 生成 4 组 train/test 文件
+    for i, (train_idx, test_idx) in enumerate(folds):
+        # 训练集：3 个 Fold（60% 原始数据）
+        train_images = [all_images[idx] for idx in train_idx]
+        # 测试集：1 个 Fold（20% 原始数据）
+        test_images = [all_images[idx] for idx in test_idx]
+
+        # 写入 train_fold_{i}.txt 和 test_fold_{i}.txt
+        with open(os.path.join(input_dir, f"train_fold_{i}.txt"), "w") as f:
+            f.write("\n".join(train_images))
+        with open(os.path.join(input_dir, f"val_fold_{i}.txt"), "w") as f:
+            f.write("\n".join(test_images))
+
+        print(f"Fold {i}:")
+        print(f"  Train: {len(train_images)} images")
+        print(f"  Val: {len(test_images)} images")
+
 if __name__ == '__main__':
     pass
-    # src_dir = r'/localnvme/data/billboard/ps_data/psdata118'
-    # mseg_dir = src_dir + '_mseg'
-    # mseg_c6_dir = src_dir + '_mseg_c6'
-    # seg_dir = src_dir + '_seg'
-    # seg_c6_dir = src_dir + '_seg_c6'
-
-    # if os.path.exists(src_dir):
-    #     os.rename(src_dir, mseg_dir)
-    # mseg_class_update(mseg_dir, mseg_c6_dir)
-    # mseg2seg(mseg_c6_dir, seg_c6_dir)
-    #
-    # random_select(mseg_c6_dir)
-    # random_select(seg_c6_dir)
-
-
-    # data_merge(r'/localnvme/data/billboard/ps_data/psdata118_mseg_c6',
-    #            r'/localnvme/data/billboard/ps_data/psdata617_mseg_c6',
-    #            r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6')
-    #
-    # data_merge(r'/localnvme/data/billboard/ps_data/psdata118_seg_c6',
-    #            r'/localnvme/data/billboard/ps_data/psdata617_seg_c6',
-    #            r'/localnvme/data/billboard/ps_data/psdata735_seg_c6')
-    #
-    # data_merge(r'/localnvme/data/billboard/bd_data/data626_mseg_c6',
-    #            r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6',
-    #            r'/localnvme/data/billboard/fused_data/data1361_mseg_c6')
-    #
-    # data_merge(r'/localnvme/data/billboard/bd_data/data626_seg_c6',
-    #            r'/localnvme/data/billboard/ps_data/psdata735_seg_c6',
-    #            r'/localnvme/data/billboard/fused_data/data1361_seg_c6')
-
-
-    # mseg_attribute_update_gt(r'/localnvme/data/billboard/bd_data/data626_mseg_c6/labels_src',
-    #                          r'/localnvme/data/billboard/bd_data/data626_mseg_c6/labels')
-    # data_check(r'/localnvme/data/billboard/bd_data/data626_mseg_c6/labels',
-    #            r'/localnvme/data/billboard/bd_data/data626_mseg_c6/attribute.yaml')
-
-    # data_check(r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6/labels',
-    #            r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6/attribute.yaml')
-    # mseg_attribute_update_gt(r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6/labels_src',
-    #                          r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6/labels')
-    # mseg2seg(r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6', r'/localnvme/data/billboard/ps_data/psdata735_seg_c6')
-    # mseg2seg(r'/localnvme/data/billboard/bd_data/data626_mseg_c6', r'/localnvme/data/billboard/bd_data/data626_seg_c6')
-
-    # data_check(r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6/labels',
-    #            r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6/attribute.yaml')
-    # data_check(r'/localnvme/data/billboard/ps_data/psdata118_mseg_c6/labels',
-    #            r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6/attribute.yaml')
-    # data_check(r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6/labels',
-    #            r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6/attribute.yaml')
-    # data_check(r'/localnvme/data/billboard/fused_data/data1361_mseg_c6/labels',
-    #            r'/localnvme/data/billboard/fused_data/data1361_mseg_c6/attribute.yaml')
-
-
-    # data_merge(r'/localnvme/data/billboard/bd_data/data626_mseg_c6',
-    #            r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6',
-    #            r'/localnvme/data/billboard/fused_data/data1361_mseg_c6')
-    #
-    # data_merge(r'/localnvme/data/billboard/bd_data/data626_seg_c6',
-    #            r'/localnvme/data/billboard/ps_data/psdata735_seg_c6',
-    #            r'/localnvme/data/billboard/fused_data/data1361_seg_c6')
-
-
-
-    # data_merge(r'/localnvme/data/billboard/bd_data_add/bd_data_add1_c6',
-    #            r'/localnvme/data/billboard/fused_data/data1361_mseg_c6',
-    #            r'/localnvme/data/billboard/fused_data/data1422_mseg_c6',
-    #            cp_split=False)
-
-    # mseg2seg(
-    #     r'/localnvme/data/billboard/fused_data/data1422_mseg_c6',
-    #     r'/localnvme/data/billboard/fused_data/data1422_seg_c6',
+    # new_psdata_add_pipline(
+    #     input_ps_mseg_dir=r'/localnvme/data/billboard/ps_data/psdata_add823_0724_mseg',
+    #     src_fused_mseg_c6_dir=r'/localnvme/data/billboard/fused_data/data1422_mseg_c6_check0708',
+    #     dst_fused_mseg_c6_dir=r'/localnvme/data/billboard/fused_data/data2245_mseg_c6_0724'
     # )
 
-    ref_split(
-        r'/localnvme/data/billboard/fused_data/data1361_mseg_c6_check0624/val.txt',
-        r'/localnvme/data/billboard/fused_data/data1422_seg_c6/images',
-        r'/localnvme/data/billboard/fused_data/data1422_seg_c6/labels',
-        add_suffix=''
-    )
-
-    ref_split(
-        r'/localnvme/data/billboard/fused_data/data1361_mseg_c6_check0624/val.txt',
-        r'/localnvme/data/billboard/fused_data/data1422_mseg_c6/images',
-        r'/localnvme/data/billboard/fused_data/data1422_mseg_c6/labels',
-        add_suffix=''
-    )
-
-    # mseg_class_update(
-    #     r'/localnvme/data/billboard/bd_data_add/bd_data_add1',
-    #     r'/localnvme/data/billboard/bd_data_add/bd_data_add1_c6'
+    # new_psdata_add_pipline(
+    #     input_ps_mseg_dir=r'/localnvme/data/billboard/ps_data/psdata_add997_0730_mseg',
+    #     src_fused_mseg_c6_dir=r'/localnvme/data/billboard/fused_data/data1422_mseg_c6_check0708',
+    #     dst_fused_mseg_c6_dir=r'/localnvme/data/billboard/fused_data/data2419_mseg_c6_0730'
     # )
-    #
+
+    # att_check(r'/localnvme/data/billboard/ps_data/psdata_add625_0731_mseg_c6/labels')
+
+
+    # bd_data_dir = r'/localnvme/data/billboard/bd_data/data626_mseg_c6_check0624'
+    # split_rmbd(
+    #     r'/localnvme/data/billboard/fused_data/data3072_mseg_c5_0809',
+    #     bd_data_dir
+    # )
+
+    # ref_split(
+    #     ref_path=r'/localnvme/data/billboard/fused_data/data3072_seg_c5_0809/val_80p.txt',
+    #     img_dir=r'/localnvme/data/billboard/fused_data/data3072_mseg_c5_l2_0809/images',
+    #     label_dir=r'/localnvme/data/billboard/fused_data/data3072_mseg_c5_l2_0809/labels',
+    #     add_suffix='_80p'
+    # )
+
+
+    # new_psdata_add_pipline2(
+    #     input_ps_mseg_c6_dir=r'/localnvme/data/billboard/ps_data/psdata_add625_0731_mseg_c6',
+    #     src_fused_mseg_c6_dir=r'/localnvme/data/billboard/fused_data/data2419_mseg_c6_0730',
+    #     dst_fused_mseg_c6_dir=r'/localnvme/data/billboard/fused_data/data3044_mseg_c6_0731'
+    # )
+
+    new_psdata_add_pipline2(
+        input_ps_mseg_c6_dir=r'/localnvme/data/billboard/ps_data/psdata_add827_0818_mseg_c6',
+        src_fused_mseg_c6_dir=r'/localnvme/data/billboard/fused_data/data3072_mseg_c6_0809',
+        dst_fused_mseg_c6_dir=r'/localnvme/data/billboard/fused_data/data3899_mseg_c6_0818'
+    )
+
+
