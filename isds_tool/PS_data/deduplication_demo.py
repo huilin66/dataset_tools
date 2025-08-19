@@ -120,11 +120,11 @@ def batch_filter_unique_images(image_paths, similarity_matrix, threshold=0.7, ou
     unique_indices = np.where(max_similarities <= threshold)[0]
 
     # 4. 批量复制唯一图像
-    for idx in unique_indices:
+    for idx in tqdm(unique_indices):
         src_path = image_paths[idx]
         dst_path = os.path.join(output_folder, os.path.basename(src_path))
         shutil.copy2(src_path, dst_path)
-        print(f"Copied: {os.path.basename(src_path)} (Max similarity: {max_similarities[idx]:.2f})")
+        # print(f"Copied: {os.path.basename(src_path)} (Max similarity: {max_similarities[idx]:.2f})")
 
     print(f"\nTotal unique images copied: {len(unique_indices)}")
 

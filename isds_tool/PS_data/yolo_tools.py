@@ -1,6 +1,6 @@
 import os
 import shutil
-
+import sys
 from tqdm import tqdm
 from pathlib import Path
 
@@ -12,10 +12,13 @@ import pandas as pd
 import yaml
 from sklearn.model_selection import KFold
 
+sys.path.append(r'E:\repository\dataset_tools')
+
 ATT_FILE = r'/localnvme/data/billboard/attribute.yaml'
 ATT_L2_FILE = r'/localnvme/data/billboard/attribute_l2.yaml'
 CLASS_C6_FILE = r'/localnvme/data/billboard/class_c6.txt'
 CLASS_C5_FILE = r'/localnvme/data/billboard/class_c5.txt'
+
 
 def mseg2seg_gt(input_dir, output_dir):
     label_list = os.listdir(input_dir)
@@ -609,25 +612,6 @@ def data_merge(input_dir1, input_dir2, output_dir, cp_split=True, cp_split80=Tru
         input_val_path2 = os.path.join(input_dir2, 'val.txt')
         output_val_path = os.path.join(output_dir, 'val.txt')
         df_input_train1 = pd.read_csv(input_train_path1, names=['file_name'],header=None, index_col=False)
-        df_input_train1['file_name'] = df_input_train1['file_name'].str.replace(input_dir1, output_dir)
-        df_input_train2 = pd.read_csv(input_train_path2, names=['file_name'], header=None, index_col=False)
-        df_input_train2['file_name'] = df_input_train2['file_name'].str.replace(input_dir2, output_dir)
-        df_output_train = pd.concat([df_input_train1, df_input_train2])
-        df_output_train.to_csv(output_train_path, index=False, header=False)
-        df_input_val1 = pd.read_csv(input_val_path1, names=['file_name'], header=None, index_col=False)
-        df_input_val1['file_name'] = df_input_val1['file_name'].str.replace(input_dir1, output_dir)
-        df_input_val2 = pd.read_csv(input_val_path2, names=['file_name'], header=None, index_col=False)
-        df_input_val2['file_name'] = df_input_val2['file_name'].str.replace(input_dir2, output_dir)
-        df_output_val = pd.concat([df_input_val1, df_input_val2])
-        df_output_val.to_csv(output_val_path, index=False, header=False)
-    if cp_split80:
-        input_train_path1 = os.path.join(input_dir1, 'train_80p.txt')
-        input_train_path2 = os.path.join(input_dir2, 'train_80p.txt')
-        output_train_path = os.path.join(output_dir, 'train_80p.txt')
-        input_val_path1 = os.path.join(input_dir1, 'val_80p.txt')
-        input_val_path2 = os.path.join(input_dir2, 'val_80p.txt')
-        output_val_path = os.path.join(output_dir, 'val_80p.txt')
-        df_input_train1 = pd.read_csv(input_train_path1, names=['file_name'], header=None, index_col=False)
         df_input_train1['file_name'] = df_input_train1['file_name'].str.replace(input_dir1, output_dir)
         df_input_train2 = pd.read_csv(input_train_path2, names=['file_name'], header=None, index_col=False)
         df_input_train2['file_name'] = df_input_train2['file_name'].str.replace(input_dir2, output_dir)
