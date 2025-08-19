@@ -30,7 +30,7 @@ def convert_voc2yolo(size, box):
     h = h*dh
     return (x,y,w,h)
 
-def convert_annotation(input_folder, image_id, output_folder):
+def convert_annotation(input_folder, image_id, output_folder, classes):
     if not os.path.exists('%s/labels/' % (output_folder)):
         os.makedirs('%s/labels/' % (output_folder))
     in_file = open('%s/Annotations/%s.xml'%(input_folder, image_id))
@@ -116,6 +116,7 @@ def coco2yolo(json_file, labels_dir, img_dir_src, img_dir_dst, txt_path):
 
 
 def voc2yolo(anno_dir, save_dir, img_dir, train_percent = 0.1):
+    os.makedirs(save_dir, exist_ok=True)
     save_dir_r = os.path.dirname(save_dir)
     # 训练集和验证集的比例分配
     # trainval_percent = 1-train_percent
@@ -138,13 +139,13 @@ def voc2yolo(anno_dir, save_dir, img_dir, train_percent = 0.1):
 
     # ftrainval = open(os.path.join(save_dir, 'trainval.txt'), 'w')
     # ftest = open(os.path.join(save_dir, 'test.txt'), 'w')
-    ftrain = open(os.path.join(save_dir, 'train.txt'), 'w')
-    fval = open(os.path.join(save_dir, 'val.txt'), 'w')
+    ftrain = open(os.path.join(save_dir, 'train.txt'), 'w+')
+    fval = open(os.path.join(save_dir, 'val.txt'), 'w+')
 
     # ftrainval_r = open(os.path.join(save_dir_r, 'trainval.txt'), 'w')
     # ftest_r = open(os.path.join(save_dir_r, 'test.txt'), 'w')
-    ftrain_r = open(os.path.join(save_dir_r, 'train.txt'), 'w')
-    fval_r = open(os.path.join(save_dir_r, 'val.txt'), 'w')
+    ftrain_r = open(os.path.join(save_dir_r, 'train.txt'), 'w+')
+    fval_r = open(os.path.join(save_dir_r, 'val.txt'), 'w+')
 
     for i in range(num):
         name = total_xml[i][:-4] + '\n'
@@ -177,6 +178,13 @@ def voc2yolo(anno_dir, save_dir, img_dir, train_percent = 0.1):
 
 if __name__ == '__main__':
     pass
+
+    voc2yolo(
+        anno_dir=r'/data/huilin/data/BDD/cubit-det/Annotations',
+        save_dir=r'/data/huilin/data/BDD/cubit-det/labels',
+        img_dir=r'/data/huilin/data/BDD/cubit-det/JPEGImages'
+    )
+
     # coco2yolo(json_file=r'E:\data\1211_monhkok\mk_merge\coco_select\annotations\instance_train.json',
     #           labels_dir=r'E:\data\1211_monhkok\mk_merge\yolo_select\labels\train',
     #           img_dir_src=r'E:\data\1211_monhkok\mk_merge\coco_select\img',
@@ -293,16 +301,16 @@ if __name__ == '__main__':
     #           )
 
 
-    coco2yolo(json_file=r'E:\data\0111_testdata\data_labeled4254\coco6r1280_w\annotations\instance_train.json',
-              labels_dir=r'E:\data\0111_testdata\data_labeled4254\yolo6r1280_w\labels',
-              img_dir_src= r'E:\data\0111_testdata\data_labeled4254\coco6r1280_w\images_train',
-              img_dir_dst=r'E:\data\0111_testdata\data_labeled4254\yolo6r1280_w\images',
-              txt_path=r'E:\data\0111_testdata\data_labeled4254\yolo6r1280_w\train.txt',
-              )
-
-    coco2yolo(json_file=r'E:\data\0111_testdata\data_labeled4254\coco6r1280_w\annotations\instance_val.json',
-              labels_dir=r'E:\data\0111_testdata\data_labeled4254\yolo6r1280_w\labels',
-              img_dir_src= r'E:\data\0111_testdata\data_labeled4254\coco6r1280_w\images_val',
-              img_dir_dst=r'E:\data\0111_testdata\data_labeled4254\yolo6r1280_w\images',
-              txt_path=r'E:\data\0111_testdata\data_labeled4254\yolo6r1280_w\val.txt',
-              )
+    # coco2yolo(json_file=r'E:\data\0111_testdata\data_labeled4254\coco6r1280_w\annotations\instance_train.json',
+    #           labels_dir=r'E:\data\0111_testdata\data_labeled4254\yolo6r1280_w\labels',
+    #           img_dir_src= r'E:\data\0111_testdata\data_labeled4254\coco6r1280_w\images_train',
+    #           img_dir_dst=r'E:\data\0111_testdata\data_labeled4254\yolo6r1280_w\images',
+    #           txt_path=r'E:\data\0111_testdata\data_labeled4254\yolo6r1280_w\train.txt',
+    #           )
+    #
+    # coco2yolo(json_file=r'E:\data\0111_testdata\data_labeled4254\coco6r1280_w\annotations\instance_val.json',
+    #           labels_dir=r'E:\data\0111_testdata\data_labeled4254\yolo6r1280_w\labels',
+    #           img_dir_src= r'E:\data\0111_testdata\data_labeled4254\coco6r1280_w\images_val',
+    #           img_dir_dst=r'E:\data\0111_testdata\data_labeled4254\yolo6r1280_w\images',
+    #           txt_path=r'E:\data\0111_testdata\data_labeled4254\yolo6r1280_w\val.txt',
+    #           )
