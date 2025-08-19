@@ -51,9 +51,9 @@ def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None, 
     classes = df_class['class_name'].to_list()
 
     if attribute_path is None:
-        df_box, _ = get_df_yolo(gt_dir, ref_txt=ref_txt, classes=classes)
+        df_box, _, _ = get_df_yolo(gt_dir, ref_txt=ref_txt, classes=classes)
     else:
-        df_box, df_attribute = get_df_yolo(gt_dir, ref_txt=ref_txt, classes=classes, attribute_path=attribute_path, mdet=True, seg=seg)
+        df_box, df_attribute, attribute_dict = get_df_yolo(gt_dir, ref_txt=ref_txt, classes=classes, attribute_path=attribute_path, mdet=True, seg=seg)
 
         # region
         csv_path = os.path.join(result_dir, 'sta_attribute.csv')
@@ -121,6 +121,50 @@ def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None, 
         print(category_defects)
         print('+'*100)
         print('sta result save to', png_att_path)
+
+        level_list = attribute_dict[list(attribute_dict.keys())[0]]
+
+        level_defects = df_attribute.drop(['category', 'image', 'attribute sum', 'with attribute'], axis=1).apply(pd.Series.value_counts).T
+        level_defects = level_defects.fillna(0).astype(int)
+        if len(level_list) == 3:
+            level_defects.columns = ['no', 'medium', 'high']
+        elif len(level_list) == 2:
+            level_defects.columns = ['no', 'high']
+
+        col_num = int(level_defects.shape[0]+1)//2
+        fig, axs = plt.subplots(2, col_num, figsize=(col_num*2, 6))
+        for idx, (risk, levels) in enumerate(level_defects.iterrows()):
+            with_att = levels.values[0]
+            without_att = sum(levels.values) - with_att
+            axs[idx%2][idx//2].pie(
+                [with_att, without_att],
+                autopct='%1.2f%%',
+                startangle=90,
+                colors=['orange', 'green'],
+                wedgeprops=dict(width=0.4),
+            )
+            axs[idx%2][idx//2].set_title(risk)
+        plt.subplots_adjust(wspace=0.1)
+        plt.tight_layout(rect=[0, 0, 1, 0.95])
+        fig.legend(['with attribute', 'without attribute'], loc='center right')
+        plt.savefig(csv_path.replace('.csv', '_distributions_level_pie.png'), bbox_inches='tight', dpi=300)
+        plt.close()
+
+        if len(level_list) == 3:
+            fig, ax = plt.subplots(figsize=(6, 6), tight_layout=True)
+            level_defects[['medium', 'high']].plot(kind='bar', color=['orange', 'green'], alpha=0.7, ax=ax)
+            plt.title('Distribution of defect risk levels across Attributes')
+            plt.xlabel('Attribute')
+            plt.ylabel('Level')
+            plt.xticks(rotation=30)
+            plt.savefig(csv_path.replace('.csv', '_distributions_level_bar.png'))
+            plt.close()
+
+        level_defects.to_csv(csv_path.replace('.csv', '_distributions_level.csv'))
+        print('+'*100)
+        print(level_defects)
+        print('+'*100)
+        print('sta result save to', csv_path.replace('.csv', '_distributions_level.png'))
         # endregion
 
     # region: box sta result
@@ -224,7 +268,6 @@ def get_df_yolo(gt_dir, classes, attribute_path=None, ref_txt=None, mdet=False, 
         img_list = pd.read_csv(ref_txt, header=None, index_col=None)[0].tolist()
         gt_list = [Path(img_path).stem+'.txt' for img_path in img_list]
 
-
     if mdet:
         assert attribute_path is not None, 'attribute_path must be provided, which is "%s"'%attribute_path
         with open(attribute_path, 'r') as file:
@@ -233,9 +276,10 @@ def get_df_yolo(gt_dir, classes, attribute_path=None, ref_txt=None, mdet=False, 
         names = ['category'] + ['attribute_len'] + attribute_keys + [ 'center_x', 'center_y', 'width', 'height']
     else:
         names = ['category', 'center_x', 'center_y', 'width', 'height']
+        attribute_dict = None
     if not seg:
         dfs = []
-        for gt_name in tqdm(gt_list):
+        for gt_name in tqdm(gt_list, desc='get seg yolo labels'):
             gt_path = os.path.join(gt_dir, gt_name)
             df = pd.read_csv(gt_path, header=None, index_col=None, sep=' ', names=names)
             df['image'] = Path(gt_path).stem
@@ -252,7 +296,7 @@ def get_df_yolo(gt_dir, classes, attribute_path=None, ref_txt=None, mdet=False, 
         return df_box, df_attribute
     else:
         dfs = []
-        for gt_name in tqdm(gt_list):
+        for gt_name in tqdm(gt_list, desc='get det yolo labels'):
             gt_path = os.path.join(gt_dir, gt_name)
             df = pd.DataFrame(None, columns=names+['image'])
             with open(gt_path, 'r') as f:
@@ -283,7 +327,7 @@ def get_df_yolo(gt_dir, classes, attribute_path=None, ref_txt=None, mdet=False, 
             df_attribute['with attribute'] = df_attribute['attribute sum'].apply(lambda x: 0 if x == 0 else 1)
         else:
             df_attribute = None
-        return df_box, df_attribute
+        return df_box, df_attribute, attribute_dict
 def info_vis(info_path):
     df = pd.read_csv(info_path, header=0, index_col=0)
     class_counts = df['class_id'].value_counts().sort_index()
@@ -332,12 +376,16 @@ if __name__ == '__main__':
     #     seg=True,
     # )
 
-    # data_dir = r'/localnvme/data/billboard/fused_data/data1422_mseg_c6'
-    # yolo_sta(
-    #     img_dir=None,
-    #     gt_dir=os.path.join(data_dir, "labels"),
-    #     result_dir=os.path.join(data_dir, "labels_sta"),
-    #     class_path=os.path.join(data_dir, "class.txt"),
-    #     attribute_path=os.path.join(data_dir, "attribute.yaml"),
-    #     seg=True,
-    # )
+    # data_dir = r'/nfshdd/23039356r/data/billboard/data0806_m/yolo_rgb_detection5_10_c'
+    data_dir = r'/localnvme/data/billboard/fused_data/data3044_mseg_c6_0731'
+    yolo_sta(
+        img_dir=None,
+        gt_dir=os.path.join(data_dir, "labels"),
+        class_path=os.path.join(data_dir, "class.txt"),
+        attribute_path=os.path.join(data_dir, "attribute.yaml"),
+        seg=True,
+
+        result_dir=os.path.join(data_dir, "labels_sta"),
+        # ref_txt = os.path.join(data_dir, "val.txt"),
+        # result_dir=os.path.join(data_dir, "labels_sta_val"),
+    )
