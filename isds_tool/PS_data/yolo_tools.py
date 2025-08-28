@@ -14,10 +14,10 @@ from sklearn.model_selection import KFold
 
 sys.path.append(r'E:\repository\dataset_tools')
 
-ATT_FILE = r'/localnvme/data/billboard/attribute.yaml'
-ATT_L2_FILE = r'/localnvme/data/billboard/attribute_l2.yaml'
-CLASS_C6_FILE = r'/localnvme/data/billboard/class_c6.txt'
-CLASS_C5_FILE = r'/localnvme/data/billboard/class_c5.txt'
+ATT_FILE = r'/data/huilin/data/isds/fused_data/attribute.yaml'
+ATT_L2_FILE = r'/data/huilin/data/isds/fused_data/attribute_l2.yaml'
+CLASS_C6_FILE = r'/data/huilin/data/isds/fused_data/class_c6.txt'
+CLASS_C5_FILE = r'/data/huilin/data/isds/fused_data/class_c5.txt'
 
 
 def mseg2seg_gt(input_dir, output_dir):
@@ -521,8 +521,8 @@ def random_select(data_dir, save_dir=None, train_ratio=0.9, random_seed=1010, fu
     df_train.to_csv(os.path.join(save_dir, f'train{suffix}.txt'), header=None, index=None)
     df_val.to_csv(os.path.join(save_dir, f'val{suffix}.txt'), header=None, index=None)
     df_all.to_csv(os.path.join(save_dir, 'all.txt'), header=None, index=None)
-    print('%d save to %s,\n%d save to %s!'%(len(train_list), os.path.join(save_dir, 'train.txt'),
-                                           len(val_list), os.path.join(save_dir, 'val.txt')))
+    print('%d save to %s,\n%d save to %s!'%(len(train_list), os.path.join(save_dir, f'train{suffix}.txt'),
+                                           len(val_list), os.path.join(save_dir, f'val{suffix}.txt')))
 
 def random_kfold(img_dir, k, label_dir=None, save_dir=None, random_seed=1010, full_path=True):
     file_list = os.listdir(img_dir)
@@ -611,6 +611,25 @@ def data_merge(input_dir1, input_dir2, output_dir, cp_split=True, cp_split80=Tru
         input_val_path1 = os.path.join(input_dir1, 'val.txt')
         input_val_path2 = os.path.join(input_dir2, 'val.txt')
         output_val_path = os.path.join(output_dir, 'val.txt')
+        df_input_train1 = pd.read_csv(input_train_path1, names=['file_name'],header=None, index_col=False)
+        df_input_train1['file_name'] = df_input_train1['file_name'].str.replace(input_dir1, output_dir)
+        df_input_train2 = pd.read_csv(input_train_path2, names=['file_name'], header=None, index_col=False)
+        df_input_train2['file_name'] = df_input_train2['file_name'].str.replace(input_dir2, output_dir)
+        df_output_train = pd.concat([df_input_train1, df_input_train2])
+        df_output_train.to_csv(output_train_path, index=False, header=False)
+        df_input_val1 = pd.read_csv(input_val_path1, names=['file_name'], header=None, index_col=False)
+        df_input_val1['file_name'] = df_input_val1['file_name'].str.replace(input_dir1, output_dir)
+        df_input_val2 = pd.read_csv(input_val_path2, names=['file_name'], header=None, index_col=False)
+        df_input_val2['file_name'] = df_input_val2['file_name'].str.replace(input_dir2, output_dir)
+        df_output_val = pd.concat([df_input_val1, df_input_val2])
+        df_output_val.to_csv(output_val_path, index=False, header=False)
+    if cp_split80:
+        input_train_path1 = os.path.join(input_dir1, 'train_80p.txt')
+        input_train_path2 = os.path.join(input_dir2, 'train_80p.txt')
+        output_train_path = os.path.join(output_dir, 'train_80p.txt')
+        input_val_path1 = os.path.join(input_dir1, 'val_80p.txt')
+        input_val_path2 = os.path.join(input_dir2, 'val_80p.txt')
+        output_val_path = os.path.join(output_dir, 'val_80p.txt')
         df_input_train1 = pd.read_csv(input_train_path1, names=['file_name'],header=None, index_col=False)
         df_input_train1['file_name'] = df_input_train1['file_name'].str.replace(input_dir1, output_dir)
         df_input_train2 = pd.read_csv(input_train_path2, names=['file_name'], header=None, index_col=False)
@@ -937,7 +956,103 @@ def new_psdata_add_pipline2(input_ps_mseg_c6_dir, src_fused_mseg_c6_dir, dst_fus
     )
 
 
+def new_psdata_add_pipline3(input_ps_mseg_c6_dir, src_fused_mseg_c6_dir, dst_fused_mseg_c6_dir):
+    pass
+    dst_fused_seg_c6_dir = dst_fused_mseg_c6_dir.replace('_mseg', '_seg')
+    dst_fused_mseg_c5_dir = dst_fused_mseg_c6_dir.replace('_c6', '_c5')
+    dst_fused_mseg_c5_large_dir = dst_fused_mseg_c5_dir.replace('_c5', '_c5_large')
+    dst_fused_mseg_c5_l2_dir = dst_fused_mseg_c5_dir.replace('_c5', '_c5_l2')
+    dst_fused_seg_c5_dir = dst_fused_mseg_c5_dir.replace('_mseg', '_seg')
 
+
+    random_select(input_ps_mseg_c6_dir)
+    random_select(input_ps_mseg_c6_dir, train_ratio=1, suffix='_80p')
+    # get fused mseg c6 dataset
+    data_merge(
+        input_ps_mseg_c6_dir,
+        src_fused_mseg_c6_dir,
+        dst_fused_mseg_c6_dir,
+    )
+    shutil.copy(ATT_FILE, os.path.join(dst_fused_mseg_c6_dir, 'attribute.yaml'))
+    shutil.copy(CLASS_C6_FILE, os.path.join(dst_fused_mseg_c6_dir, 'class.txt'))
+
+    # get fused mseg c5 dataset
+    mseg_class_update2(
+        dst_fused_mseg_c6_dir,
+        dst_fused_mseg_c5_dir,
+    )
+    ref_split(
+        os.path.join(dst_fused_mseg_c6_dir, 'val.txt'),
+        os.path.join(dst_fused_mseg_c5_dir, 'images'),
+        os.path.join(dst_fused_mseg_c5_dir, 'labels'),
+        add_suffix=''
+    )
+    ref_split(
+        os.path.join(dst_fused_mseg_c6_dir, 'val_80p.txt'),
+        os.path.join(dst_fused_mseg_c5_dir, 'images'),
+        os.path.join(dst_fused_mseg_c5_dir, 'labels'),
+        add_suffix='_80p'
+    )
+    shutil.copy(ATT_FILE, os.path.join(dst_fused_mseg_c5_dir, 'attribute.yaml'))
+    shutil.copy(CLASS_C5_FILE, os.path.join(dst_fused_mseg_c5_dir, 'class.txt'))
+
+
+    # get fused mseg c5 l2 dataset
+    mseg_attribute_update2(dst_fused_mseg_c5_dir, dst_fused_mseg_c5_l2_dir)
+    ref_split(
+        os.path.join(dst_fused_mseg_c5_dir, 'val.txt'),
+        os.path.join(dst_fused_mseg_c5_l2_dir, 'images'),
+        os.path.join(dst_fused_mseg_c5_l2_dir, 'labels'),
+        add_suffix=''
+    )
+    ref_split(
+        os.path.join(dst_fused_mseg_c5_dir, 'val_80p.txt'),
+        os.path.join(dst_fused_mseg_c5_l2_dir, 'images'),
+        os.path.join(dst_fused_mseg_c5_l2_dir, 'labels'),
+        add_suffix='_80p'
+    )
+    shutil.copy(ATT_L2_FILE, os.path.join(dst_fused_mseg_c5_l2_dir, 'attribute.yaml'))
+    shutil.copy(CLASS_C5_FILE, os.path.join(dst_fused_mseg_c5_l2_dir, 'class.txt'))
+
+    # get fused seg c6 dataset
+    mseg2seg(
+        dst_fused_mseg_c6_dir,
+        dst_fused_seg_c6_dir,
+    )
+    ref_split(
+        os.path.join(dst_fused_mseg_c6_dir, 'val.txt'),
+        os.path.join(dst_fused_seg_c6_dir, 'images'),
+        os.path.join(dst_fused_seg_c6_dir, 'labels'),
+        add_suffix=''
+    )
+    shutil.copy(CLASS_C6_FILE, os.path.join(dst_fused_seg_c6_dir, 'class.txt'))
+
+    # get fused seg c5 dataset
+    mseg2seg(
+        dst_fused_mseg_c5_dir,
+        dst_fused_seg_c5_dir,
+    )
+    ref_split(
+        os.path.join(dst_fused_mseg_c5_dir, 'val.txt'),
+        os.path.join(dst_fused_seg_c5_dir, 'images'),
+        os.path.join(dst_fused_seg_c5_dir, 'labels'),
+        add_suffix=''
+    )
+    ref_split(
+        os.path.join(dst_fused_mseg_c5_dir, 'val_80p.txt'),
+        os.path.join(dst_fused_seg_c5_dir, 'images'),
+        os.path.join(dst_fused_seg_c5_dir, 'labels'),
+        add_suffix='_80p'
+    )
+    shutil.copy(CLASS_C5_FILE, os.path.join(dst_fused_seg_c5_dir, 'class.txt'))
+
+    mseg_get_large_object(dst_fused_mseg_c5_dir, dst_fused_mseg_c5_large_dir)
+    ref_split(
+        os.path.join(dst_fused_mseg_c5_dir, 'val.txt'),
+        os.path.join(dst_fused_mseg_c5_large_dir, 'images'),
+        os.path.join(dst_fused_mseg_c5_large_dir, 'labels'),
+        add_suffix=''
+    )
 
 def new_psdata_add_pipline2_80(input_ps_mseg_c6_dir, src_fused_mseg_c6_dir, dst_fused_mseg_c6_dir):
     pass
@@ -1162,10 +1277,20 @@ if __name__ == '__main__':
     #     dst_fused_mseg_c6_dir=r'/localnvme/data/billboard/fused_data/data3044_mseg_c6_0731'
     # )
 
-    new_psdata_add_pipline2(
-        input_ps_mseg_c6_dir=r'/localnvme/data/billboard/ps_data/psdata_add827_0818_mseg_c6',
-        src_fused_mseg_c6_dir=r'/localnvme/data/billboard/fused_data/data3072_mseg_c6_0809',
-        dst_fused_mseg_c6_dir=r'/localnvme/data/billboard/fused_data/data3899_mseg_c6_0818'
+    # new_psdata_add_pipline2(
+    #     input_ps_mseg_c6_dir=r'/data/huilin/data/isds/fused_data/diffusion_data_0821',
+    #     src_fused_mseg_c6_dir=r'/data/huilin/data/isds/fused_data/data3899_mseg_c6_0818',
+    #     dst_fused_mseg_c6_dir=r'/data/huilin/data/isds/fused_data/data4267_mseg_c6_0821'
+    # )
+
+    mseg_class_update2(
+        r'/data/huilin/data/isds/fused_data/data3899_mseg_c6_0818',
+        r'/data/huilin/data/isds/fused_data/data3899_mseg_c5_0818',
     )
 
+    # new_psdata_add_pipline3(
+    #     input_ps_mseg_c6_dir=r'/data/huilin/data/isds/fused_data/diffusion_data_0821',
+    #     src_fused_mseg_c6_dir=r'/data/huilin/data/isds/fused_data/data3899_mseg_c6_0818',
+    #     dst_fused_mseg_c6_dir=r'/data/huilin/data/isds/fused_data/data4267_mseg_c6_0821'
+    # )
 

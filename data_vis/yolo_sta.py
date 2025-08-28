@@ -312,27 +312,27 @@ if __name__ == '__main__':
     #     seg=True,
     # )
 
-    data_dir = r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6_check0618'
-    yolo_sta(
-        img_dir=None,
-        gt_dir=os.path.join(data_dir, "labels"),
-        result_dir=os.path.join(data_dir, "labels_sta"),
-        class_path=os.path.join(data_dir, "class.txt"),
-        attribute_path=os.path.join(data_dir, "attribute.yaml"),
-        seg=True,
-    )
+    # data_dir = r'/localnvme/data/billboard/ps_data/psdata735_mseg_c6_check0618'
+    # yolo_sta(
+    #     img_dir=None,
+    #     gt_dir=os.path.join(data_dir, "labels"),
+    #     result_dir=os.path.join(data_dir, "labels_sta"),
+    #     class_path=os.path.join(data_dir, "class.txt"),
+    #     attribute_path=os.path.join(data_dir, "attribute.yaml"),
+    #     seg=True,
+    # )
+    #
+    # data_dir = r'/localnvme/data/billboard/bd_data/data626_mseg_c6_check0618'
+    # yolo_sta(
+    #     img_dir=None,
+    #     gt_dir=os.path.join(data_dir, "labels"),
+    #     result_dir=os.path.join(data_dir, "labels_sta"),
+    #     class_path=os.path.join(data_dir, "class.txt"),
+    #     attribute_path=os.path.join(data_dir, "attribute.yaml"),
+    #     seg=True,
+    # )
 
-    data_dir = r'/localnvme/data/billboard/bd_data/data626_mseg_c6_check0618'
-    yolo_sta(
-        img_dir=None,
-        gt_dir=os.path.join(data_dir, "labels"),
-        result_dir=os.path.join(data_dir, "labels_sta"),
-        class_path=os.path.join(data_dir, "class.txt"),
-        attribute_path=os.path.join(data_dir, "attribute.yaml"),
-        seg=True,
-    )
-
-    data_dir = r'/localnvme/data/billboard/fused_data/data1361_mseg_c6_check0618'
+    data_dir = r'/data/huilin/data/isds/fused_data/data4267_mseg_c6_0821'
     yolo_sta(
         img_dir=None,
         gt_dir=os.path.join(data_dir, "labels"),
