@@ -192,7 +192,7 @@ class ImageDisplayWidget(QWidget):
         self.show_masks = state == Qt.Checked
         self.redraw_image()
         
-    def display_image_with_masks(self, image: np.ndarray, masks: List[Dict], risks: List[Dict], class_names: Optional[List[str]] = None, image_name: str = ""):
+    def display_image_with_masks(self, image: np.ndarray, masks: List[Dict], risks: List[Dict], class_names: Optional[List[str]] = None, image_name: str = "", object_id: int = None):
         """
         显示图像和mask
         
@@ -274,6 +274,8 @@ class ImageDisplayWidget(QWidget):
                     
                 # 添加标签
                 class_id = mask['class_id']
+                object_id = mask['object_id']
+
                 risk_desc = self.get_risk_description(risk['risk_levels'])
                 
                 # 使用类别名称
@@ -282,7 +284,7 @@ class ImageDisplayWidget(QWidget):
                 else:
                     class_name = f"Class {class_id}"
                     
-                label = class_name
+                label = f"id:{object_id};"+class_name
                 if risk_desc != "无风险":
                     label += f" ({risk_desc})"
                     

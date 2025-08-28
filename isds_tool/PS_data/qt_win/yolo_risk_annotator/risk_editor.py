@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 """
 风险编辑组件
-用于编辑选中mask的风险信息
+用于编辑选中mask的风险信息和object_id
 """
 
 from typing import List, Dict, Optional
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QPushButton, QGroupBox, QGridLayout,
-                             QRadioButton, QButtonGroup, QMessageBox)
+                             QRadioButton, QButtonGroup, QMessageBox, QLineEdit)
 from PyQt5.QtCore import Qt, pyqtSignal
 
 
@@ -16,10 +16,12 @@ class RiskEditorWidget(QWidget):
     """风险编辑组件"""
     
     risk_updated = pyqtSignal(dict)  # 发送更新后的风险数据
+    object_id_updated = pyqtSignal(int)  # 发送更新后的object_id
     
     def __init__(self):
         super().__init__()
         self.current_risk_data = None
+        self.current_object_id = None
         self.risk_groups = []  # 存储每个风险的按钮组
         
         self.init_ui()
@@ -29,8 +31,22 @@ class RiskEditorWidget(QWidget):
         layout = QVBoxLayout(self)
         
         # 创建组框
-        group_box = QGroupBox("风险信息编辑")
+        group_box = QGroupBox("风险信息与ID编辑")
         group_layout = QVBoxLayout(group_box)
+        
+        # Object ID输入
+        id_layout = QHBoxLayout()
+        id_layout.addWidget(QLabel("Object ID:"))
+        self.id_input = QLineEdit()
+        self.id_input.setPlaceholderText("输入数字ID")
+        id_layout.addWidget(self.id_input)
+        
+        # ID更新按钮
+        id_update_button = QPushButton("更新ID")
+        id_update_button.clicked.connect(self.on_id_update_clicked)
+        id_layout.addWidget(id_update_button)
+        
+        group_layout.addLayout(id_layout)
         
         # 风险级别设置
         self.create_risk_controls(group_layout)
@@ -80,14 +96,22 @@ class RiskEditorWidget(QWidget):
             
         parent_layout.addLayout(grid_layout)
         
-    def set_risk_data(self, risk_data: Dict):
+    def set_risk_data(self, risk_data: Dict, object_id: int = None):
         """
-        设置风险数据
+        设置风险数据和object_id
         
         Args:
             risk_data: 风险数据字典
+            object_id: 对象ID
         """
         self.current_risk_data = risk_data.copy()
+        self.current_object_id = object_id
+        
+        # 设置object_id
+        if object_id is not None:
+            self.id_input.setText(str(object_id))
+        else:
+            self.id_input.clear()
         
         # 设置风险级别
         risk_levels = risk_data.get('risk_levels', [0, 0, 0, 0])
@@ -147,6 +171,25 @@ class RiskEditorWidget(QWidget):
         
         QMessageBox.information(self, "成功", "风险信息已更新")
         
+    def on_id_update_clicked(self):
+        """更新ID按钮点击事件"""
+        if self.current_object_id is None:
+            QMessageBox.warning(self, "警告", "请先选择一个mask")
+            return
+            
+        try:
+            new_id = int(self.id_input.text())
+            if new_id < 0:
+                raise ValueError("ID必须为非负整数")
+            
+            # 发送ID更新信号
+            self.object_id_updated.emit(new_id)
+            self.current_object_id = new_id
+            
+            QMessageBox.information(self, "成功", f"Object ID已更新为: {new_id}")
+        except ValueError as e:
+            QMessageBox.warning(self, "警告", f"无效的ID: {str(e)}")
+        
     def validate_risk_data(self, risk_data: Dict) -> bool:
         """验证风险数据"""
         risk_levels = risk_data.get('risk_levels', [])
@@ -164,6 +207,8 @@ class RiskEditorWidget(QWidget):
     def clear(self):
         """清除数据"""
         self.current_risk_data = None
+        self.current_object_id = None
+        self.id_input.clear()
         
         for group in self.risk_groups:
             for button in group.buttons():

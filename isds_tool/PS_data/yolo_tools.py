@@ -19,6 +19,14 @@ ATT_L2_FILE = r'/data/huilin/data/isds/fused_data/attribute_l2.yaml'
 CLASS_C6_FILE = r'/data/huilin/data/isds/fused_data/class_c6.txt'
 CLASS_C5_FILE = r'/data/huilin/data/isds/fused_data/class_c5.txt'
 
+def get_stem2img(img_dir):
+    img_list = os.listdir(img_dir)
+    stem2img = {}
+    for img_name in img_list:
+        stem = Path(img_name).stem
+        stem2img[stem] = img_name
+    return stem2img
+
 
 def mseg2seg_gt(input_dir, output_dir):
     label_list = os.listdir(input_dir)

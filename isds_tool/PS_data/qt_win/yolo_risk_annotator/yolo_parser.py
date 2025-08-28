@@ -34,9 +34,7 @@ class YOLOParser:
         
         if not os.path.exists(label_path):
             return masks, risks
-            
-        height, width = image_shape[:2]
-        
+
         with open(label_path, 'r', encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
@@ -51,20 +49,27 @@ class YOLOParser:
                     # 解析基本信息
                     class_id = int(parts[0])
                     risk_num = int(parts[1])
-                    
+                    risk_start = 2
+                    coord_start = 6  # class_id + risk_num + 4个risk值
+                    if len(parts[coord_start:]) % 2 == 0:
+                        coord_end = len(parts)
+                        object_id = 0
+                    else:
+                        coord_end = len(parts) - 1
+                        object_id = int(parts[-1])
+
+
                     # 解析risk值
                     risk_levels = []
                     for i in range(4):  # 固定4个risk
                         if i < len(parts) - 2:
-                            risk_levels.append(int(parts[2 + i]))
+                            risk_levels.append(int(parts[risk_start + i]))
                         else:
                             risk_levels.append(0)
                     
                     # 解析坐标点
                     coordinates = []
-                    coord_start = 6  # class_id + risk_num + 4个risk值
-                    
-                    for i in range(coord_start, len(parts), 2):
+                    for i in range(coord_start, coord_end, 2):
                         if i + 1 < len(parts):
                             x = float(parts[i])  # 保持归一化坐标
                             y = float(parts[i + 1])
@@ -73,6 +78,7 @@ class YOLOParser:
                     # 创建mask信息
                     mask_info = {
                         'class_id': class_id,
+                        'object_id': object_id,
                         'coordinates': coordinates
                     }
                     
@@ -108,9 +114,8 @@ class YOLOParser:
                 for mask, risk in zip(masks, risks):
                     # 写入class_id
                     f.write(f"{mask['class_id']} ")
-                    
                     # 写入risk_num，如果不存在则默认为0
-                    risk_num = risk.get('risk_num', 0)
+                    risk_num = risk.get('risk_num', 4)
                     f.write(f"{risk_num} ")
                     
                     # 写入risk值
@@ -120,15 +125,12 @@ class YOLOParser:
                     # 写入坐标点（归一化到0-1）
                     coordinates = mask['coordinates']
                     if coordinates:
-                        # 计算边界框用于归一化
-                        x_coords = [coord[0] for coord in coordinates]
-                        y_coords = [coord[1] for coord in coordinates]
                         
                         # 这里假设图像尺寸，实际应该传入图像尺寸
                         # 为了简化，我们假设坐标已经是归一化的
                         for x, y in coordinates:
                             f.write(f"{x:.6f} {y:.6f} ")
-                    
+                    f.write(f"{mask['object_id']} ")
                     f.write('\n')
                     
             return True
