@@ -36,19 +36,18 @@ def list_shape_sta(imgs_list, save_path):
     with tqdm(imgs_list) as pbar:
         pbar.set_description('shape sta ')
         for index, img_path in enumerate(pbar):
-            try:
-                img = img_read(img_path)
-            except Exception as e:
-                print(img_path, e)
+            if Path(img_path).suffix not in ['.jpg', '.png', '.jpeg', '.JPG', '.PNG', '.JPEG']:
                 continue
+
+            img = img_read(img_path)
             shape_df.loc[index] = [img.shape[0], img.shape[1]]
             new_img_list.append(Path(img_path).stem)
 
     sns.jointplot(x='img_height', y='img_width', data=shape_df)
-    plt.savefig(save_path)
+    plt.savefig(save_path.replace('.csv', '_shape.png'))
 
     shape_df['image'] = [os.path.basename(gt_path) for gt_path in new_img_list]
-    shape_df.to_csv(save_path.replace('.png', '.csv'))
+    shape_df.to_csv(save_path.replace('.csv', '_shape.csv'))
     print('save to %s' % save_path)
     return shape_df
 
@@ -61,5 +60,5 @@ if __name__ == '__main__':
     #               r'E:\data\tp\multi_modal_airplane_train\rgb.csv')
     # dir_shape_sta(r'E:\data\tp\multi_modal_airplane_train\sar',
     #               r'E:\data\tp\multi_modal_airplane_train\sar.csv')
-    dir_shape_sta(r'E:\data\tp\multi_modal_airplane_train\img',
-                  r'E:\data\tp\multi_modal_airplane_train\img.csv')
+    dir_shape_sta(r'/data/huilin/data/isds/fused_data/data3899_mseg_c6_0818/images_crop',
+                  r'/data/huilin/data/isds/fused_data/data3899_mseg_c6_0818.csv')

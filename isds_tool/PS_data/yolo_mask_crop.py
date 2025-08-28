@@ -119,12 +119,13 @@ def polygon_swift(record, image):
     polygon_coords = np.array(polys_sized, np.int32).reshape((-1, 2))
     return polygon_coords
 
-def extract_polygon_from_image(image, polygon_coords, crop_method='without_background_keep_shape', color=RED_BGR):
+def extract_polygon_from_image(image, polygon_coords, crop_method='without_background_keep_shape', color=RED_BGR, with_boundary=True):
     mask = np.zeros(image.shape[:2], np.uint8)
     top_left_x, top_left_y = np.min(polygon_coords, axis=0)
     bottom_right_x, bottom_right_y = np.max(polygon_coords, axis=0)
     if crop_method.startswith('without_background'):
-        cv2.polylines(image, [polygon_coords], isClosed=True, color=color)
+        if with_boundary:
+            cv2.polylines(image, [polygon_coords], isClosed=True, color=color)
         cv2.fillPoly(mask, [polygon_coords], color=255)
         img_copy = cv2.bitwise_and(image, image, mask=mask)
         if crop_method == 'without_background_image_shape':
@@ -132,7 +133,8 @@ def extract_polygon_from_image(image, polygon_coords, crop_method='without_backg
         elif crop_method == 'without_background_box_shape':
             img_crop = img_copy[int(top_left_y):int(bottom_right_y), int(top_left_x):int(bottom_right_x)]
     elif crop_method.startswith('with_background'):
-        cv2.polylines(image, [polygon_coords], isClosed=True, color=color)
+        if with_boundary:
+            cv2.polylines(image, [polygon_coords], isClosed=True, color=color)
         if crop_method == 'with_background_image_shape':
             img_crop = image
         elif crop_method == 'with_background_box_shape':
@@ -140,11 +142,11 @@ def extract_polygon_from_image(image, polygon_coords, crop_method='without_backg
     return img_crop, top_left_x, top_left_y
 
 def xywh2poly_crop(record, image, cats, atts=None, annotation=False, crop_method='without_background_keep_shape',
-                   filter_no=True, alpha=0.5, tf=1, sf=2/3):
+                   filter_no=True, alpha=0.5, tf=1, sf=2/3, with_boundary=True):
     polygon_coords = polygon_swift(record, image)
     cat_id =  int(record['category'])
     color = COLOR_MAP[cat_id]
-    image_crop, top_left_x, top_left_y = extract_polygon_from_image(image, polygon_coords, crop_method=crop_method, color=color)
+    image_crop, top_left_x, top_left_y = extract_polygon_from_image(image, polygon_coords, crop_method=crop_method, color=color, with_boundary=with_boundary)
     if crop_method == 'with_background_image_shape' and annotation:
         text_size = cv2.getTextSize(cats[cat_id], cv2.FONT_HERSHEY_SIMPLEX, sf - 0.1, tf)[0]
         cv2.rectangle(image_crop, (int(top_left_x), int(top_left_y) + 10),
@@ -211,7 +213,7 @@ def dict_revert(crop_dict):
     return reverted_dict
 
 def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, seg=True, annotation=False, ref_list=None,
-               only_defect=False, save_method='attribute', crop_method='without_background_image_shape'):
+               only_defect=False, save_method='attribute', crop_method='without_background_image_shape', with_boundary=True):
     os.makedirs(crop_dir, exist_ok=True)
     cats = get_cats(class_file)
     atts = get_atts(attribute_file) if attribute_file is not None else None
@@ -227,9 +229,24 @@ def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, 
             cat_dir = os.path.join(crop_dir, cat)
             os.makedirs(cat_dir, exist_ok=True)
     elif save_method == 'attribute_category' and atts is not None:
-        pass
+        for att in atts:
+            att_dir = os.path.join(crop_dir, att)
+            for idx, level in enumerate(atts[att]):
+                att_level_dir = os.path.join(att_dir, level)
+                for cat in cats:
+                    cat_dir = os.path.join(att_level_dir, cat)
+                    os.makedirs(cat_dir, exist_ok=True)
+    elif save_method == 'category_attribute' and atts is not None:
+        for cat in cats:
+            cat_dir = os.path.join(crop_dir, cat)
+            for att in atts:
+                att_dir = os.path.join(cat_dir, att)
+                for idx, level in enumerate(atts[att]):
+                    att_level_dir = os.path.join(att_dir, level)
+                    os.makedirs(att_level_dir, exist_ok=True)
 
     crop_dict = {}
+    image_crop_info_df = pd.DataFrame(None, columns=['image_name_src', 'image_name_object', 'object_id', 'category']+list(atts.keys()))
     image_list = os.listdir(image_dir)
     for img_idx, image_name in enumerate(tqdm(image_list, desc='mask cropping ')):
         label_name = Path(image_name).stem + '.txt'
@@ -241,6 +258,7 @@ def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, 
         label = label_read(label_path, seg=seg, atts=atts)
         for idx, record in label.iterrows():
             image_object_name_stem = f'{Path(image_name).stem}_{idx}'
+            category = record['category']
             if ref_list is not None and image_object_name_stem not in ref_list:
                 continue
             if seg:
@@ -251,7 +269,7 @@ def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, 
                         att_sum += att_level_int
                     if att_sum == 0:
                         continue
-                image_crop = xywh2poly_crop(record, image.copy(), crop_method=crop_method, annotation=annotation, cats=cats, atts=atts)
+                image_crop = xywh2poly_crop(record, image.copy(), crop_method=crop_method, annotation=annotation, cats=cats, atts=atts, with_boundary=with_boundary)
                 if image_crop.shape[0]>0 and image_crop.shape[1]>0:
                     save_name = Path(image_name).stem + f'_{idx}' + Path(image_name).suffix
                     if save_method == 'attribute':
@@ -262,10 +280,31 @@ def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, 
                             att_level = levels[att_level_int]
                             save_path = os.path.join(crop_dir, att, att_level, save_name)
                             image_save(save_path, image_crop)
+                    elif save_method == 'category':
+                        save_path = os.path.join(crop_dir, category, save_name)
+                        image_save(save_path, image_crop)
+                    elif save_method == 'category_attribute':
+                        for att, levels in atts.items():
+                            att_level_int = int(record[att])
+                            if only_defect and att_level_int == 0:
+                                continue
+                            att_level = levels[att_level_int]
+                            save_path = os.path.join(crop_dir, category, att, att_level, save_name)
+                            image_save(save_path, image_crop)
+                    elif save_method == 'attribute_category':
+                        for att, levels in atts.items():
+                            att_level_int = int(record[att])
+                            if only_defect and att_level_int == 0:
+                                continue
+                            att_level = levels[att_level_int]
+                            save_path = os.path.join(crop_dir, att, att_level, category, save_name)
+                            image_save(save_path, image_crop)
                     else:
                         save_path = os.path.join(crop_dir,  save_name)
                         image_save(save_path, image_crop)
                     crop_dict[save_name] = image_name
+                    info_record = [image_name, save_name, idx, category] + record[list(atts.keys())].to_list()
+                    image_crop_info_df.loc[len(image_crop_info_df)] = info_record
             else:
                 pass
     crop_result_path = crop_dir+'.json'
@@ -278,6 +317,7 @@ def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, 
     crop_dict_revert = dict_revert(crop_dict)
     with open(crop_result_revert_path, 'w') as f:
         json.dump(crop_dict_revert, f, ensure_ascii=False, indent=4)
+    image_crop_info_df.to_csv(crop_dir+'.csv', encoding='utf-8-sig')
 
 
 def myolo_crop_single(args):
@@ -362,7 +402,7 @@ def myolo_crop_mp(image_dir, label_dir, crop_dir, class_file, attribute_file=Non
 
 if __name__ == '__main__':
     pass
-    root_dir = r'E:\data\202502_signboard\data_annotation\dataset\data1422'
+    root_dir = r'/data/huilin/data/isds/fused_data/data3899_mseg_c6_0818'
     dataset_dir = root_dir
     image_dir = os.path.join(dataset_dir, 'images')
     labels_dir = os.path.join(dataset_dir, 'labels')
@@ -370,6 +410,6 @@ if __name__ == '__main__':
     class_file = os.path.join(dataset_dir, 'class.txt')
     attribute_file = os.path.join(dataset_dir, 'attribute.yaml')
     myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
-               attribute_file=attribute_file, seg=True, annotation=True,
-               save_method='all', only_defect=True,
-               crop_method='with_background_image_shape')
+               attribute_file=attribute_file, seg=True, annotation=False,
+               save_method='all', only_defect=False, with_boundary=False,
+               crop_method='without_background_box_shape')
