@@ -18,7 +18,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QListWidget, QListWidgetItem, QFileDialog, 
                              QMenuBar, QStatusBar, QMessageBox, QComboBox,
                              QGroupBox, QCheckBox, QSpinBox, QTextEdit)
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QEvent
 from PyQt5.QtGui import QPixmap, QPainter, QPen, QBrush, QColor, QFont, QImage
 
 from yolo_parser import YOLOParser
@@ -48,6 +48,9 @@ class YOLORiskAnnotator(QMainWindow):
         
         # 确保主窗口获得焦点
         self.setFocus()
+        
+        # 为所有子组件设置事件过滤器
+        self.setEventFilter()
         
     def init_ui(self):
         """初始化用户界面"""
@@ -83,6 +86,7 @@ class YOLORiskAnnotator(QMainWindow):
         # 左下角：风险编辑区域
         self.risk_editor = RiskEditorWidget()
         self.risk_editor.risk_updated.connect(self.on_risk_updated)
+        self.risk_editor.object_id_updated.connect(self.on_object_id_updated)
         main_layout.addWidget(self.risk_editor, 2, 0, 1, 1)
         
         # 设置布局比例
@@ -234,13 +238,14 @@ class YOLORiskAnnotator(QMainWindow):
         for i, (mask, risk) in enumerate(zip(self.current_masks, self.current_risks)):
             class_id = mask['class_id']
             class_name = f"Class {class_id}"
+            object_id = mask['object_id']
             
             # 如果加载了类别文件，使用类别名称
             if self.class_names and class_id < len(self.class_names):
                 class_name = self.class_names[class_id]
             risk_levels = risk['risk_levels']
             
-            item_text = f"{i+1}: {class_name}"
+            item_text = f"id:{object_id} ; {class_name}"
             
             # 显示风险信息
             risk_names = []
@@ -255,6 +260,7 @@ class YOLORiskAnnotator(QMainWindow):
             else:
                 item_text += " (无风险)"
             
+
             item = QListWidgetItem(item_text)
             self.mask_list_widget.addItem(item)
             
@@ -267,7 +273,8 @@ class YOLORiskAnnotator(QMainWindow):
         if 0 <= mask_index < len(self.current_risks):
             self.selected_mask_index = mask_index
             risk = self.current_risks[mask_index]
-            self.risk_editor.set_risk_data(risk)
+            object_id = self.current_masks[mask_index]['object_id']
+            self.risk_editor.set_risk_data(risk, object_id)
             # 更新mask列表选中状态
             self.update_mask_info()
         else:
@@ -287,18 +294,41 @@ class YOLORiskAnnotator(QMainWindow):
         # 确保即使图像列表没有焦点，快捷键也能工作
         if event.key() == Qt.Key_A:
             self.show_previous_image()
+            event.accept()
         elif event.key() == Qt.Key_D:
             self.show_next_image()
+            event.accept()
         else:
             super().keyPressEvent(event)
             
-    # 重写focusNextChild和focusPreviousChild方法
-    # 确保主窗口始终保持焦点，以便快捷键能正常工作
+    # 移除阻止焦点移动的代码，允许输入框获得焦点
+    # 重写focusNextChild和focusPreviousChild方法，允许焦点在子组件间移动
     def focusNextChild(self):
-        return False
+        return super().focusNextChild()
         
     def focusPreviousChild(self):
-        return False
+        return super().focusPreviousChild()
+
+    def focusInEvent(self, event):
+        super().focusInEvent(event)
+        
+    def setEventFilter(self):
+        """为所有子组件设置事件过滤器，确保键盘事件能被主窗口捕获"""
+        for child in self.findChildren(QWidget):
+            child.installEventFilter(self)
+    
+    def eventFilter(self, source, event):
+        """事件过滤器，只处理快捷键而不干扰输入框"""
+        if event.type() == QEvent.KeyPress:
+            # 只处理特定的快捷键(A和D)，让其他按键事件正常传播
+            if event.key() == Qt.Key_A or event.key() == Qt.Key_D:
+                # 对于快捷键，调用主窗口的keyPressEvent
+                self.keyPressEvent(event)
+                return True
+        return super().eventFilter(source, event)
+
+    def event(self, event):
+        return super().event(event)
             
     def show_previous_image(self):
         """显示上一个图像"""
@@ -377,6 +407,26 @@ class YOLORiskAnnotator(QMainWindow):
             image = cv2.imread(self.current_image_path)
             if image is not None:
                 self.image_display.display_image_with_masks(image, self.current_masks, self.current_risks, self.class_names, self.image_display.current_image_name)
+
+    def on_object_id_updated(self, new_id):
+        """object_id更新事件"""
+        if self.selected_mask_index >= 0 and self.selected_mask_index < len(self.current_masks):
+            # 更新内存中的object_id
+            old_id = self.current_masks[self.selected_mask_index]['object_id']
+            self.current_masks[self.selected_mask_index]['object_id'] = new_id
+            
+            # 保存到文件
+            self.save_updated_labels()
+            
+            # 更新显示
+            self.update_mask_info()
+            
+            # 刷新图像显示
+            image = cv2.imread(self.current_image_path)
+            if image is not None:
+                self.image_display.display_image_with_masks(image, self.current_masks, self.current_risks, self.class_names, self.image_display.current_image_name)
+            
+            self.statusBar().showMessage(f"Object ID已从 {old_id} 更新为 {new_id}")
             
     def save_updated_labels(self):
         """保存更新后的标签文件"""
@@ -405,3 +455,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+    # pyinstaller --onefile --windowed main.py
