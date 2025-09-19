@@ -1,7 +1,7 @@
 import os.path
 
 from yolo_mask_crop import *
-from yolo_tools import delete_matching_files, psdata_add_pipline, random_select_exclude, psdata_add_piplines, data_tf_piplines, ref_split
+from yolo_tools import delete_matching_files, psdata_add_pipline, random_select_exclude, psdata_add_piplines, data_tf_piplines, ref_split, copy_ref
 from data_vis.yolo_sta import yolo_sta
 from data_vis.yolo_vis import yolo_mdet_vis
 if __name__ == '__main__':
@@ -123,30 +123,30 @@ if __name__ == '__main__':
     #            save_method='attribute', only_defect=True, with_boundary=True,
     #            crop_method='with_background_image_shape')
 
-    root_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c5_l2_0917'
-    dataset_dir = root_dir
-    image_dir = os.path.join(dataset_dir, 'images')
-    labels_dir = os.path.join(dataset_dir, 'result_analysis', 'filter_pre_match_defect')
-    image_crop_dir = os.path.join(dataset_dir, 'result_analysis', 'images_crop_pre')
-    class_file = os.path.join(dataset_dir, 'class_c5.txt')
-    attribute_file = os.path.join(dataset_dir, 'attribute_l2.yaml')
-    myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
-               attribute_file=attribute_file, seg=True, annotation=False,
-               save_method='attribute', only_defect=True, with_boundary=True,
-               crop_method='with_background_image_shape')
-
-
-    root_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c5_l2_0917'
-    dataset_dir = root_dir
-    image_dir = os.path.join(dataset_dir, 'images')
-    labels_dir = os.path.join(dataset_dir, 'result_analysis', 'filter_gt_match_defect')
-    image_crop_dir = os.path.join(dataset_dir, 'result_analysis', 'images_crop_gt')
-    class_file = os.path.join(dataset_dir, 'class_c5.txt')
-    attribute_file = os.path.join(dataset_dir, 'attribute_l2.yaml')
-    myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
-               attribute_file=attribute_file, seg=True, annotation=False,
-               save_method='attribute', only_defect=True, with_boundary=True,
-               crop_method='with_background_image_shape')
+    # root_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c5_l2_0917'
+    # dataset_dir = root_dir
+    # image_dir = os.path.join(dataset_dir, 'images')
+    # labels_dir = os.path.join(dataset_dir, 'result_analysis', 'filter_pre_match_defect')
+    # image_crop_dir = os.path.join(dataset_dir, 'result_analysis', 'images_crop_pre')
+    # class_file = os.path.join(dataset_dir, 'class_c5.txt')
+    # attribute_file = os.path.join(dataset_dir, 'attribute_l2.yaml')
+    # myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
+    #            attribute_file=attribute_file, seg=True, annotation=False,
+    #            save_method='attribute', only_defect=True, with_boundary=True,
+    #            crop_method='with_background_image_shape')
+    #
+    #
+    # root_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c5_l2_0917'
+    # dataset_dir = root_dir
+    # image_dir = os.path.join(dataset_dir, 'images')
+    # labels_dir = os.path.join(dataset_dir, 'result_analysis', 'filter_gt_match_defect')
+    # image_crop_dir = os.path.join(dataset_dir, 'result_analysis', 'images_crop_gt')
+    # class_file = os.path.join(dataset_dir, 'class_c5.txt')
+    # attribute_file = os.path.join(dataset_dir, 'attribute_l2.yaml')
+    # myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
+    #            attribute_file=attribute_file, seg=True, annotation=False,
+    #            save_method='attribute', only_defect=True, with_boundary=True,
+    #            crop_method='with_background_image_shape')
 
 
 
@@ -197,3 +197,17 @@ if __name__ == '__main__':
     #     attribute_file=attribute_file,
     #     seg=True,
     #     )
+
+    root_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c5_l2_0917'
+    dataset_dir = root_dir
+    image_dir = os.path.join(dataset_dir, 'images')
+    image_copy_dir = os.path.join(dataset_dir, 'result_analysis', 'images_gt')
+    labels_dir = os.path.join(dataset_dir, 'result_analysis', 'filter_gt_match_defect')
+    copy_ref(image_dir, image_copy_dir, labels_dir)
+
+    root_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c5_l2_0917'
+    dataset_dir = root_dir
+    image_dir = os.path.join(dataset_dir, 'images')
+    image_copy_dir = os.path.join(dataset_dir, 'result_analysis', 'images_pre')
+    labels_dir = os.path.join(dataset_dir, 'result_analysis', 'filter_pre_match_defect')
+    copy_ref(image_dir, image_copy_dir, labels_dir)
