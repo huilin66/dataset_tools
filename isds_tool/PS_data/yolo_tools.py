@@ -14,10 +14,10 @@ from sklearn.model_selection import KFold
 
 sys.path.append(r'E:\repository\dataset_tools')
 
-ATT_FILE = r'/data/huilin/data/isds/fused_data/attribute.yaml'
-ATT_L2_FILE = r'/data/huilin/data/isds/fused_data/attribute_l2.yaml'
-CLASS_C6_FILE = r'/data/huilin/data/isds/fused_data/class_c6.txt'
-CLASS_C5_FILE = r'/data/huilin/data/isds/fused_data/class_c5.txt'
+ATT_FILE = r'/localnvme/data/billboard/attribute.yaml'
+ATT_L2_FILE = r'/localnvme/data/billboard/attribute_l2.yaml'
+CLASS_C6_FILE = r'/localnvme/data/billboard/class_c6.txt'
+CLASS_C5_FILE = r'/localnvme/data/billboard/class_c5.txt'
 
 def get_stem2img(img_dir):
     img_list = os.listdir(img_dir)
@@ -532,6 +532,47 @@ def random_select(data_dir, save_dir=None, train_ratio=0.9, random_seed=1010, fu
     print('%d save to %s,\n%d save to %s!'%(len(train_list), os.path.join(save_dir, f'train{suffix}.txt'),
                                            len(val_list), os.path.join(save_dir, f'val{suffix}.txt')))
 
+
+def random_select_exclude(data_dir, exclude_data_dir, save_dir=None, train_ratio=0.9, random_seed=1010, full_path=True, suffix=''):
+    image_dir = os.path.join(data_dir, 'images')
+    label_dir = os.path.join(data_dir, 'labels')
+    exclude_image_dir = os.path.join(exclude_data_dir, 'images')
+    file_list = os.listdir(image_dir)
+    exclude_image_list = os.listdir(exclude_image_dir)
+    if label_dir is not None:
+        label_list = os.listdir(label_dir)
+        label_list = [Path(label_name).stem for label_name in label_list]
+        file_list_check = []
+        for img_name in tqdm(file_list, desc='img check', total=len(file_list)):
+            name = Path(img_name).stem
+            if name in label_list:
+                file_list_check.append(img_name)
+        file_list = file_list_check
+    if save_dir is None:
+        save_dir = os.path.dirname(image_dir)
+    src_num = len(file_list)
+    file_list = [filename for filename in file_list if filename not in exclude_image_list]
+    dst_num = len(file_list)
+    print(f'{src_num} --> {dst_num}, exclude {src_num-dst_num} in {len(file_list)}')
+    if full_path:
+        file_list = [os.path.join(image_dir, filename) for filename in file_list]
+    np.random.seed(random_seed)
+    np.random.shuffle(file_list)
+    train_num = int(len(file_list)*train_ratio)
+
+
+    train_list = file_list[:train_num]
+    val_list = file_list[train_num:]
+
+    df_train = pd.DataFrame({'filename': train_list})
+    df_val = pd.DataFrame({'filename': val_list})
+    df_all = pd.DataFrame({'filename': train_list+val_list})
+    df_train.to_csv(os.path.join(save_dir, f'train{suffix}.txt'), header=None, index=None)
+    df_val.to_csv(os.path.join(save_dir, f'val{suffix}.txt'), header=None, index=None)
+    df_all.to_csv(os.path.join(save_dir, 'all.txt'), header=None, index=None)
+    print('%d save to %s,\n%d save to %s!'%(len(train_list), os.path.join(save_dir, f'train{suffix}.txt'),
+                                           len(val_list), os.path.join(save_dir, f'val{suffix}.txt')))
+
 def random_kfold(img_dir, k, label_dir=None, save_dir=None, random_seed=1010, full_path=True):
     file_list = os.listdir(img_dir)
     if label_dir is not None:
@@ -608,48 +649,33 @@ def ref_split(ref_path, img_dir, label_dir=None, save_dir=None, full_path=True, 
     df_all.to_csv(all_path, header=None, index=None)
     print('%d save to %s,\n%d save to %s!'%(len(train_list), train_path, len(val_list), val_path))
 
-def data_merge(input_dir1, input_dir2, output_dir, cp_split=True, cp_split80=True):
+def split_txt_merge(input_dir1, input_dir2, output_dir, suffix):
+    input_train_path1 = os.path.join(input_dir1, f'train{suffix}.txt')
+    input_train_path2 = os.path.join(input_dir2, f'train{suffix}.txt')
+    output_train_path = os.path.join(output_dir, f'train{suffix}.txt')
+    input_val_path1 = os.path.join(input_dir1, f'val{suffix}.txt')
+    input_val_path2 = os.path.join(input_dir2, f'val{suffix}.txt')
+    output_val_path = os.path.join(output_dir, f'val{suffix}.txt')
+    df_input_train1 = pd.read_csv(input_train_path1, names=['file_name'], header=None, index_col=False)
+    df_input_train1['file_name'] = df_input_train1['file_name'].str.replace(input_dir1, output_dir)
+    df_input_train2 = pd.read_csv(input_train_path2, names=['file_name'], header=None, index_col=False)
+    df_input_train2['file_name'] = df_input_train2['file_name'].str.replace(input_dir2, output_dir)
+    df_output_train = pd.concat([df_input_train1, df_input_train2])
+    df_output_train.to_csv(output_train_path, index=False, header=False)
+    df_input_val1 = pd.read_csv(input_val_path1, names=['file_name'], header=None, index_col=False)
+    df_input_val1['file_name'] = df_input_val1['file_name'].str.replace(input_dir1, output_dir)
+    df_input_val2 = pd.read_csv(input_val_path2, names=['file_name'], header=None, index_col=False)
+    df_input_val2['file_name'] = df_input_val2['file_name'].str.replace(input_dir2, output_dir)
+    df_output_val = pd.concat([df_input_val1, df_input_val2])
+    df_output_val.to_csv(output_val_path, index=False, header=False)
+    print(f'merge {input_train_path1} + {input_train_path2} -> {output_train_path}')
+
+def data_merge(input_dir1, input_dir2, output_dir, cp_split=True, suffix=''):
     print(f'merging {input_dir1} + {input_dir2} --> {output_dir}...')
     data_copy(input_dir1, output_dir)
     data_copy(input_dir2, output_dir)
     if cp_split:
-        input_train_path1 = os.path.join(input_dir1, 'train.txt')
-        input_train_path2 = os.path.join(input_dir2, 'train.txt')
-        output_train_path = os.path.join(output_dir, 'train.txt')
-        input_val_path1 = os.path.join(input_dir1, 'val.txt')
-        input_val_path2 = os.path.join(input_dir2, 'val.txt')
-        output_val_path = os.path.join(output_dir, 'val.txt')
-        df_input_train1 = pd.read_csv(input_train_path1, names=['file_name'],header=None, index_col=False)
-        df_input_train1['file_name'] = df_input_train1['file_name'].str.replace(input_dir1, output_dir)
-        df_input_train2 = pd.read_csv(input_train_path2, names=['file_name'], header=None, index_col=False)
-        df_input_train2['file_name'] = df_input_train2['file_name'].str.replace(input_dir2, output_dir)
-        df_output_train = pd.concat([df_input_train1, df_input_train2])
-        df_output_train.to_csv(output_train_path, index=False, header=False)
-        df_input_val1 = pd.read_csv(input_val_path1, names=['file_name'], header=None, index_col=False)
-        df_input_val1['file_name'] = df_input_val1['file_name'].str.replace(input_dir1, output_dir)
-        df_input_val2 = pd.read_csv(input_val_path2, names=['file_name'], header=None, index_col=False)
-        df_input_val2['file_name'] = df_input_val2['file_name'].str.replace(input_dir2, output_dir)
-        df_output_val = pd.concat([df_input_val1, df_input_val2])
-        df_output_val.to_csv(output_val_path, index=False, header=False)
-    if cp_split80:
-        input_train_path1 = os.path.join(input_dir1, 'train_80p.txt')
-        input_train_path2 = os.path.join(input_dir2, 'train_80p.txt')
-        output_train_path = os.path.join(output_dir, 'train_80p.txt')
-        input_val_path1 = os.path.join(input_dir1, 'val_80p.txt')
-        input_val_path2 = os.path.join(input_dir2, 'val_80p.txt')
-        output_val_path = os.path.join(output_dir, 'val_80p.txt')
-        df_input_train1 = pd.read_csv(input_train_path1, names=['file_name'],header=None, index_col=False)
-        df_input_train1['file_name'] = df_input_train1['file_name'].str.replace(input_dir1, output_dir)
-        df_input_train2 = pd.read_csv(input_train_path2, names=['file_name'], header=None, index_col=False)
-        df_input_train2['file_name'] = df_input_train2['file_name'].str.replace(input_dir2, output_dir)
-        df_output_train = pd.concat([df_input_train1, df_input_train2])
-        df_output_train.to_csv(output_train_path, index=False, header=False)
-        df_input_val1 = pd.read_csv(input_val_path1, names=['file_name'], header=None, index_col=False)
-        df_input_val1['file_name'] = df_input_val1['file_name'].str.replace(input_dir1, output_dir)
-        df_input_val2 = pd.read_csv(input_val_path2, names=['file_name'], header=None, index_col=False)
-        df_input_val2['file_name'] = df_input_val2['file_name'].str.replace(input_dir2, output_dir)
-        df_output_val = pd.concat([df_input_val1, df_input_val2])
-        df_output_val.to_csv(output_val_path, index=False, header=False)
+        split_txt_merge(input_dir1, input_dir2, output_dir, suffix)
     print(f'merging {input_dir1} + {input_dir2} --> {output_dir} finished!')
 
 def data_copy(input_dir, output_dir):
@@ -1142,6 +1168,179 @@ def new_psdata_add_pipline2_80(input_ps_mseg_c6_dir, src_fused_mseg_c6_dir, dst_
         add_suffix=''
     )
 
+
+def psdata_add_piplines(input_ps_mseg_c6_dir, src_fused_mseg_c6_dir, dst_fused_mseg_c6_dir, add_train_ratio=1, selected_suffix_list=[], copy=True):
+    for idx, selected_suffix in enumerate(selected_suffix_list):
+        if copy and idx==0:
+            pass
+        else:
+            copy = False
+        psdata_add_pipline(input_ps_mseg_c6_dir, src_fused_mseg_c6_dir, dst_fused_mseg_c6_dir, add_train_ratio, selected_suffix, copy)
+
+def psdata_add_pipline(input_ps_mseg_c6_dir, src_fused_mseg_c6_dir, dst_fused_mseg_c6_dir, add_train_ratio=1, selected_suffix='', copy=True):
+    dst_fused_seg_c6_dir = dst_fused_mseg_c6_dir.replace('_mseg', '_seg')
+    dst_fused_mseg_c5_dir = dst_fused_mseg_c6_dir.replace('_c6', '_c5')
+    dst_fused_mseg_c5_l2_dir = dst_fused_mseg_c5_dir.replace('_c5', '_c5_l2')
+    dst_fused_seg_c5_dir = dst_fused_mseg_c5_dir.replace('_mseg', '_seg')
+
+    # split current data
+    random_select(input_ps_mseg_c6_dir, train_ratio=add_train_ratio, suffix=selected_suffix)
+
+
+    # get fused mseg c6 dataset
+    if copy:
+        # data_merge(
+        #     input_ps_mseg_c6_dir,
+        #     src_fused_mseg_c6_dir,
+        #     dst_fused_mseg_c6_dir,
+        #     cp_split=True,
+        #     suffix=selected_suffix,
+        # )
+        shutil.copy(ATT_FILE, os.path.join(dst_fused_mseg_c6_dir, 'attribute.yaml'))
+        shutil.copy(CLASS_C6_FILE, os.path.join(dst_fused_mseg_c6_dir, 'class.txt'))
+    else:
+        split_txt_merge(input_ps_mseg_c6_dir, src_fused_mseg_c6_dir, dst_fused_mseg_c6_dir, suffix=selected_suffix,)
+
+    # get fused mseg c5 dataset
+    if copy:
+        mseg_class_update2(
+            dst_fused_mseg_c6_dir,
+            dst_fused_mseg_c5_dir,
+        )
+        shutil.copy(ATT_FILE, os.path.join(dst_fused_mseg_c5_dir, 'attribute.yaml'))
+        shutil.copy(CLASS_C5_FILE, os.path.join(dst_fused_mseg_c5_dir, 'class.txt'))
+    ref_split(
+        os.path.join(dst_fused_mseg_c6_dir, f'val{selected_suffix}.txt'),
+        os.path.join(dst_fused_mseg_c5_dir, 'images'),
+        os.path.join(dst_fused_mseg_c5_dir, 'labels'),
+        add_suffix=selected_suffix
+    )
+
+
+    # get fused mseg c5 l2 dataset
+    if copy:
+        mseg_attribute_update2(dst_fused_mseg_c5_dir, dst_fused_mseg_c5_l2_dir)
+        shutil.copy(ATT_L2_FILE, os.path.join(dst_fused_mseg_c5_l2_dir, 'attribute.yaml'))
+        shutil.copy(CLASS_C5_FILE, os.path.join(dst_fused_mseg_c5_l2_dir, 'class.txt'))
+    ref_split(
+        os.path.join(dst_fused_mseg_c5_dir, f'val{selected_suffix}.txt'),
+        os.path.join(dst_fused_mseg_c5_l2_dir, 'images'),
+        os.path.join(dst_fused_mseg_c5_l2_dir, 'labels'),
+        add_suffix=selected_suffix
+    )
+
+
+
+    # get fused seg c6 dataset
+    if copy:
+        mseg2seg(
+            dst_fused_mseg_c6_dir,
+            dst_fused_seg_c6_dir,
+        )
+        shutil.copy(CLASS_C6_FILE, os.path.join(dst_fused_seg_c6_dir, 'class.txt'))
+    ref_split(
+        os.path.join(dst_fused_mseg_c6_dir, f'val{selected_suffix}.txt'),
+        os.path.join(dst_fused_seg_c6_dir, 'images'),
+        os.path.join(dst_fused_seg_c6_dir, 'labels'),
+        add_suffix=selected_suffix
+    )
+
+
+    # get fused seg c5 dataset
+    if copy:
+        mseg2seg(
+            dst_fused_mseg_c5_dir,
+            dst_fused_seg_c5_dir,
+        )
+        shutil.copy(CLASS_C5_FILE, os.path.join(dst_fused_seg_c5_dir, 'class.txt'))
+    ref_split(
+        os.path.join(dst_fused_mseg_c5_dir, f'val{selected_suffix}.txt'),
+        os.path.join(dst_fused_seg_c5_dir, 'images'),
+        os.path.join(dst_fused_seg_c5_dir, 'labels'),
+        add_suffix=selected_suffix
+    )
+
+
+def data_tf_piplines(dst_fused_mseg_c6_dir, train_ratio_list=[], selected_suffix_list=[], copy=True):
+    for idx in range(len(selected_suffix_list)):
+        train_ratio = train_ratio_list[idx]
+        selected_suffix = selected_suffix_list[idx]
+        if copy and idx==0:
+            pass
+        else:
+            copy = False
+        data_tf_pipline(dst_fused_mseg_c6_dir, train_ratio=train_ratio, selected_suffix=selected_suffix, copy=True)
+
+def data_tf_pipline(dst_fused_mseg_c6_dir, train_ratio=1, selected_suffix='', copy=True):
+    dst_fused_seg_c6_dir = dst_fused_mseg_c6_dir.replace('_mseg', '_seg')
+    dst_fused_mseg_c5_dir = dst_fused_mseg_c6_dir.replace('_c6', '_c5')
+    dst_fused_mseg_c5_l2_dir = dst_fused_mseg_c5_dir.replace('_c5', '_c5_l2')
+    dst_fused_seg_c5_dir = dst_fused_mseg_c5_dir.replace('_mseg', '_seg')
+
+    # split current data
+    random_select(dst_fused_mseg_c6_dir, train_ratio=train_ratio, suffix=selected_suffix)
+
+
+    # get fused mseg c5 dataset
+    if copy:
+        mseg_class_update2(
+            dst_fused_mseg_c6_dir,
+            dst_fused_mseg_c5_dir,
+        )
+        shutil.copy(ATT_FILE, os.path.join(dst_fused_mseg_c5_dir, 'attribute.yaml'))
+        shutil.copy(CLASS_C5_FILE, os.path.join(dst_fused_mseg_c5_dir, 'class.txt'))
+    ref_split(
+        os.path.join(dst_fused_mseg_c6_dir, f'val{selected_suffix}.txt'),
+        os.path.join(dst_fused_mseg_c5_dir, 'images'),
+        os.path.join(dst_fused_mseg_c5_dir, 'labels'),
+        add_suffix=selected_suffix
+    )
+
+
+    # get fused mseg c5 l2 dataset
+    if copy:
+        mseg_attribute_update2(dst_fused_mseg_c5_dir, dst_fused_mseg_c5_l2_dir)
+        shutil.copy(ATT_L2_FILE, os.path.join(dst_fused_mseg_c5_l2_dir, 'attribute.yaml'))
+        shutil.copy(CLASS_C5_FILE, os.path.join(dst_fused_mseg_c5_l2_dir, 'class.txt'))
+    ref_split(
+        os.path.join(dst_fused_mseg_c5_dir, f'val{selected_suffix}.txt'),
+        os.path.join(dst_fused_mseg_c5_l2_dir, 'images'),
+        os.path.join(dst_fused_mseg_c5_l2_dir, 'labels'),
+        add_suffix=selected_suffix
+    )
+
+
+
+    # get fused seg c6 dataset
+    if copy:
+        mseg2seg(
+            dst_fused_mseg_c6_dir,
+            dst_fused_seg_c6_dir,
+        )
+        shutil.copy(CLASS_C6_FILE, os.path.join(dst_fused_seg_c6_dir, 'class.txt'))
+    ref_split(
+        os.path.join(dst_fused_mseg_c6_dir, f'val{selected_suffix}.txt'),
+        os.path.join(dst_fused_seg_c6_dir, 'images'),
+        os.path.join(dst_fused_seg_c6_dir, 'labels'),
+        add_suffix=selected_suffix
+    )
+
+
+    # get fused seg c5 dataset
+    if copy:
+        mseg2seg(
+            dst_fused_mseg_c5_dir,
+            dst_fused_seg_c5_dir,
+        )
+        shutil.copy(CLASS_C5_FILE, os.path.join(dst_fused_seg_c5_dir, 'class.txt'))
+    ref_split(
+        os.path.join(dst_fused_mseg_c5_dir, f'val{selected_suffix}.txt'),
+        os.path.join(dst_fused_seg_c5_dir, 'images'),
+        os.path.join(dst_fused_seg_c5_dir, 'labels'),
+        add_suffix=selected_suffix
+    )
+
+
 def att_check(input_dir):
     label_list = os.listdir(input_dir)
     for label_name in tqdm(label_list):
@@ -1248,6 +1447,38 @@ def ref_k_fold(input_dir, k=5):
         print(f"  Train: {len(train_images)} images")
         print(f"  Val: {len(test_images)} images")
 
+
+def count_files(input_dir):
+    total = 0
+    for _,_, files in os.walk(input_dir):
+        total += len(files)
+    return total
+
+def delete_matching_files(input_dir1, input_dir2, dry_run=True):
+    before_opt = count_files(input_dir1)
+
+    stems_ref = set(Path(f).stem for f in os.listdir(input_dir2))
+
+    delected_count = 0
+
+    for root, dirs, files in os.walk(input_dir1):
+        for file in files:
+            file_path = os.path.join(root, file)
+            name_stem = Path(file).stem
+
+            base_stem, obj_id = name_stem.rsplit('_', 1)
+            if base_stem in stems_ref:
+                if dry_run:
+                    print(f'[PRE] delete: {name_stem}')
+                else:
+                    print(f'[INFO] delete: {name_stem}')
+                    os.remove(file_path)
+                delected_count += 1
+    after_opt = count_files(input_dir1)
+
+    print(f'before: {before_opt}, after: {after_opt}, delected: {delected_count}')
+
+
 if __name__ == '__main__':
     pass
     # new_psdata_add_pipline(
@@ -1286,19 +1517,34 @@ if __name__ == '__main__':
     # )
 
     # new_psdata_add_pipline2(
-    #     input_ps_mseg_c6_dir=r'/data/huilin/data/isds/fused_data/diffusion_data_0821',
-    #     src_fused_mseg_c6_dir=r'/data/huilin/data/isds/fused_data/data3899_mseg_c6_0818',
-    #     dst_fused_mseg_c6_dir=r'/data/huilin/data/isds/fused_data/data4267_mseg_c6_0821'
+    #     input_ps_mseg_c6_dir=r'/localnvme/data/billboard/ps_data/psdata_add827_0818_mseg_c6',
+    #     src_fused_mseg_c6_dir=r'/localnvme/data/billboard/fused_data/data3072_mseg_c6_0809',
+    #     dst_fused_mseg_c6_dir=r'/localnvme/data/billboard/fused_data/data3899_mseg_c6_0818'
     # )
+    # defect_list = ['deformation', 'broken', 'abandonment', 'corrosion']
+    # get_yolo_label_df(r'/localnvme/data/billboard/fused_data/data7436_mseg_c6_0912/labels/DA5148680_20250812140435100.txt', mdet=True, attributes=defect_list)
 
-    mseg_class_update2(
-        r'/data/huilin/data/isds/fused_data/data3899_mseg_c6_0818',
-        r'/data/huilin/data/isds/fused_data/data3899_mseg_c5_0818',
-    )
-
-    # new_psdata_add_pipline3(
-    #     input_ps_mseg_c6_dir=r'/data/huilin/data/isds/fused_data/diffusion_data_0821',
-    #     src_fused_mseg_c6_dir=r'/data/huilin/data/isds/fused_data/data3899_mseg_c6_0818',
-    #     dst_fused_mseg_c6_dir=r'/data/huilin/data/isds/fused_data/data4267_mseg_c6_0821'
-    # )
-
+    # def get_stem2img_dict(img_dir):
+    #     img_list = [img_name for img_name in os.listdir(img_dir)]
+    #     stem_list = [Path(img).stem for img in img_list]
+    #     stem2img_dict = dict(zip(stem_list, img_list))
+    #     return stem2img_dict
+    #
+    # def find_defect(label_dir, image_dir, defect_list):
+    #     defect_file_list = []
+    #     label_file_list = os.listdir(label_dir)
+    #     stem2img_dict = get_stem2img_dict(image_dir)
+    #     for label_name in tqdm(label_file_list):
+    #         input_label_path = os.path.join(label_dir, label_name)
+    #         df = get_yolo_label_df(input_label_path, mdet=True, attributes=defect_list)
+    #         with_defect = (df[defect_list] > 0).any().any()
+    #         if with_defect:
+    #             image_name = stem2img_dict[Path(label_name).stem]
+    #             defect_file_list.append(image_name)
+    #
+    #
+    # root_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c6_0912'
+    # image_dir = os.path.join(root_dir, 'images')
+    # label_dir = os.path.join(root_dir, 'labels')
+    # defect_list = ['deformation', 'broken', 'abandonment', 'corrosion']
+    # find_defect(label_dir, image_dir, defect_list)
