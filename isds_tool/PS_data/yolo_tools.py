@@ -1491,15 +1491,24 @@ def get_stem2name(input_dir):
     stem2name_dict = {Path(name).stem:name for name in name_list}
     return stem2name_dict
 
-def copy_ref(input_dir, output_dir, ref_dir):
-    os.makedirs(output_dir, exist_ok=True)
+def copy_ref_dir(input_dir, output_dir, ref_dir):
     ref_list = os.listdir(ref_dir)
+    copy_ref_list(input_dir, output_dir, ref_list)
+
+def copy_ref_list(input_dir, output_dir, ref_list):
+    os.makedirs(output_dir, exist_ok=True)
     input_stem2name = get_stem2name(input_dir)
     for ref_name in tqdm(ref_list):
         input_name = input_stem2name[Path(ref_name).stem]
         input_path = os.path.join(input_dir, input_name)
         output_path = os.path.join(output_dir, input_name)
         shutil.copy(input_path, output_path)
+
+def copy_ref_xlsx(input_dir, output_dir, ref_path, column='file_name'):
+    df = pd.read_excel(ref_path, sheet_name='Sheet1')
+    ref_list = df[column].to_list()
+    copy_ref_list(input_dir, output_dir, ref_list)
+
 
 if __name__ == '__main__':
     pass

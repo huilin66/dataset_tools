@@ -96,16 +96,20 @@ def yolo_to_custom(input_file, output_file, image_file, classes, atts=None):
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(custom_data, f, indent=2, ensure_ascii=False)
 
+def get_stem2name(input_dir):
+    name_list = os.listdir(input_dir)
+    stem2name_dict = {Path(name).stem:name for name in name_list}
+    return stem2name_dict
 
 def yolo_to_xanylabeling_dir(yolo_label_dir, images_dir, xanylabeling_label_dir, class_file, attribute_file=None):
     cats = get_cats(class_file)
     atts = get_atts(attribute_file) if attribute_file is not None else None
     os.makedirs(xanylabeling_label_dir, exist_ok=True)
-
+    img_stem2name = get_stem2name(images_dir)
     label_list = os.listdir(yolo_label_dir)
     for label_name in tqdm(label_list):
         json_name = Path(label_name).stem + ".json"
-        image_name = Path(label_name).stem + ".jpg"
+        image_name = img_stem2name[Path(label_name).stem]
         label_path = osp.join(yolo_label_dir, label_name)
         image_path = osp.join(images_dir, image_name)
         json_path = osp.join(xanylabeling_label_dir, json_name)
