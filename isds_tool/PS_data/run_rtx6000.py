@@ -1,9 +1,10 @@
 import os.path
 
 from yolo_mask_crop import *
-from yolo_tools import delete_matching_files, psdata_add_pipline, random_select_exclude, psdata_add_piplines, data_tf_piplines, ref_split, copy_ref
+from yolo_tools import copy_ref_xlsx, psdata_add_pipline, random_select_exclude, psdata_add_piplines, data_tf_piplines, ref_split
 from data_vis.yolo_sta import yolo_sta
 from data_vis.yolo_vis import yolo_mdet_vis
+from dataformat_swift.yolo2xanylabeling import yolo_to_xanylabeling_dir
 if __name__ == '__main__':
     pass
     # root_dir = r'/localnvme/data/billboard/bd_data/data687_mseg_c6_0915'
@@ -198,16 +199,36 @@ if __name__ == '__main__':
     #     seg=True,
     #     )
 
-    root_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c5_l2_0917'
-    dataset_dir = root_dir
-    image_dir = os.path.join(dataset_dir, 'images')
-    image_copy_dir = os.path.join(dataset_dir, 'result_analysis', 'images_gt')
-    labels_dir = os.path.join(dataset_dir, 'result_analysis', 'filter_gt_match_defect')
-    copy_ref(image_dir, image_copy_dir, labels_dir)
+    # root_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c5_l2_0917'
+    # dataset_dir = root_dir
+    # image_dir = os.path.join(dataset_dir, 'images')
+    # image_copy_dir = os.path.join(dataset_dir, 'result_analysis', 'images_gt')
+    # labels_dir = os.path.join(dataset_dir, 'result_analysis', 'filter_gt_match_defect')
+    # copy_ref(image_dir, image_copy_dir, labels_dir)
+    #
+    # root_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c5_l2_0917'
+    # dataset_dir = root_dir
+    # image_dir = os.path.join(dataset_dir, 'images')
+    # image_copy_dir = os.path.join(dataset_dir, 'result_analysis', 'images_pre')
+    # labels_dir = os.path.join(dataset_dir, 'result_analysis', 'filter_pre_match_defect')
+    # copy_ref(image_dir, image_copy_dir, labels_dir)
 
-    root_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c5_l2_0917'
-    dataset_dir = root_dir
-    image_dir = os.path.join(dataset_dir, 'images')
-    image_copy_dir = os.path.join(dataset_dir, 'result_analysis', 'images_pre')
-    labels_dir = os.path.join(dataset_dir, 'result_analysis', 'filter_pre_match_defect')
-    copy_ref(image_dir, image_copy_dir, labels_dir)
+    # dataset_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c6_0917'
+    # image_dir = os.path.join(dataset_dir, 'images')
+    # label_dir = os.path.join(dataset_dir, 'labels')
+    # select_dir = os.path.join(dataset_dir, 'select')
+    # image_select_dir = os.path.join(select_dir, 'images')
+    # label_select_dir = os.path.join(select_dir, 'labels')
+    # ref_path = r'/localnvme/data/billboard/fused_data/data7436_mseg_c5_l2_0917/result_analysis/check0919.xlsx'
+    # copy_ref_xlsx(image_dir, image_select_dir, ref_path, column='file_name')
+    # copy_ref_xlsx(label_dir, label_select_dir, ref_path, column='file_name')
+
+
+    dataset_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c6_0917'
+    select_dir = os.path.join(dataset_dir, 'select')
+    image_select_dir = os.path.join(select_dir, 'images')
+    label_select_dir = os.path.join(select_dir, 'labels')
+    json_dir = os.path.join(select_dir, 'json')
+    class_file = os.path.join(dataset_dir, 'class.txt')
+    attribute_file = os.path.join(dataset_dir, 'attribute.yaml')
+    yolo_to_xanylabeling_dir(label_select_dir, image_select_dir, json_dir, class_file, attribute_file)
