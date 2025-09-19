@@ -1,0 +1,199 @@
+import os.path
+
+from yolo_mask_crop import *
+from yolo_tools import delete_matching_files, psdata_add_pipline, random_select_exclude, psdata_add_piplines, data_tf_piplines, ref_split
+from data_vis.yolo_sta import yolo_sta
+from data_vis.yolo_vis import yolo_mdet_vis
+if __name__ == '__main__':
+    pass
+    # root_dir = r'/localnvme/data/billboard/bd_data/data687_mseg_c6_0915'
+    # dataset_dir = root_dir
+    # image_dir = os.path.join(dataset_dir, 'images')
+    # labels_dir = os.path.join(dataset_dir, 'labels')
+    # image_crop_dir = os.path.join(dataset_dir, 'images_crop')
+    # class_file = os.path.join(dataset_dir, 'class.txt')
+    # attribute_file = os.path.join(dataset_dir, 'attribute.yaml')
+    # myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
+    #            attribute_file=attribute_file, seg=True, annotation=False,
+    #            save_method='attribute', only_defect=True, with_boundary=True,
+    #            crop_method='with_background_image_shape')
+    # #
+    #
+    # data_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c6_0912'
+    # yolo_sta(
+    #     # img_dir=os.path.join(data_dir, "images"),
+    #     gt_dir=os.path.join(data_dir, "labels"),
+    #     result_dir=os.path.join(data_dir, "labels_sta"),
+    #     class_path=os.path.join(data_dir, "class.txt"),
+    #     attribute_path=os.path.join(data_dir, "attribute.yaml"),
+    #     seg=True,
+    # )
+    # data_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c6_0917'
+    # yolo_sta(
+    #     # img_dir=os.path.join(data_dir, "images"),
+    #     gt_dir=os.path.join(data_dir, "labels"),
+    #     result_dir=os.path.join(data_dir, "labels_sta"),
+    #     class_path=os.path.join(data_dir, "class.txt"),
+    #     attribute_path=os.path.join(data_dir, "attribute.yaml"),
+    #     seg=True,
+    # )
+    # data_dir = r'/localnvme/data/billboard/fused_data/data4197_mseg_c6_0914'
+    # yolo_sta(
+    #     # img_dir=os.path.join(data_dir, "images"),
+    #     gt_dir=os.path.join(data_dir, "labels"),
+    #     result_dir=os.path.join(data_dir, "labels_sta"),
+    #     class_path=os.path.join(data_dir, "class.txt"),
+    #     attribute_path=os.path.join(data_dir, "attribute.yaml"),
+    #     seg=True,
+    # )
+    # data_dir = r'/localnvme/data/billboard/fused_data/data3617_mseg_c6_0915'
+    # yolo_sta(
+    #     # img_dir=os.path.join(data_dir, "images"),
+    #     gt_dir=os.path.join(data_dir, "labels"),
+    #     result_dir=os.path.join(data_dir, "labels_sta"),
+    #     class_path=os.path.join(data_dir, "class.txt"),
+    #     attribute_path=os.path.join(data_dir, "attribute.yaml"),
+    #     seg=True,
+    # )
+    # root_dir = r'/localnvme/data/billboard/fused_data/data5894_mseg_c5_0822/val'
+    # attribute_file = os.path.join(root_dir, 'attribute.yaml')
+    # class_file = os.path.join(root_dir, 'class_c5.txt')
+    # image_dir = os.path.join(root_dir, 'images')
+    # label_dir = os.path.join(root_dir, 'prediction_score')
+    # txt_dir = os.path.join(label_dir, 'txt')
+    # vis_dir = os.path.join(label_dir, 'img')
+    # yolo_mdet_vis(image_dir, txt_dir, vis_dir, class_file, crop_dir=None, seg=True, attribute_file=attribute_file, filter_no=False, att_score_vis=True)
+
+    # data3899_dir = r'/localnvme/data/billboard/fused_data/data3899_mseg_c6_0818'
+    # data626_dr = r'/localnvme/data/billboard/bd_data/data626_mseg_c6_check0624'
+    #
+    # random_select_exclude(data3899_dir, data626_dr, train_ratio=0.75, suffix='_75p')
+    # random_select_exclude(data3899_dir, data626_dr, train_ratio=0.7, suffix='_70p')
+    # random_select_exclude(data3899_dir, data626_dr, train_ratio=0.65, suffix='_65p')
+    # random_select_exclude(data3899_dir, data626_dr, train_ratio=0.6, suffix='_60p')
+
+    # psdata_add_pipline(
+    #     r'/localnvme/data/billboard/ps_data/psdata_add2177_0911_mseg_c6',
+    #     r'/localnvme/data/billboard/fused_data/data3899_mseg_c6_0818',
+    #     r'/localnvme/data/billboard/fused_data/data6010_mseg_c6_0911',
+    #     add_train_ratio=1, selected_suffix='',copy=True
+    # )
+    # psdata_add_pipline(
+    #     r'/localnvme/data/billboard/ps_data/psdata_add2177_0911_mseg_c6',
+    #     r'/localnvme/data/billboard/fused_data/data3899_mseg_c6_0818',
+    #     r'/localnvme/data/billboard/fused_data/data6010_mseg_c6_0911',
+    #     add_train_ratio=1, selected_suffix='_80p',copy=False
+    # )
+    #
+    # psdata_add_piplines(
+    #     r'/localnvme/data/billboard/ps_data/psdata_add4924_0912_mseg_c6',
+    #     r'/localnvme/data/billboard/fused_data/data6010_mseg_c6_0911',
+    #     r'/localnvme/data/billboard/fused_data/data7436_mseg_c6_0914',
+    #     add_train_ratio=1, selected_suffix_list=['_80p', '_75p', '_70p', '_65p', '_60p'], copy=True
+    # )
+
+    # data_tf_piplines(
+    #     r'/localnvme/data/billboard/fused_data/data4197_mseg_c6_0917',
+    #     train_ratio_list=[0.8, 0.75, 0.7, 0.65, 0.6],
+    #     selected_suffix_list=['_80p', '_75p', '_70p', '_65p', '_60p'],
+    #     copy=True
+    # )
+    #
+    #
+    # ref_split(
+    #     '/localnvme/data/billboard/fused_data/data3617_mseg_c6_0915/val_80p.txt',
+    #     '/localnvme/data/billboard/fused_data/data4197_mseg_c5_0917/images',
+    #     add_suffix = '_80p_ref'
+    # )
+    # ref_split(
+    #     '/localnvme/data/billboard/fused_data/data3617_mseg_c6_0915/val_80p.txt',
+    #     '/localnvme/data/billboard/fused_data/data4197_mseg_c5_l2_0917/images',
+    #     add_suffix = '_80p_ref'
+    # )
+    #
+    # root_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c5_l2_0917'
+    # dataset_dir = root_dir
+    # image_dir = os.path.join(dataset_dir, 'images')
+    # labels_dir = os.path.join(dataset_dir, 'result_analysis', 'pred_filter_pre_match_defect')
+    # image_crop_dir = os.path.join(dataset_dir, 'images_crop_pre')
+    # class_file = os.path.join(dataset_dir, 'class_c5.txt')
+    # attribute_file = os.path.join(dataset_dir, 'attribute_l2.yaml')
+    # myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
+    #            attribute_file=attribute_file, seg=True, annotation=False,
+    #            save_method='attribute', only_defect=True, with_boundary=True,
+    #            crop_method='with_background_image_shape')
+
+    root_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c5_l2_0917'
+    dataset_dir = root_dir
+    image_dir = os.path.join(dataset_dir, 'images')
+    labels_dir = os.path.join(dataset_dir, 'result_analysis', 'filter_pre_match_defect')
+    image_crop_dir = os.path.join(dataset_dir, 'result_analysis', 'images_crop_pre')
+    class_file = os.path.join(dataset_dir, 'class_c5.txt')
+    attribute_file = os.path.join(dataset_dir, 'attribute_l2.yaml')
+    myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
+               attribute_file=attribute_file, seg=True, annotation=False,
+               save_method='attribute', only_defect=True, with_boundary=True,
+               crop_method='with_background_image_shape')
+
+
+    root_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c5_l2_0917'
+    dataset_dir = root_dir
+    image_dir = os.path.join(dataset_dir, 'images')
+    labels_dir = os.path.join(dataset_dir, 'result_analysis', 'filter_gt_match_defect')
+    image_crop_dir = os.path.join(dataset_dir, 'result_analysis', 'images_crop_gt')
+    class_file = os.path.join(dataset_dir, 'class_c5.txt')
+    attribute_file = os.path.join(dataset_dir, 'attribute_l2.yaml')
+    myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
+               attribute_file=attribute_file, seg=True, annotation=False,
+               save_method='attribute', only_defect=True, with_boundary=True,
+               crop_method='with_background_image_shape')
+
+
+
+    # root_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c5_l2_0917'
+    # dataset_dir = root_dir
+    # image_dir = os.path.join(dataset_dir, 'images')
+    # labels_dir = os.path.join(dataset_dir, 'result_analysis', 'filter_pre_match_defect')
+    # vis_dir = os.path.join(dataset_dir, 'result_analysis', 'images_vis_pre')
+    # class_file = os.path.join(dataset_dir, 'class_c5.txt')
+    # attribute_file = os.path.join(dataset_dir, 'attribute_l2.yaml')
+    # yolo_mdet_vis(
+    #     image_dir,
+    #     labels_dir,
+    #     vis_dir,
+    #     class_file,
+    #     attribute_file=attribute_file,
+    #     seg=True,
+    #     )
+    #
+    # root_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c5_l2_0917'
+    # dataset_dir = root_dir
+    # image_dir = os.path.join(dataset_dir, 'images')
+    # labels_dir = os.path.join(dataset_dir, 'result_analysis', 'filter_gt_match_defect')
+    # vis_dir = os.path.join(dataset_dir, 'result_analysis', 'images_vis_gt')
+    # class_file = os.path.join(dataset_dir, 'class_c5.txt')
+    # attribute_file = os.path.join(dataset_dir, 'attribute_l2.yaml')
+    # yolo_mdet_vis(
+    #     image_dir,
+    #     labels_dir,
+    #     vis_dir,
+    #     class_file,
+    #     attribute_file=attribute_file,
+    #     seg=True,
+    #     )
+
+    # root_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c5_l2_0917'
+    # dataset_dir = root_dir
+    # image_dir = os.path.join(dataset_dir, 'images')
+    # labels_dir = os.path.join(dataset_dir, 'labels')
+    # vis_dir = os.path.join(dataset_dir, 'result_analysis', 'images_vis')
+    # class_file = os.path.join(dataset_dir, 'class_c5.txt')
+    # attribute_file = os.path.join(dataset_dir, 'attribute_l2.yaml')
+    # yolo_mdet_vis(
+    #     image_dir,
+    #     labels_dir,
+    #     vis_dir,
+    #     class_file,
+    #     attribute_file=attribute_file,
+    #     seg=True,
+    #     )

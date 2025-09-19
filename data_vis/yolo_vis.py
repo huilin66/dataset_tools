@@ -59,28 +59,16 @@ def get_attribute_len(attributes):
     attribute_len = len(attributes)
     return attribute_len
 
-def get_attribute(attribute_dict, gt_attribute):
-    # attributes = {}
-    # idx = 0
-    # attribute_len = get_attribute_len(attribute_dict)
-    # assert attribute_len == len(gt_attribute)
-    # if isinstance(gt_attribute[0], str):
-    #     gt_attribute = [int(gt_value) for gt_value in gt_attribute]
-    # for k, v in attribute_dict.items():
-    #     assert len(v) > 1
-    #     attributes[k] = False
-    #     for i in range(1, len(v)):
-    #         if gt_attribute[idx] == 1:
-    #             attributes[k] = v[i]
-    #         idx += 1
-    # return attributes
-
+def get_attribute(attribute_dict, gt_attribute, att_score_vis=False):
     attributes_recover = {}
     attribute_dict_key_list = list(attribute_dict.keys())
 
     for idx, gt_value in enumerate(gt_attribute):
         attribute_name = attribute_dict_key_list[idx]
-        attribute_value = attribute_dict[attribute_name][int(gt_value)]
+        if att_score_vis:
+            attribute_value = round(float(gt_value), 4)
+        else:
+            attribute_value = attribute_dict[attribute_name][int(gt_value)]
         attributes_recover[attribute_name] = attribute_value
     return attributes_recover
 # endregion
@@ -202,7 +190,7 @@ def xywh2xyxy(x, w1, h1, img, img_vis, cats, crop=True, attributes=None, filter_
         attribute_strs = None
     return img_vis, img_crop, attribute_strs
 
-def xywh2poly(x, w, h, img, img_vis, cats, crop=True, attributes=None, filter_no=False, alpha=0.3, tf=1, sf=2/3, add_mask=True):
+def xywh2poly(x, w, h, img, img_vis, cats, crop=True, attributes=None, filter_no=False, alpha=0.3, tf=1, sf=2/3, add_mask=True, att_score_vis=False):
     label, polypos = int(float(x[0])),x[1:]
     polys = []
     for i in range(0, len(polypos), 2):
@@ -238,7 +226,6 @@ def xywh2poly(x, w, h, img, img_vis, cats, crop=True, attributes=None, filter_no
                   color=colormap[int(label)], thickness=-1)
     cv2.putText(img_vis, cats[int(label)], (int(top_left_x), int(top_left_y)+7), cv2.FONT_HERSHEY_SIMPLEX  , 0.5, (0, 0, 0), 1)
 
-    # print(cats[int(label)], int(top_left_y),int(bottom_right_y), int(top_left_x),int(bottom_right_x), int(bottom_right_y)-int(top_left_y), int(bottom_right_x)-int(top_left_x))
     if attributes is not None:
         count = 0
         count2 = 0
@@ -342,7 +329,8 @@ def yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=
             cv2.imwrite(save_path, img_vis)
 
 def yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=None, attribute_file=None,
-                  filter_no=True, seg=False, crop_keep_shape=False, det_crop=True, seg_crop=False, single_save=False, add_mask=True):
+                  filter_no=True, seg=False, crop_keep_shape=False, det_crop=True, seg_crop=False, single_save=False, add_mask=True,
+                  att_score_vis=False):
     cats = get_cats(class_file)
     if attribute_file is not None:
         with open(attribute_file, 'r') as file:
@@ -383,7 +371,7 @@ def yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=
             for idx, x in enumerate(lb):
                 attribute_len = int(x[1])
                 gt_attribute = x[2:2+attribute_len]
-                attribute = get_attribute(attribute_dict, gt_attribute)
+                attribute = get_attribute(attribute_dict, gt_attribute, att_score_vis)
                 x = np.concatenate([x[:1], x[2+attribute_len:]])
                 if not seg:
                     if crop_dir is None:
@@ -408,7 +396,7 @@ def yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=
                             cv2.imwrite(save_path, img_crop)
                 else:
                     if crop_dir is None:
-                        img_vis, _, _ = xywh2poly(x, w, h, img, img_vis, cats=cats, attributes=attribute, filter_no=filter_no, add_mask=add_mask)
+                        img_vis, _, _ = xywh2poly(x, w, h, img, img_vis, cats=cats, attributes=attribute, filter_no=filter_no, add_mask=add_mask, att_score_vis=att_score_vis)
                     else:
                         img_vis, img_crop, attribute_strs = xywh2poly(x, w, h, img, img_vis, cats=cats, crop=True, attributes=attribute, filter_no=filter_no, add_mask=add_mask)
                         cat = cats[int(x[0])]
