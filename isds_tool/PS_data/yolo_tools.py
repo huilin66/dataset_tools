@@ -1486,6 +1486,20 @@ def delete_matching_files(input_dir1, input_dir2, dry_run=True):
 
     print(f'before: {before_opt}, after: {after_opt}, delected: {delected_count}')
 
+def get_stem2name(input_dir):
+    name_list = os.listdir(input_dir)
+    stem2name_dict = {Path(name).stem:name for name in name_list}
+    return stem2name_dict
+
+def copy_ref(input_dir, output_dir, ref_dir):
+    os.makedirs(output_dir, exist_ok=True)
+    ref_list = os.listdir(ref_dir)
+    input_stem2name = get_stem2name(input_dir)
+    for ref_name in tqdm(ref_list):
+        input_name = input_stem2name[Path(ref_name).stem]
+        input_path = os.path.join(input_dir, input_name)
+        output_path = os.path.join(output_dir, input_name)
+        shutil.copy(input_path, output_path)
 
 if __name__ == '__main__':
     pass
