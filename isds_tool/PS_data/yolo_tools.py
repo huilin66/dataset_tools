@@ -712,39 +712,47 @@ def get_attributes(attribute_path):
     attribute_keys = list(attribute_dict.keys())
     return attribute_keys
 
-def get_yolo_label_df(gt_path, mdet=False, attributes=None, all_info=False):
+def get_yolo_label_df(gt_path, mdet=False, attributes=None, with_track_id=False, with_object_id=False):
     if mdet:
         assert attributes is not None, 'attribute_path must be provided, which is "%s"' % attributes
         if isinstance(attributes, str):
             attribute_keys = get_attributes(attributes)
         elif isinstance(attributes, list):
             attribute_keys = attributes
-        names = ['category'] + ['attribute_len'] + attribute_keys + [ 'center_x', 'center_y', 'width', 'height']
+        names = ['category'] + ['attribute_len'] + attribute_keys + [ 'center_x', 'center_y', 'width', 'height', 'image']
     else:
-        names = ['category', 'center_x', 'center_y', 'width', 'height']
+        names = ['category', 'center_x', 'center_y', 'width', 'height', 'image_name']
+    if with_track_id:
+        names = names + ['track_id']
+    if with_object_id:
+        names = names + ['object_id']
 
-    if all_info:
-        names = ['file_name', 'obj_id']+names
 
-    df = pd.DataFrame(None, columns=names + ['image'])
+    df = pd.DataFrame(None, columns=names)
     with open(gt_path, 'r') as f:
         data = f.readlines()
         for id_line, line in enumerate(data):
             parts = line.strip().split(' ')
             category = int(parts[0])
-            image_name = Path(gt_path).stem
+            image_name = Path(gt_path).name
             if mdet:
                 att_len = int(parts[1])
                 atts = list(map(float, parts[2:2 + att_len]))
-                polygons = list(map(float, parts[2 + att_len:]))
-                xywh = poly2xywh(polygons)
-                info = [category, att_len] + atts + xywh + [image_name]
+                if with_track_id:
+                    track_id = int(parts[-1])
+                    polygons = list(map(float, parts[2 + att_len:-1]))
+                    xywh = poly2xywh(polygons)
+                    info = [category, att_len] + atts + xywh + [image_name, track_id]
+                else:
+                    polygons = list(map(float, parts[2 + att_len:]))
+                    xywh = poly2xywh(polygons)
+                    info = [category, att_len] + atts + xywh + [image_name]
+                if with_object_id:
+                    info += [id_line]
             else:
                 polygons = list(map(float, parts[1:]))
                 xywh = poly2xywh(polygons)
                 info = [category] + xywh + [image_name]
-            if all_info:
-                info = [Path(gt_path).stem, id_line] + info
             df.loc[len(df)] = info
     return df
 
