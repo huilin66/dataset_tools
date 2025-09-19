@@ -301,14 +301,21 @@ class ImageDisplayWidget(QWidget):
         
     def get_risk_description(self, risk_levels: List[int]) -> str:
         """获取risk描述"""
+        # 显示顺序: abandonment, broken, corrosion, deformation
+        # 数据顺序: deformation, broken, abandonment, corrosion
         risk_names = ["abandonment", "broken", "corrosion", "deformation"]
         risk_level_names = {0: "No", 1: "Medium", 2: "High"}
         
+        # 建立从显示索引到数据索引的映射
+        data_order = [2, 1, 3, 0]  # 索引映射 (从显示顺序到数据顺序)
+        
         descriptions = []
-        for i, level in enumerate(risk_levels):
-            if level > 0:
-                level_name = risk_level_names[level]
-                descriptions.append(f"{risk_names[i]}: {level_name}")
+        for i, display_name in enumerate(risk_names):
+            if i < len(data_order) and data_order[i] < len(risk_levels):
+                level = risk_levels[data_order[i]]
+                if level > 0:
+                    level_name = risk_level_names[level]
+                    descriptions.append(f"{display_name}: {level_name}")
                 
         return ", ".join(descriptions) if descriptions else "无风险"
         

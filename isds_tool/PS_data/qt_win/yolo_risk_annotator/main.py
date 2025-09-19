@@ -87,7 +87,8 @@ class YOLORiskAnnotator(QMainWindow):
         self.risk_editor = RiskEditorWidget()
         self.risk_editor.risk_updated.connect(self.on_risk_updated)
         self.risk_editor.object_id_updated.connect(self.on_object_id_updated)
-        main_layout.addWidget(self.risk_editor, 2, 0, 1, 1)
+        self.risk_editor.class_id_updated.connect(self.on_class_id_updated)
+        main_layout.addWidget(self.risk_editor, 3, 0, 1, 1)
         
         # 设置布局比例
         main_layout.setColumnStretch(0, 3)  # 图像显示区域占3份
@@ -165,6 +166,7 @@ class YOLORiskAnnotator(QMainWindow):
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     self.class_names = [line.strip() for line in f.readlines()]
+                    self.risk_editor.class_names = self.class_names
                 
                 self.statusBar().showMessage(f"已加载类别文件: {file_path}，共{len(self.class_names)}个类别")
                 QMessageBox.information(self, "成功", f"已成功加载{len(self.class_names)}个类别")
@@ -249,11 +251,22 @@ class YOLORiskAnnotator(QMainWindow):
             
             # 显示风险信息
             risk_names = []
+            # 读取保存顺序: deformation, broken, abandonment, corrosion
+            risk_types = ["deformation", "broken", "abandonment", "corrosion"]
+            # 显示顺序映射: abandonment, broken, corrosion, deformation
+            display_order = [2, 1, 3, 0]  # 索引映射 (从读取顺序到显示顺序)
+            
+            # 先创建按显示顺序排序的风险信息字典
+            risk_info_dict = {}
             for j, level in enumerate(risk_levels):
                 if level > 0:  # 只显示有风险的项目
                     level_name = {0: "No", 1: "Medium", 2: "High"}[level]
-                    risk_types = ["abandonment", "broken", "corrosion", "deformation"]
-                    risk_names.append(f"{risk_types[j]}: {level_name}")
+                    risk_info_dict[j] = f"{risk_types[j]}: {level_name}"
+            
+            # 按照显示顺序收集风险信息
+            for display_idx in display_order:
+                if display_idx in risk_info_dict:
+                    risk_names.append(risk_info_dict[display_idx])
                     
             if risk_names:
                 item_text += f" ({', '.join(risk_names)})"
@@ -274,7 +287,8 @@ class YOLORiskAnnotator(QMainWindow):
             self.selected_mask_index = mask_index
             risk = self.current_risks[mask_index]
             object_id = self.current_masks[mask_index]['object_id']
-            self.risk_editor.set_risk_data(risk, object_id)
+            class_id = self.current_masks[mask_index]['class_id']
+            self.risk_editor.set_risk_data(risk, object_id, class_id)
             # 更新mask列表选中状态
             self.update_mask_info()
         else:
@@ -427,7 +441,27 @@ class YOLORiskAnnotator(QMainWindow):
                 self.image_display.display_image_with_masks(image, self.current_masks, self.current_risks, self.class_names, self.image_display.current_image_name)
             
             self.statusBar().showMessage(f"Object ID已从 {old_id} 更新为 {new_id}")
+
+    def on_class_id_updated(self, new_class):
+        """class_id更新事件"""
+        if self.selected_mask_index >= 0 and self.selected_mask_index < len(self.current_masks):
+            # 更新内存中的object_id
+            old_class = self.current_masks[self.selected_mask_index]['class_id']
+            self.current_masks[self.selected_mask_index]['class_id'] = new_class
             
+            # 保存到文件
+            self.save_updated_labels()
+            
+            # 更新显示
+            self.update_mask_info()
+            
+            # 刷新图像显示
+            image = cv2.imread(self.current_image_path)
+            if image is not None:
+                self.image_display.display_image_with_masks(image, self.current_masks, self.current_risks, self.class_names, self.image_display.current_image_name)
+            
+            self.statusBar().showMessage(f"Class ID已从 {old_class} 更新为 {new_class}")
+
     def save_updated_labels(self):
         """保存更新后的标签文件"""
         if not self.current_label_path or not self.current_masks:

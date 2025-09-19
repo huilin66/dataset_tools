@@ -198,7 +198,7 @@ def json2yolo(json_file):
     return yolo_results
 
 
-def json2yolo_track(json_file, img_size=[4096, 2456]):
+def json2yolo_track(json_file, img_size=[4096, 2456], mdet=False, seg=False, with_object_id=False):
 
     with open(json_file, 'r') as f:
         datas = json.load(f)
@@ -208,16 +208,30 @@ def json2yolo_track(json_file, img_size=[4096, 2456]):
         lines = []
         for record in data:
             cat_id = record['category']
-            obj_id = record['id']
-            box = record['box']
-            x1,y1,x2,y2 = box[0]/img_size[0], box[1]/img_size[1], box[2]/img_size[0], box[3]/img_size[1]
-            x_center = (x1+x2)/2
-            y_center = (y1+y2)/2
-            width = x2-x1
-            height = y2-y1
-            box = [x_center, y_center, width, height]
+            nums = [cat_id]
+            if mdet:
+                risk_a_value = record['risk_a_value']
+                risk_b_value = record['risk_b_value']
+                risk_c_value = record['risk_c_value']
+                risk_d_value = record['risk_d_value']
+                nums += [4, risk_a_value, risk_b_value, risk_c_value, risk_d_value]
+            if seg:
+                polygon = record['uvs']
+                polygon = [item for sublist in polygon for item in sublist]
+                nums += polygon
+            else:
+                box = record['box']
+                x1,y1,x2,y2 = box[0]/img_size[0], box[1]/img_size[1], box[2]/img_size[0], box[3]/img_size[1]
+                x_center = (x1+x2)/2
+                y_center = (y1+y2)/2
+                width = x2-x1
+                height = y2-y1
+                box = [x_center, y_center, width, height]
+                nums += box
+            if with_object_id:
+                obj_id = record['id']
+                nums += [obj_id]
 
-            nums = [cat_id] + box + [obj_id]
             nums_str = list(map(str, nums))
             line = ' '.join(nums_str)
             lines.append(line+'\n')
@@ -282,8 +296,58 @@ def esimage_merge(input_dir):
         if os.path.exists(input6_path):
             shutil.copy(input6_path, os.path.join(image_dir, input6_name))
 
-def esresult2yolo(input_dir):
+# def esresult2yolo(input_dir):
+#     json_dir = os.path.join(input_dir, 'output')
+#     yolo_dir = os.path.join(input_dir, 'yolo_dataset')
+#     image_dir = os.path.join(yolo_dir, 'images')
+#     label_dir = os.path.join(yolo_dir, 'labels')
+#     print(f'reset {label_dir}...')
+#     shutil.rmtree(label_dir) if os.path.exists(label_dir) else None
+#     os.makedirs(label_dir, exist_ok=True)
+
+#     input1_stem2img = get_stem2img(os.path.join(input_dir, 'input_1'))
+#     input2_stem2img = get_stem2img(os.path.join(input_dir, 'input_2'))
+#     input3_stem2img = get_stem2img(os.path.join(input_dir, 'input_3'))
+#     input4_stem2img = get_stem2img(os.path.join(input_dir, 'input_4'))
+#     input5_stem2img = get_stem2img(os.path.join(input_dir, 'input_5'))
+#     input6_stem2img = get_stem2img(os.path.join(input_dir, 'input_6'))
+
+#     json_list = os.listdir(json_dir)
+#     for json_name in tqdm(json_list):
+#         yolo_results = json2yolo(os.path.join(json_dir, json_name))
+
+#         timestamp_stem = Path(json_name).stem
+#         input1_name = input1_stem2img[timestamp_stem] if timestamp_stem in input1_stem2img else 'None'
+#         input2_name = input2_stem2img[timestamp_stem] if timestamp_stem in input2_stem2img else 'None'
+#         input3_name = input3_stem2img[timestamp_stem] if timestamp_stem in input3_stem2img else 'None'
+#         input4_name = input4_stem2img[timestamp_stem] if timestamp_stem in input4_stem2img else 'None'
+#         input5_name = input5_stem2img[timestamp_stem] if timestamp_stem in input5_stem2img else 'None'
+#         input6_name = input6_stem2img[timestamp_stem] if timestamp_stem in input6_stem2img else 'None'
+
+#         input1_path = os.path.join(image_dir, input1_name)
+#         input2_path = os.path.join(image_dir, input2_name)
+#         input3_path = os.path.join(image_dir, input3_name)
+#         input4_path = os.path.join(image_dir, input4_name)
+#         input5_path = os.path.join(image_dir, input5_name)
+#         input6_path = os.path.join(image_dir, input6_name)
+
+#         if os.path.exists(input1_path):
+#             write2txt(os.path.join(label_dir, Path(input1_name).stem+'.txt'), yolo_results[0])
+#         if os.path.exists(input2_path):  
+#             write2txt(os.path.join(label_dir, Path(input2_name).stem+'.txt'), yolo_results[1])
+#         if os.path.exists(input3_path):  
+#             write2txt(os.path.join(label_dir, Path(input3_name).stem+'.txt'), yolo_results[2])
+#         if os.path.exists(input4_path):
+#             write2txt(os.path.join(label_dir, Path(input4_name).stem+'.txt'), yolo_results[3])
+#         if os.path.exists(input5_path):
+#             write2txt(os.path.join(label_dir, Path(input5_name).stem+'.txt'), yolo_results[4])
+#         if os.path.exists(input6_path):
+#             write2txt(os.path.join(label_dir, Path(input6_name).stem+'.txt'), yolo_results[5])
+
+
+def esresult2yolo(input_dir, img_size=[4096, 2456], mdet=False, seg=False, with_object_id=False):
     json_dir = os.path.join(input_dir, 'output')
+    # json_dir = os.path.join(input_dir, 'infer', 'seg')
     yolo_dir = os.path.join(input_dir, 'yolo_dataset')
     image_dir = os.path.join(yolo_dir, 'images')
     label_dir = os.path.join(yolo_dir, 'labels')
@@ -300,56 +364,7 @@ def esresult2yolo(input_dir):
 
     json_list = os.listdir(json_dir)
     for json_name in tqdm(json_list):
-        yolo_results = json2yolo(os.path.join(json_dir, json_name))
-
-        timestamp_stem = Path(json_name).stem
-        input1_name = input1_stem2img[timestamp_stem] if timestamp_stem in input1_stem2img else 'None'
-        input2_name = input2_stem2img[timestamp_stem] if timestamp_stem in input2_stem2img else 'None'
-        input3_name = input3_stem2img[timestamp_stem] if timestamp_stem in input3_stem2img else 'None'
-        input4_name = input4_stem2img[timestamp_stem] if timestamp_stem in input4_stem2img else 'None'
-        input5_name = input5_stem2img[timestamp_stem] if timestamp_stem in input5_stem2img else 'None'
-        input6_name = input6_stem2img[timestamp_stem] if timestamp_stem in input6_stem2img else 'None'
-
-        input1_path = os.path.join(image_dir, input1_name)
-        input2_path = os.path.join(image_dir, input2_name)
-        input3_path = os.path.join(image_dir, input3_name)
-        input4_path = os.path.join(image_dir, input4_name)
-        input5_path = os.path.join(image_dir, input5_name)
-        input6_path = os.path.join(image_dir, input6_name)
-
-        if os.path.exists(input1_path):
-            write2txt(os.path.join(label_dir, Path(input1_name).stem+'.txt'), yolo_results[0])
-        if os.path.exists(input2_path):  
-            write2txt(os.path.join(label_dir, Path(input2_name).stem+'.txt'), yolo_results[1])
-        if os.path.exists(input3_path):  
-            write2txt(os.path.join(label_dir, Path(input3_name).stem+'.txt'), yolo_results[2])
-        if os.path.exists(input4_path):
-            write2txt(os.path.join(label_dir, Path(input4_name).stem+'.txt'), yolo_results[3])
-        if os.path.exists(input5_path):
-            write2txt(os.path.join(label_dir, Path(input5_name).stem+'.txt'), yolo_results[4])
-        if os.path.exists(input6_path):
-            write2txt(os.path.join(label_dir, Path(input6_name).stem+'.txt'), yolo_results[5])
-
-
-def esresult2yolo_track(input_dir, img_size=[4096, 2456]):
-    json_dir = os.path.join(input_dir, 'output')
-    yolo_dir = os.path.join(input_dir, 'yolo_dataset')
-    image_dir = os.path.join(yolo_dir, 'images')
-    label_dir = os.path.join(yolo_dir, 'labels')
-    print(f'reset {label_dir}...')
-    shutil.rmtree(label_dir) if os.path.exists(label_dir) else None
-    os.makedirs(label_dir, exist_ok=True)
-
-    input1_stem2img = get_stem2img(os.path.join(input_dir, 'input_1'))
-    input2_stem2img = get_stem2img(os.path.join(input_dir, 'input_2'))
-    input3_stem2img = get_stem2img(os.path.join(input_dir, 'input_3'))
-    input4_stem2img = get_stem2img(os.path.join(input_dir, 'input_4'))
-    input5_stem2img = get_stem2img(os.path.join(input_dir, 'input_5'))
-    input6_stem2img = get_stem2img(os.path.join(input_dir, 'input_6'))
-
-    json_list = os.listdir(json_dir)
-    for json_name in tqdm(json_list):
-        yolo_results = json2yolo_track(os.path.join(json_dir, json_name), img_size)
+        yolo_results = json2yolo_track(os.path.join(json_dir, json_name), img_size, mdet, seg, with_object_id)
 
         timestamp_stem = Path(json_name).stem
         input1_name = input1_stem2img[timestamp_stem] if timestamp_stem in input1_stem2img else 'None'

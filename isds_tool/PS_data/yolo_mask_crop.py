@@ -255,6 +255,8 @@ def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, 
         if not os.path.exists(label_path):
             continue
         image = image_read(image_path)
+        if image is None:
+            print(f'image {image_name} read failed')
         label = label_read(label_path, seg=seg, atts=atts)
         for idx, record in label.iterrows():
             image_object_name_stem = f'{Path(image_name).stem}_{idx}'
@@ -270,7 +272,7 @@ def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, 
                     if att_sum == 0:
                         continue
                 image_crop = xywh2poly_crop(record, image.copy(), crop_method=crop_method, annotation=annotation, cats=cats, atts=atts, with_boundary=with_boundary)
-                if image_crop.shape[0]>0 and image_crop.shape[1]>0:
+                if image_crop is not None and image_crop.shape[0]>0 and image_crop.shape[1]>0:
                     save_name = Path(image_name).stem + f'_{idx}' + Path(image_name).suffix
                     if save_method == 'attribute':
                         for att, levels in atts.items():
@@ -402,14 +404,26 @@ def myolo_crop_mp(image_dir, label_dir, crop_dir, class_file, attribute_file=Non
 
 if __name__ == '__main__':
     pass
-    root_dir = r'/data/huilin/data/isds/fused_data/data3899_mseg_c6_0818'
+    # root_dir = r'/data/huilin/data/isds/fused_data/data3899_mseg_c6_0818'
+    # dataset_dir = root_dir
+    # image_dir = os.path.join(dataset_dir, 'images')
+    # labels_dir = os.path.join(dataset_dir, 'labels')
+    # image_crop_dir = os.path.join(dataset_dir, 'images_crop')
+    # class_file = os.path.join(dataset_dir, 'class.txt')
+    # attribute_file = os.path.join(dataset_dir, 'attribute.yaml')
+    # myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
+    #            attribute_file=attribute_file, seg=True, annotation=False,
+    #            save_method='all', only_defect=False, with_boundary=False,
+    #            crop_method='without_background_box_shape')
+
+    root_dir = r'E:\data\202502_signboard\data_annotation\ps_data\task\check_0914_labels_0914'
     dataset_dir = root_dir
     image_dir = os.path.join(dataset_dir, 'images')
-    labels_dir = os.path.join(dataset_dir, 'labels')
+    labels_dir = os.path.join(dataset_dir, 'check_0914_labels_0914_check')
     image_crop_dir = os.path.join(dataset_dir, 'images_crop')
-    class_file = os.path.join(dataset_dir, 'class.txt')
+    class_file = os.path.join(dataset_dir, 'class_c6.txt')
     attribute_file = os.path.join(dataset_dir, 'attribute.yaml')
     myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
                attribute_file=attribute_file, seg=True, annotation=False,
-               save_method='all', only_defect=False, with_boundary=False,
-               crop_method='without_background_box_shape')
+               save_method='attribute', only_defect=True, with_boundary=True,
+               crop_method='with_background_image_shape')
