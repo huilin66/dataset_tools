@@ -1197,13 +1197,13 @@ def psdata_add_pipline(input_ps_mseg_c6_dir, src_fused_mseg_c6_dir, dst_fused_ms
 
     # get fused mseg c6 dataset
     if copy:
-        # data_merge(
-        #     input_ps_mseg_c6_dir,
-        #     src_fused_mseg_c6_dir,
-        #     dst_fused_mseg_c6_dir,
-        #     cp_split=True,
-        #     suffix=selected_suffix,
-        # )
+        data_merge(
+            input_ps_mseg_c6_dir,
+            src_fused_mseg_c6_dir,
+            dst_fused_mseg_c6_dir,
+            cp_split=True,
+            suffix=selected_suffix,
+        )
         shutil.copy(ATT_FILE, os.path.join(dst_fused_mseg_c6_dir, 'attribute.yaml'))
         shutil.copy(CLASS_C6_FILE, os.path.join(dst_fused_mseg_c6_dir, 'class.txt'))
     else:
@@ -1491,10 +1491,6 @@ def get_stem2name(input_dir):
     stem2name_dict = {Path(name).stem:name for name in name_list}
     return stem2name_dict
 
-def copy_ref_dir(input_dir, output_dir, ref_dir):
-    ref_list = os.listdir(ref_dir)
-    copy_ref_list(input_dir, output_dir, ref_list)
-
 def copy_ref_list(input_dir, output_dir, ref_list):
     os.makedirs(output_dir, exist_ok=True)
     input_stem2name = get_stem2name(input_dir)
@@ -1504,10 +1500,35 @@ def copy_ref_list(input_dir, output_dir, ref_list):
         output_path = os.path.join(output_dir, input_name)
         shutil.copy(input_path, output_path)
 
+def copy_ref_dir(input_dir, output_dir, ref_dir):
+    ref_list = os.listdir(ref_dir)
+    copy_ref_list(input_dir, output_dir, ref_list)
+
 def copy_ref_xlsx(input_dir, output_dir, ref_path, column='file_name'):
     df = pd.read_excel(ref_path, sheet_name='Sheet1')
     ref_list = df[column].to_list()
     copy_ref_list(input_dir, output_dir, ref_list)
+
+
+def copy_exclude_list(input_dir, output_dir, exclude_list):
+    os.makedirs(output_dir, exist_ok=True)
+    input_list = os.listdir(input_dir)
+    exclude_stem_list = [Path(exclude_name).stem for exclude_name in exclude_list]
+    for input_name in tqdm(input_list):
+        input_stem = Path(input_name).stem
+        if input_stem not in exclude_stem_list:
+            input_path = os.path.join(input_dir, input_name)
+            output_path = os.path.join(output_dir, input_name)
+            shutil.copy(input_path, output_path)
+
+def copy_exclude_dir(input_dir, output_dir, exclude_dir):
+    exclude_list = os.listdir(exclude_dir)
+    copy_exclude_list(input_dir, output_dir, exclude_list)
+
+def copy_exclude_xlsx(input_dir, output_dir, exclude_path, column='file_name'):
+    df = pd.read_excel(exclude_path, sheet_name='Sheet1')
+    exclude_list = df[column].to_list()
+    copy_exclude_list(input_dir, output_dir, exclude_list)
 
 
 if __name__ == '__main__':
