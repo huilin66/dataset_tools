@@ -1,34 +1,56 @@
 import os.path
 
 from yolo_mask_crop import *
-from yolo_tools import copy_ref_xlsx, psdata_add_pipline, random_select_exclude, psdata_add_piplines, data_tf_piplines, ref_split
+from yolo_tools import copy_ref_xlsx, psdata_add_pipline, copy_ref_dir, random_select_exclude, psdata_add_piplines, data_tf_piplines, ref_split, copy_exclude_xlsx
 from data_vis.yolo_sta import yolo_sta
 from data_vis.yolo_vis import yolo_mdet_vis
 from dataformat_swift.yolo2xanylabeling import yolo_to_xanylabeling_dir
 if __name__ == '__main__':
     pass
-    # root_dir = r'/localnvme/data/billboard/bd_data/data687_mseg_c6_0915'
-    # dataset_dir = root_dir
+    # dataset_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c6_0922'
     # image_dir = os.path.join(dataset_dir, 'images')
     # labels_dir = os.path.join(dataset_dir, 'labels')
-    # image_crop_dir = os.path.join(dataset_dir, 'images_crop')
+    # labels_sta_dir = os.path.join(dataset_dir, 'labels_sta')
+    # image_crop_dir = os.path.join(dataset_dir, 'result_analysis', 'images_crop')
     # class_file = os.path.join(dataset_dir, 'class.txt')
     # attribute_file = os.path.join(dataset_dir, 'attribute.yaml')
+    # yolo_sta(
+    #     # img_dir=os.path.join(dataset_dir, "images"),
+    #     gt_dir=labels_dir,
+    #     result_dir=labels_sta_dir,
+    #     class_path=class_file,
+    #     attribute_path=attribute_file,
+    #     seg=True,
+    # )
+    #
     # myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
     #            attribute_file=attribute_file, seg=True, annotation=False,
     #            save_method='attribute', only_defect=True, with_boundary=True,
     #            crop_method='with_background_image_shape')
-    # #
-    #
-    # data_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c6_0912'
-    # yolo_sta(
-    #     # img_dir=os.path.join(data_dir, "images"),
-    #     gt_dir=os.path.join(data_dir, "labels"),
-    #     result_dir=os.path.join(data_dir, "labels_sta"),
-    #     class_path=os.path.join(data_dir, "class.txt"),
-    #     attribute_path=os.path.join(data_dir, "attribute.yaml"),
-    #     seg=True,
+
+    # data_tf_piplines(
+    #     r'/localnvme/data/billboard/fused_data/data7436_mseg_c6_0922',
+    #     train_ratio_list=[0.8, 0.75, 0.7, 0.65, 0.6],
+    #     selected_suffix_list=['_80p', '_75p', '_70p', '_65p', '_60p'],
+    #     copy=True
     # )
+
+    # ref_split(
+    #     '/localnvme/data/billboard/fused_data/data3617_mseg_c6_0915/val_80p.txt',
+    #     '/localnvme/data/billboard/fused_data/data7436_mseg_c5_0922/images',
+    #     add_suffix = '_80p_ref'
+    # )
+    # ref_split(
+    #     '/localnvme/data/billboard/fused_data/data3617_mseg_c6_0915/val_80p.txt',
+    #     '/localnvme/data/billboard/fused_data/data7436_mseg_c5_l2_0922/images',
+    #     add_suffix = '_80p_ref'
+    # )
+    # ref_split(
+    #     '/localnvme/data/billboard/fused_data/data3617_mseg_c6_0915/val_80p.txt',
+    #     '/localnvme/data/billboard/fused_data/data7436_seg_c5_0922/images',
+    #     add_suffix = '_80p_ref'
+    # )
+
     # data_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c6_0917'
     # yolo_sta(
     #     # img_dir=os.path.join(data_dir, "images"),
@@ -135,7 +157,7 @@ if __name__ == '__main__':
     #            attribute_file=attribute_file, seg=True, annotation=False,
     #            save_method='attribute', only_defect=True, with_boundary=True,
     #            crop_method='with_background_image_shape')
-    #
+
     #
     # root_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c5_l2_0917'
     # dataset_dir = root_dir
@@ -219,16 +241,58 @@ if __name__ == '__main__':
     # select_dir = os.path.join(dataset_dir, 'select')
     # image_select_dir = os.path.join(select_dir, 'images')
     # label_select_dir = os.path.join(select_dir, 'labels')
+    # img_vis_gt_select_dir = os.path.join(select_dir, 'img_vis_gt')
+    # img_vis_gt_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c5_l2_0917/result_analysis/images_vis_gt'
     # ref_path = r'/localnvme/data/billboard/fused_data/data7436_mseg_c5_l2_0917/result_analysis/check0919.xlsx'
-    # copy_ref_xlsx(image_dir, image_select_dir, ref_path, column='file_name')
-    # copy_ref_xlsx(label_dir, label_select_dir, ref_path, column='file_name')
+    # # copy_ref_xlsx(image_dir, image_select_dir, ref_path, column='file_name')
+    # # copy_ref_xlsx(label_dir, label_select_dir, ref_path, column='file_name')
+    # copy_ref_xlsx(img_vis_gt_dir, img_vis_gt_select_dir, ref_path, column='file_name')
 
 
-    dataset_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c6_0917'
-    select_dir = os.path.join(dataset_dir, 'select')
-    image_select_dir = os.path.join(select_dir, 'images')
-    label_select_dir = os.path.join(select_dir, 'labels')
-    json_dir = os.path.join(select_dir, 'json')
+    # dataset_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c6_0917'
+    # image_dir = os.path.join(dataset_dir, 'images')
+    # label_dir = os.path.join(dataset_dir, 'labels')
+    # select_dir = os.path.join(dataset_dir, 'select_pre')
+    # image_select_dir = os.path.join(select_dir, 'images')
+    # label_select_dir = os.path.join(select_dir, 'labels')
+    # img_vis_pre_select_dir = os.path.join(select_dir, 'img_vis_pre')
+    # img_vis_pre_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c5_l2_0917/result_analysis/images_vis_pre'
+    # exclude_path = r'/localnvme/data/billboard/fused_data/data7436_mseg_c5_l2_0917/result_analysis/check0920.xlsx'
+    # copy_exclude_xlsx(img_vis_pre_dir, img_vis_pre_select_dir, exclude_path, column='file_name')
+    # copy_ref_dir(image_dir, image_select_dir, img_vis_pre_select_dir)
+    # copy_ref_dir(label_dir, label_select_dir, img_vis_pre_select_dir)
+
+
+    # dataset_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c6_0917'
+    # select_dir = os.path.join(dataset_dir, 'select_pre')
+    # image_select_dir = os.path.join(select_dir, 'images')
+    # label_select_dir = os.path.join(select_dir, 'labels')
+    # json_dir = os.path.join(select_dir, 'json')
+    # class_file = os.path.join(dataset_dir, 'class.txt')
+    # attribute_file = os.path.join(dataset_dir, 'attribute.yaml')
+    # yolo_to_xanylabeling_dir(label_select_dir, image_select_dir, json_dir, class_file, attribute_file)
+
+
+
+    # psdata_add_pipline(
+    #     r'/localnvme/data/billboard/ps_data/psdata_add284_1002_mseg_c6',
+    #     r'/localnvme/data/billboard/fused_data/data7436_mseg_c6_0922',
+    #     r'/localnvme/data/billboard/fused_data/data7720_mseg_c6_1002',
+    #     add_train_ratio=1, selected_suffix='_80p_ref', copy=True
+    # )
+
+    dataset_dir = r'/localnvme/data/billboard/fused_data/data7720_mseg_c6_1002'
+    image_dir = os.path.join(dataset_dir, 'images')
+    labels_dir = os.path.join(dataset_dir, 'labels')
+    labels_sta_dir = os.path.join(dataset_dir, 'labels_sta')
+    image_crop_dir = os.path.join(dataset_dir, 'result_analysis', 'images_crop')
     class_file = os.path.join(dataset_dir, 'class.txt')
     attribute_file = os.path.join(dataset_dir, 'attribute.yaml')
-    yolo_to_xanylabeling_dir(label_select_dir, image_select_dir, json_dir, class_file, attribute_file)
+    yolo_sta(
+        # img_dir=os.path.join(dataset_dir, "images"),
+        gt_dir=labels_dir,
+        result_dir=labels_sta_dir,
+        class_path=class_file,
+        attribute_path=attribute_file,
+        seg=True,
+    )
