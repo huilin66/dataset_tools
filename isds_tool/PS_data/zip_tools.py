@@ -25,3 +25,13 @@ def uzip_dirs(root_dir, zip_relative_path):
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                 zip_ref.extractall(zip_path.replace('.zip', ''))
             print(f'{zip_path} done\n')
+
+
+def uzip_file(zip_path, result_path):
+    if not os.path.exists(zip_path):
+        print(f'{zip_path} not exists')
+    else:
+        print(f'{zip_path} unzip...')
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(result_path)
+        print(f'{zip_path} done\n')

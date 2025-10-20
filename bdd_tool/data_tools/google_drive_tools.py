@@ -30,9 +30,6 @@ def authenticate_with_google(token_path, client_secret_path):
 
 def download_large_file(service, file_id, file_path):
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    # if os.path.exists(file_path) or file_path.endswith('.pcd'):
-    #     print(f"⚠️ 已存在，跳过: {file_path}")
-    #     return
     if os.path.exists(file_path):
         print(f"⚠️ 已存在，跳过: {file_path}")
         return

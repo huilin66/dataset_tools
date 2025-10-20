@@ -725,7 +725,7 @@ if __name__ == '__main__':
     #     small_threshold=32,
     # )
 
-    # esresult2yolo(r'Y:\ZHL\isds\PS\task0725\results\290')
+    esresult2yolo(r'\\158.132.186.40\isds\huilin\isds\environ_sense_data\task0926\results\438_demo', mdet=True, seg=True, with_object_id=False)
     # select_defect(
     #     r'Y:\ZHL\isds\PS\task0725\results\290\yolo_dataset',
     #     r'Y:\ZHL\isds\PS\task0725\results\290\yolo_dataset_select',
