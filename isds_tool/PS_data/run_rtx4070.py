@@ -2,6 +2,8 @@ import os
 from tqdm import tqdm
 from yolo_mask_crop import *
 from yolo2xanylabeling import yolo_to_xanylabeling_dir
+from zip_tools import zip_folder_to_path
+
 
 def att_check(input_dir, output_dir, reorder=False, rm_id=True):
     os.makedirs(output_dir, exist_ok=True)
@@ -75,10 +77,23 @@ if __name__ == '__main__':
     #            crop_method='with_background_image_shape')
 
 
-    root_dir = r'E:\data\202502_signboard\data_annotation\field_data'
-    image_dir = os.path.join(root_dir, 'images')
-    label_dir = os.path.join(root_dir, 'labels')
+    root_dir = r'\\158.132.186.40\isds\huilin\isds\other_data\task1008'
+    image_dir = os.path.join(root_dir, 'merge_dir')
+    label_dir = os.path.join(root_dir, 'merge_dir_infer', 'labels')
     json_dir = os.path.join(root_dir, 'json')
     class_file = os.path.join(root_dir, 'class_c6.txt')
     attribute_file = os.path.join(root_dir, 'attribute.yaml')
-    yolo_to_xanylabeling_dir(label_dir, image_dir, json_dir, class_file, attribute_file)
+    # yolo_to_xanylabeling_dir(label_dir, image_dir, json_dir, class_file, attribute_file)
+
+    zip_folder_to_path(
+        source_folder=image_dir,
+        destination_zip=os.path.join(root_dir, os.path.basename(root_dir)+'.zip')
+    )
+    zip_folder_to_path(
+        source_folder=label_dir,
+        destination_zip=os.path.join(root_dir, os.path.basename(root_dir)+'_labels.zip')
+    )
+    zip_folder_to_path(
+        source_folder=json_dir,
+        destination_zip=os.path.join(root_dir, os.path.basename(root_dir)+'_jsons.zip')
+    )

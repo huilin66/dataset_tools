@@ -1530,6 +1530,80 @@ def copy_exclude_xlsx(input_dir, output_dir, exclude_path, column='file_name'):
     exclude_list = df[column].to_list()
     copy_exclude_list(input_dir, output_dir, exclude_list)
 
+def get_stem2img_dict(img_dir):
+    img_list = [img_name for img_name in os.listdir(img_dir) if img_name.endswith('.jpg')]
+    stem_list = [Path(img).stem for img in img_list]
+    stem2img_dict = dict(zip(stem_list, img_list))
+    return stem2img_dict
+
+def find_defect(input_label_dir, output_label_dir, input_image_dir, output_image_dir, defect_list):
+    os.makedirs(output_label_dir, exist_ok=True)
+    os.makedirs(output_image_dir, exist_ok=True)
+    label_file_list = os.listdir(input_label_dir)
+    stem2img_dict = get_stem2img_dict(input_image_dir)
+    file_with_defect_list = []
+    for label_name in tqdm(label_file_list, desc='find_defect'):
+        input_label_path = os.path.join(input_label_dir, label_name)
+        df = get_yolo_label_df(input_label_path, mdet=True, attributes=defect_list)
+        with_defect = (df[defect_list] > 0).any().any()
+        if with_defect:
+            label_name_stem = Path(label_name).stem
+            image_name = stem2img_dict[label_name_stem]
+            input_image_path = os.path.join(input_image_dir, image_name)
+            output_label_path = os.path.join(output_label_dir, label_name)
+            output_image_path = os.path.join(output_image_dir, image_name)
+            shutil.copy(input_label_path, output_label_path)
+            shutil.copy(input_image_path, output_image_path)
+            file_with_defect_list.append(label_name)
+    print(f'find {len(file_with_defect_list)} files with defect')
+
+def att_check(input_dir, output_dir, reorder=False, rm_id=True):
+    os.makedirs(output_dir, exist_ok=True)
+    count = 0
+    label_list = os.listdir(input_dir)
+    track_list = []
+    for label_name in tqdm(label_list, desc='att_check'):
+        input_label_path = os.path.join(input_dir, label_name)
+        output_label_path = os.path.join(output_dir, label_name)
+        with open(input_label_path, 'r') as f1, open(output_label_path, 'w') as f2:
+            lines = f1.readlines()
+            new_lines = []
+            for idx, line in enumerate(lines):
+                parts = line.strip().split(' ')
+                risk_list = parts[2:6]
+                if reorder:
+                    new_risk_list = [risk_list[3], risk_list[1], risk_list[0], risk_list[2]]
+                    parts[2:6] = new_risk_list
+                if rm_id:
+                    if len(parts) % 2 == 1:
+                        parts = parts[:-1]
+                        track_list.append(label_name)
+                new_line = ' '.join(parts) + '\n'
+                if line[2] == '0':
+                    lines[idx] = lines[idx][0:2] + '4' + lines[idx][3:]
+                    count += 1
+                new_lines.append(new_line)
+            f2.writelines(new_lines)
+        with open(input_label_path, 'w') as f:
+            f.writelines(lines)
+    print(f'change "0" {count} lines')
+    track_list = list(set(track_list))
+    print(f'remove {len(track_list)} id')
+
+def copy_all(input_label_dir, output_label_dir, input_image_dir, output_image_dir):
+    os.makedirs(output_label_dir, exist_ok=True)
+    os.makedirs(output_image_dir, exist_ok=True)
+    label_file_list = os.listdir(input_label_dir)
+    stem2img_dict = get_stem2img_dict(input_image_dir)
+    for label_name in tqdm(label_file_list, desc='copy_all'):
+        input_label_path = os.path.join(input_label_dir, label_name)
+        label_name_stem = Path(label_name).stem
+        image_name = stem2img_dict[label_name_stem]
+        input_image_path = os.path.join(input_image_dir, image_name)
+        output_label_path = os.path.join(output_label_dir, label_name)
+        output_image_path = os.path.join(output_image_dir, image_name)
+        shutil.copy(input_label_path, output_label_path)
+        shutil.copy(input_image_path, output_image_path)
 
 if __name__ == '__main__':
     pass
