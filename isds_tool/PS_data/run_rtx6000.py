@@ -1,7 +1,7 @@
 import os.path
 
 from yolo_mask_crop import *
-from yolo_tools import copy_ref_xlsx, psdata_add_pipline, copy_ref_dir, random_select_exclude, psdata_add_piplines, data_tf_piplines, ref_split, copy_exclude_xlsx
+from yolo_tools import copy_ref_xlsx, psdata_add_pipline, data_tf_pipline, copy_ref_dir, random_select_exclude, psdata_add_piplines, data_tf_piplines, ref_split, copy_exclude_xlsx
 from data_vis.yolo_sta import yolo_sta
 from data_vis.yolo_vis import yolo_mdet_vis
 from dataformat_swift.yolo2xanylabeling import yolo_to_xanylabeling_dir
@@ -281,18 +281,20 @@ if __name__ == '__main__':
     #     add_train_ratio=1, selected_suffix='_80p_ref', copy=True
     # )
 
-    dataset_dir = r'/localnvme/data/billboard/fused_data/data7720_mseg_c6_1002'
+    dataset_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c6_1021'
     image_dir = os.path.join(dataset_dir, 'images')
     labels_dir = os.path.join(dataset_dir, 'labels')
     labels_sta_dir = os.path.join(dataset_dir, 'labels_sta')
     image_crop_dir = os.path.join(dataset_dir, 'result_analysis', 'images_crop')
     class_file = os.path.join(dataset_dir, 'class.txt')
     attribute_file = os.path.join(dataset_dir, 'attribute.yaml')
-    yolo_sta(
-        # img_dir=os.path.join(dataset_dir, "images"),
-        gt_dir=labels_dir,
-        result_dir=labels_sta_dir,
-        class_path=class_file,
-        attribute_path=attribute_file,
-        seg=True,
-    )
+    # yolo_sta(
+    #     # img_dir=os.path.join(dataset_dir, "images"),
+    #     gt_dir=labels_dir,
+    #     result_dir=labels_sta_dir,
+    #     class_path=class_file,
+    #     attribute_path=attribute_file,
+    #     seg=True,
+    # )
+
+    data_tf_pipline(dataset_dir, selected_suffix='_80p_ref')
