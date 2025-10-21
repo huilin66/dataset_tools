@@ -1279,14 +1279,15 @@ def data_tf_piplines(dst_fused_mseg_c6_dir, train_ratio_list=[], selected_suffix
             copy = False
         data_tf_pipline(dst_fused_mseg_c6_dir, train_ratio=train_ratio, selected_suffix=selected_suffix, copy=True)
 
-def data_tf_pipline(dst_fused_mseg_c6_dir, train_ratio=1, selected_suffix='', copy=True):
+def data_tf_pipline(dst_fused_mseg_c6_dir, train_ratio=1, selected_suffix='', copy=True, split_mseg_c6=False):
     dst_fused_seg_c6_dir = dst_fused_mseg_c6_dir.replace('_mseg', '_seg')
     dst_fused_mseg_c5_dir = dst_fused_mseg_c6_dir.replace('_c6', '_c5')
     dst_fused_mseg_c5_l2_dir = dst_fused_mseg_c5_dir.replace('_c5', '_c5_l2')
     dst_fused_seg_c5_dir = dst_fused_mseg_c5_dir.replace('_mseg', '_seg')
 
     # split current data
-    random_select(dst_fused_mseg_c6_dir, train_ratio=train_ratio, suffix=selected_suffix)
+    if split_mseg_c6:
+        random_select(dst_fused_mseg_c6_dir, train_ratio=train_ratio, suffix=selected_suffix)
 
 
     # get fused mseg c5 dataset
