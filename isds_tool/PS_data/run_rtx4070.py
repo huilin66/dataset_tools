@@ -3,7 +3,7 @@ from tqdm import tqdm
 from yolo_mask_crop import *
 from yolo2xanylabeling import yolo_to_xanylabeling_dir
 from zip_tools import zip_folder_to_path
-
+from data_vis.yolo_vis import yolo_mdet_vis
 
 def att_check(input_dir, output_dir, reorder=False, rm_id=True):
     os.makedirs(output_dir, exist_ok=True)
@@ -56,6 +56,7 @@ def find_repeated_file(input_dir1, input_dir2):
 
 
 if __name__ == '__main__':
+    pass
     # input_dir = r'E:\cp_dir\result_analysis\select_labels_0919\select_labels_0919'
     # output_dir1 = r'E:\cp_dir\result_analysis\select_labels_0919\labels'
     # # att_check(input_dir, output_dir)
@@ -77,23 +78,39 @@ if __name__ == '__main__':
     #            crop_method='with_background_image_shape')
 
 
-    root_dir = r'\\158.132.186.40\isds\huilin\isds\other_data\task1008'
-    image_dir = os.path.join(root_dir, 'merge_dir')
-    label_dir = os.path.join(root_dir, 'merge_dir_infer', 'labels')
-    json_dir = os.path.join(root_dir, 'json')
-    class_file = os.path.join(root_dir, 'class_c6.txt')
-    attribute_file = os.path.join(root_dir, 'attribute.yaml')
-    # yolo_to_xanylabeling_dir(label_dir, image_dir, json_dir, class_file, attribute_file)
+    # root_dir = r'\\158.132.186.40\isds\huilin\isds\other_data\task1008'
+    # image_dir = os.path.join(root_dir, 'merge_dir')
+    # label_dir = os.path.join(root_dir, 'merge_dir_infer', 'labels')
+    # json_dir = os.path.join(root_dir, 'json')
+    # class_file = os.path.join(root_dir, 'class_c6.txt')
+    # attribute_file = os.path.join(root_dir, 'attribute.yaml')
+    # # yolo_to_xanylabeling_dir(label_dir, image_dir, json_dir, class_file, attribute_file)
+    #
+    # zip_folder_to_path(
+    #     source_folder=image_dir,
+    #     destination_zip=os.path.join(root_dir, os.path.basename(root_dir)+'.zip')
+    # )
+    # zip_folder_to_path(
+    #     source_folder=label_dir,
+    #     destination_zip=os.path.join(root_dir, os.path.basename(root_dir)+'_labels.zip')
+    # )
+    # zip_folder_to_path(
+    #     source_folder=json_dir,
+    #     destination_zip=os.path.join(root_dir, os.path.basename(root_dir)+'_jsons.zip')
+    # )
 
-    zip_folder_to_path(
-        source_folder=image_dir,
-        destination_zip=os.path.join(root_dir, os.path.basename(root_dir)+'.zip')
-    )
-    zip_folder_to_path(
-        source_folder=label_dir,
-        destination_zip=os.path.join(root_dir, os.path.basename(root_dir)+'_labels.zip')
-    )
-    zip_folder_to_path(
-        source_folder=json_dir,
-        destination_zip=os.path.join(root_dir, os.path.basename(root_dir)+'_jsons.zip')
-    )
+    root_dir = r'\\158.132.186.40\isds\huilin\isds\other_data\check1021'
+    images_dir = os.path.join(root_dir, 'images')
+    labels_dir1 = os.path.join(root_dir, 'check1021_labels_1022')
+    labels_dir2 = os.path.join(root_dir, 'check1021_labels_1022_re')
+    images_vis_dir = os.path.join(root_dir, 'images_vis')
+    image_crop_dir = os.path.join(root_dir, 'images_crop')
+    attribute_file = os.path.join(root_dir, 'attribute.yaml')
+    class_file = os.path.join(root_dir, 'class.txt')
+    att_check(labels_dir1, labels_dir2, reorder=False, rm_id=True)
+    myolo_crop(images_dir, labels_dir2, image_crop_dir, class_file,
+               attribute_file=attribute_file, seg=True, annotation=False,
+               save_method='attribute', only_defect=True, with_boundary=True,
+               crop_method='with_background_image_shape')
+    # yolo_mdet_vis(images_dir, labels_dir2, images_vis_dir, class_file, crop_dir=None, seg=True,
+    #               attribute_file=attribute_file, filter_no=True, crop_keep_shape=False, seg_crop=False)
