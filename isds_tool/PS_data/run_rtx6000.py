@@ -281,9 +281,14 @@ if __name__ == '__main__':
     #     add_train_ratio=1, selected_suffix='_80p_ref', copy=True
     # )
 
-    dataset_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c6_1021'
+    # dataset_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c6_1022'
+    # dataset_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c6_1021_broken_refine'
+    dataset_dir = r'/localnvme/data/added_data/check1021/data29_check1021_mseg_c6_broken_refine'
+    # dataset_dir = r'/localnvme/data/added_data/check1021'
     image_dir = os.path.join(dataset_dir, 'images')
     labels_dir = os.path.join(dataset_dir, 'labels')
+    image_vis_dir = os.path.join(dataset_dir, 'image_vis')
+    json_dir = os.path.join(dataset_dir, 'jsons')
     labels_sta_dir = os.path.join(dataset_dir, 'labels_sta')
     image_crop_dir = os.path.join(dataset_dir, 'result_analysis', 'images_crop')
     class_file = os.path.join(dataset_dir, 'class.txt')
@@ -297,4 +302,21 @@ if __name__ == '__main__':
     #     seg=True,
     # )
 
-    data_tf_pipline(dataset_dir, selected_suffix='_80p_ref')
+    data_tf_pipline(dataset_dir, train_ratio=1, split_mseg_c6=True)
+    # data_tf_pipline(dataset_dir, selected_suffix='_80p_ref', split_mseg_c6=False)
+
+    # myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
+    #            attribute_file=attribute_file, seg=True, annotation=False,
+    #            save_method='attribute', only_defect=True, with_boundary=True,
+    #            crop_method='with_background_image_shape')
+
+    # myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
+    #            attribute_file=attribute_file, seg=True, annotation=False,
+    #            save_method='all', only_defect=True, with_boundary=False,
+    #            crop_method='with_background_box_shape')
+
+    # yolo_to_xanylabeling_dir(labels_dir, image_dir, json_dir, class_file, attribute_file)
+
+    # yolo_mdet_vis(image_dir, labels_dir, image_vis_dir, class_file, crop_dir=None, seg=True,
+    #               attribute_file=attribute_file, filter_no=True, crop_keep_shape=False, seg_crop=False)
+    # print(len(os.listdir(image_crop_dir)))
