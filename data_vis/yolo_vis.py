@@ -274,9 +274,14 @@ def xywh2poly(x, w, h, img, img_vis, cats, crop=True, attributes=None, filter_no
 
     return img_vis, img_crop, attribute_strs
 
+def is_img(file_name):
+    image_suffixs = ['.jpg', '.png', '.jpeg', '.tif', '.tiff']
+    results = Path(file_name).suffix.lower() in image_suffixs
+    return results
+
 def yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=None, seg=False):
     cats = get_cats(class_file)
-    img_list = os.listdir(img_folder)
+    img_list = [file_name for file_name in os.listdir(img_folder) if is_img(file_name)]
     img_list.sort()
     label_list = os.listdir(label_folder)
     label_list.sort()
@@ -426,7 +431,7 @@ if __name__ == '__main__':
     # root_dir = r'E:\data\tp\sar_det'
     # root_dir = r'E:\data\0111_testdata\data_new\yolo_src'
     # root_dir = r'E:\cp_dir\data'
-    root_dir = r'\\158.132.186.40\isds\huilin\isds\other_data\upload1014\Val_set'
+    root_dir = r'Y:\ZHL\isds\PS\task0725\results\290\yolo_dataset_select'
     # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\bd1-9hgll-94afa\train'
     # root_dir = r'E:\data\20241113_road_veg\dataset'
     # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\crack-bpxku-hcu46\train'
@@ -435,9 +440,9 @@ if __name__ == '__main__':
     # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\wall-defect-ogum1-3wsxo\train'
     # root_dir = r'E:\demo\demo_slice_merge\yolo'
     # root_dir = r'E:\data\202502_signboard\20250224 Signboard Data and CDU\Selected_Sample\data\2025.4.3'
-    img_folder = os.path.join(root_dir, 'merge')
+    img_folder = os.path.join(root_dir, 'images')
     # img_folder = os.path.join(root_dir, 'images_val')
-    label_folder = os.path.join(root_dir, 'merge_infer', 'labels')
+    label_folder = os.path.join(root_dir, 'labels')
     # img_folder = os.path.join(root_dir, 'images_slice')
     # label_folder = os.path.join(root_dir, 'labels_slice')
     # img_folder = os.path.join(root_dir, 'images_merge')
