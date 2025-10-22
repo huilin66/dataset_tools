@@ -6,6 +6,8 @@ from tqdm import tqdm
 import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
+import sys
+sys.path.append(r'/data/huilin/projects/dataset_tools/data_vis')
 from data_sta import dir_shape_sta
 from matplotlib import rcParams
 # rcParams['font.family'] = 'Times New Roman'
