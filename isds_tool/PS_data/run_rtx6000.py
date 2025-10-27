@@ -281,38 +281,53 @@ if __name__ == '__main__':
     #     add_train_ratio=1, selected_suffix='_80p_ref', copy=True
     # )
 
+    # dataset_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c6_1023'
     # dataset_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c6_1022'
     # dataset_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c6_1021_broken_refine'
-    dataset_dir = r'/localnvme/data/added_data/check1021/data29_check1021_mseg_c6_broken_refine'
-    # dataset_dir = r'/localnvme/data/added_data/check1021'
-    image_dir = os.path.join(dataset_dir, 'images')
-    labels_dir = os.path.join(dataset_dir, 'labels')
-    image_vis_dir = os.path.join(dataset_dir, 'image_vis')
+    # dataset_dir = r'/localnvme/data/added_data/check1021/data29_check1021_mseg_c6_broken_refine'
+    # dataset_dir = r'/localnvme/data/added_data/check1022/data_mseg_c6_1023'
+    # dataset_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c6_1023'
+    # dataset_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c6_1021_broken_refine_defect'
+    # dataset_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine'
+    # dataset_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c6_1021_broken_refine'
+    dataset_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1023_src'
+    image_dir = os.path.join(dataset_dir, 'val_80p_ref', 'images')
+    # labels_dir = os.path.join(dataset_dir, 'val_80p_ref', 'labels')
+    labels_dir = os.path.join(dataset_dir, 'val_80p_ref', 'images_infer', 'labels')
+    # labels_dir = os.path.join(dataset_dir, 'labels_refine')
+    image_vis_dir = os.path.join(dataset_dir, 'result_analysis', 'image_vis')
     json_dir = os.path.join(dataset_dir, 'jsons')
     labels_sta_dir = os.path.join(dataset_dir, 'labels_sta')
-    image_crop_dir = os.path.join(dataset_dir, 'result_analysis', 'images_crop')
+    image_crop_dir = os.path.join(dataset_dir, 'result_analysis', 'images_crop_val_defect_infer')
     class_file = os.path.join(dataset_dir, 'class.txt')
     attribute_file = os.path.join(dataset_dir, 'attribute.yaml')
+    ref_txt = os.path.join(dataset_dir, "train_80p_ref.txt")
     # yolo_sta(
     #     # img_dir=os.path.join(dataset_dir, "images"),
     #     gt_dir=labels_dir,
     #     result_dir=labels_sta_dir,
     #     class_path=class_file,
     #     attribute_path=attribute_file,
+    #     # ref_txt=ref_txt,
     #     seg=True,
     # )
 
-    data_tf_pipline(dataset_dir, train_ratio=1, split_mseg_c6=True)
+    # data_tf_pipline(dataset_dir, train_ratio=1, split_mseg_c6=True)
     # data_tf_pipline(dataset_dir, selected_suffix='_80p_ref', split_mseg_c6=False)
 
-    # myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
-    #            attribute_file=attribute_file, seg=True, annotation=False,
-    #            save_method='attribute', only_defect=True, with_boundary=True,
-    #            crop_method='with_background_image_shape')
+    myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
+               attribute_file=attribute_file, seg=True, annotation=False,
+               save_method='attribute', only_defect=True, with_boundary=True,
+               crop_method='with_background_image_shape')
 
     # myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
     #            attribute_file=attribute_file, seg=True, annotation=False,
     #            save_method='all', only_defect=True, with_boundary=False,
+    #            crop_method='with_background_box_shape')
+
+    # myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
+    #            attribute_file=attribute_file, seg=True, annotation=False,
+    #            save_method='attribute', only_defect=True, with_boundary=False,
     #            crop_method='with_background_box_shape')
 
     # yolo_to_xanylabeling_dir(labels_dir, image_dir, json_dir, class_file, attribute_file)
