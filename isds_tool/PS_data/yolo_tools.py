@@ -1537,6 +1537,12 @@ def get_stem2img_dict(img_dir):
     stem2img_dict = dict(zip(stem_list, img_list))
     return stem2img_dict
 
+def get_stem2name_dict(img_dir):
+    img_list = [img_name for img_name in os.listdir(img_dir)]
+    stem_list = [Path(img).stem for img in img_list]
+    stem2img_dict = dict(zip(stem_list, img_list))
+    return stem2img_dict
+
 def find_defect(input_label_dir, output_label_dir, input_image_dir, output_image_dir, defect_list):
     os.makedirs(output_label_dir, exist_ok=True)
     os.makedirs(output_image_dir, exist_ok=True)
@@ -1585,8 +1591,6 @@ def att_check(input_dir, output_dir, reorder=False, rm_id=True):
                     count += 1
                 new_lines.append(new_line)
             f2.writelines(new_lines)
-        with open(input_label_path, 'w') as f:
-            f.writelines(lines)
     print(f'change "0" {count} lines')
     track_list = list(set(track_list))
     print(f'remove {len(track_list)} id')
@@ -1605,6 +1609,26 @@ def copy_all(input_label_dir, output_label_dir, input_image_dir, output_image_di
         output_image_path = os.path.join(output_image_dir, image_name)
         shutil.copy(input_label_path, output_label_path)
         shutil.copy(input_image_path, output_image_path)
+
+
+def only_keep_defect_object(input_dir, output_dir):
+    os.makedirs(output_dir, exist_ok=True)
+    label_list = os.listdir(input_dir)
+    for label_name in tqdm(label_list, desc='only_keep_defect_object'):
+        input_label_path = os.path.join(input_dir, label_name)
+        output_label_path = os.path.join(output_dir, label_name)
+        with open(input_label_path, 'r') as f1, open(output_label_path, 'w') as f2:
+            lines = f1.readlines()
+            new_lines = []
+            for idx, line in enumerate(lines):
+                parts = line.strip().split(' ')
+                risk_len = parts[1]
+                risks = list(map(int,parts[2:2+int(risk_len)]))
+                with_risk = sum(risks) > 0
+                if with_risk:
+                    new_lines.append(line)
+            f2.writelines(new_lines)
+
 
 if __name__ == '__main__':
     pass
