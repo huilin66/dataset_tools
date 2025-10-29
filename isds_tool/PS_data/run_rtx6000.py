@@ -290,15 +290,18 @@ if __name__ == '__main__':
     # dataset_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c6_1021_broken_refine_defect'
     # dataset_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine'
     # dataset_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c6_1021_broken_refine'
-    dataset_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1023_src'
-    image_dir = os.path.join(dataset_dir, 'val_80p_ref', 'images')
-    # labels_dir = os.path.join(dataset_dir, 'val_80p_ref', 'labels')
-    labels_dir = os.path.join(dataset_dir, 'val_80p_ref', 'images_infer', 'labels')
+    # dataset_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1023_src'
+    dataset_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c6_1029_abandonment_refine'
+    image_dir = os.path.join(dataset_dir, 'images')
+    # labels_dir = os.path.join(dataset_dir, 'labels')
+    labels_dir = r'/localnvme/project/ultralytics/runs/msegment/val627/labels'
+    # labels_dir = os.path.join(dataset_dir, 'val_80p_ref', 'images_infer', 'labels')
     # labels_dir = os.path.join(dataset_dir, 'labels_refine')
     image_vis_dir = os.path.join(dataset_dir, 'result_analysis', 'image_vis')
     json_dir = os.path.join(dataset_dir, 'jsons')
     labels_sta_dir = os.path.join(dataset_dir, 'labels_sta')
-    image_crop_dir = os.path.join(dataset_dir, 'result_analysis', 'images_crop_val_defect_infer')
+    # image_crop_dir = os.path.join(dataset_dir, 'result_analysis', 'images_crop_defect')
+    image_crop_dir = os.path.join(dataset_dir, 'result_analysis', 'val627', 'all')
     class_file = os.path.join(dataset_dir, 'class.txt')
     attribute_file = os.path.join(dataset_dir, 'attribute.yaml')
     ref_txt = os.path.join(dataset_dir, "train_80p_ref.txt")
@@ -313,17 +316,17 @@ if __name__ == '__main__':
     # )
 
     # data_tf_pipline(dataset_dir, train_ratio=1, split_mseg_c6=True)
-    # data_tf_pipline(dataset_dir, selected_suffix='_80p_ref', split_mseg_c6=False)
-
-    myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
-               attribute_file=attribute_file, seg=True, annotation=False,
-               save_method='attribute', only_defect=True, with_boundary=True,
-               crop_method='with_background_image_shape')
+    data_tf_pipline(dataset_dir, selected_suffix='_80p_ref', split_mseg_c6=False)
 
     # myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
     #            attribute_file=attribute_file, seg=True, annotation=False,
-    #            save_method='all', only_defect=True, with_boundary=False,
-    #            crop_method='with_background_box_shape')
+    #            save_method='attribute', only_defect=True, with_boundary=True,
+    #            crop_method='with_background_image_shape')
+
+    # myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
+    #            attribute_file=attribute_file, seg=True, annotation=False,
+    #            save_method='all', only_defect=True, with_boundary=True,
+    #            crop_method='with_background_box_shape', with_conf=True)
 
     # myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
     #            attribute_file=attribute_file, seg=True, annotation=False,
