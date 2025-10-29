@@ -1675,6 +1675,7 @@ if __name__ == '__main__':
     # defect_list = ['deformation', 'broken', 'abandonment', 'corrosion']
     # get_yolo_label_df(r'/localnvme/data/billboard/fused_data/data7436_mseg_c6_0912/labels/DA5148680_20250812140435100.txt', mdet=True, attributes=defect_list)
 
+
     # def get_stem2img_dict(img_dir):
     #     img_list = [img_name for img_name in os.listdir(img_dir)]
     #     stem_list = [Path(img).stem for img in img_list]

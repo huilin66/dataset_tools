@@ -52,7 +52,7 @@ def image_read(filename, flags=cv2.IMREAD_COLOR):
 def image_save(img_path, img):
     cv2.imencode('.png', img)[1].tofile(img_path)
 
-def label_read(label_path, seg=False, atts=None):
+def label_read(label_path, seg=False, atts=None, with_conf=False):
     def poly2xywh(mask):
         mask = np.array([mask[::2], mask[1::2]])
         x_min, y_min = np.min(mask, axis=1)
@@ -76,13 +76,18 @@ def label_read(label_path, seg=False, atts=None):
             data = f.readlines()
             for id_line, line in enumerate(data):
                 parts = line.strip().split(' ')
+                if with_conf:
+                    parts = parts[:-1]
                 category = int(parts[0])
 
                 if atts is not None:
                     att_len = int(parts[1])
                     atts = list(map(float, parts[2:2 + att_len]))
                     polygons = list(map(float, parts[2 + att_len:]))
-                    xywh = poly2xywh(polygons)
+                    if len(polygons) <4:
+                        xywh = [0, 0, 0, 0]
+                    else:
+                        xywh = poly2xywh(polygons)
                     record = [category, att_len] + atts + xywh + [polygons]
                 else:
                     polygons = list(map(float, parts[1:]))
@@ -213,7 +218,8 @@ def dict_revert(crop_dict):
     return reverted_dict
 
 def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, seg=True, annotation=False, ref_list=None,
-               only_defect=False, save_method='attribute', crop_method='without_background_image_shape', with_boundary=True):
+               only_defect=False, save_method='attribute', crop_method='without_background_image_shape', with_boundary=True,
+               with_conf=False):
     os.makedirs(crop_dir, exist_ok=True)
     cats = get_cats(class_file)
     atts = get_atts(attribute_file) if attribute_file is not None else None
@@ -257,7 +263,7 @@ def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, 
         image = image_read(image_path)
         if image is None:
             print(f'image {image_name} read failed')
-        label = label_read(label_path, seg=seg, atts=atts)
+        label = label_read(label_path, seg=seg, atts=atts, with_conf=with_conf)
         for idx, record in label.iterrows():
             image_object_name_stem = f'{Path(image_name).stem}_{idx}'
             category = record['category']
@@ -271,6 +277,8 @@ def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, 
                         att_sum += att_level_int
                     if att_sum == 0:
                         continue
+                if len(record['masks']) == 0:
+                    continue
                 image_crop = xywh2poly_crop(record, image.copy(), crop_method=crop_method, annotation=annotation, cats=cats, atts=atts, with_boundary=with_boundary)
                 if image_crop is not None and image_crop.shape[0]>0 and image_crop.shape[1]>0:
                     save_name = Path(image_name).stem + f'_{idx}' + Path(image_name).suffix
