@@ -7,9 +7,12 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
 import sys
-sys.path.append(r'/data/huilin/projects/dataset_tools/data_vis')
+sys.path.append(r'./')
 from data_sta import dir_shape_sta
 from matplotlib import rcParams
+pd.set_option('display.max_columns', None)
+pd.set_option('display.max_colwidth', None)
+pd.set_option('display.width', None)
 # rcParams['font.family'] = 'Times New Roman'
 rcParams['font.family'] = 'serif'
 shp_rate_bins = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2, 2.1, 2.2, 2.4, 2.6, 3, 3.5, 4, 5]
@@ -63,11 +66,10 @@ def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None, 
         print('csv save to', csv_path)
 
         print('+'*100)
-        no_defect_boxes = df_attribute[df_attribute['attribute sum'] == 0].shape[0]
-        defect_boxes = df_attribute[df_attribute['attribute sum'] > 0].shape[0]
-        print(f"总box数: {len(df_attribute)}")
-        print(f"没有缺陷的box数: {no_defect_boxes}")
-        print(f"有缺陷的box数: {defect_boxes}")
+        no_defect_boxes = df_attribute[df_attribute['with attribute'] == 0].shape[0]
+        defect_boxes = df_attribute[df_attribute['with attribute'] > 0].shape[0]
+        print(f"总box数: {len(df_attribute)}; 有缺陷的box数: {defect_boxes}; 没有缺陷的box数: {no_defect_boxes}")
+
 
         png_defect_num_path = os.path.join(result_dir, 'defects_num.png')
         plt.figure(figsize=(10, 8))
@@ -82,21 +84,22 @@ def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None, 
 
 
         unique_image_count = df_attribute['image'].nunique()
-        defect_images = df_attribute.groupby('image')['attribute sum'].sum()
-        no_defect_images = defect_images[defect_images == 0].count()
-        defect_images = defect_images[defect_images > 0].count()
-        print(f"总image数: {unique_image_count}")
-        print(f"没有缺陷的image数: {no_defect_images}")
-        print(f"有缺陷的image数: {defect_images}")
+        images_att_sta = df_attribute.groupby('image')['with attribute'].sum()
+        no_defect_images = images_att_sta[images_att_sta == 0].count()
+        defect_images = images_att_sta[images_att_sta > 0].count()
+        print(f"总image数: {unique_image_count}; 有缺陷的image数: {defect_images}; 没有缺陷的image数: {no_defect_images}")
+
+
         png_att_path = os.path.join(result_dir, 'attribute_num.png')
-        category_defects = df_attribute.groupby('category').sum().drop(columns=['image'])
+        category_defects = df_attribute.drop(columns=['image']).groupby('category').apply(lambda g:(g>0).sum())
+
         total_defects = category_defects.sum(axis=0)
         category_defects.loc['total'] = total_defects
         category_defects = category_defects.T
-
+        class_new = [c for c in classes if c in category_defects.columns]
+        category_defects = category_defects[class_new + [col for col in category_defects.columns if col not in class_new]]
 
         cats = category_defects.drop(index=['attribute sum', 'with attribute'])
-        cats = cats.sort_index()
         plt.rcParams.update({
             'font.size': 12,  # 增大字体
             'axes.titlesize': 14,  # 标题字体
@@ -140,6 +143,8 @@ def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None, 
                     ha='center', va='center', xytext=(0, 10), textcoords='offset points')
     plt.savefig(png_cat_path)
     plt.close()
+    cat_sta = cat_sta.to_frame().T
+    cat_sta = cat_sta[[c for c in classes if c in cat_sta.columns]]
     cat_sta.to_csv(png_cat_path.replace('.png', '.csv'))
     print('+'*100)
     print(cat_sta)
@@ -254,7 +259,7 @@ def get_df_yolo(gt_dir, classes, attribute_path=None, ref_txt=None, mdet=False, 
         return df_box, df_attribute
     else:
         dfs = []
-        for gt_name in tqdm(gt_list):
+        for gt_name in tqdm(gt_list, desc='label read'):
             gt_path = os.path.join(gt_dir, gt_name)
             df = pd.DataFrame(None, columns=names+['image'])
             with open(gt_path, 'r') as f:
@@ -276,7 +281,9 @@ def get_df_yolo(gt_dir, classes, attribute_path=None, ref_txt=None, mdet=False, 
                         xywh = poly2xywh(polygons)
                         df.loc[len(df)] = [category]+xywh + [image_name]
                 dfs.append(df)
+        print(f'get {len(dfs)} labels, merging...')
         dfs = pd.concat(dfs)
+        print(f'merging finish, get {len(dfs)} labels!')
         dfs['category'] = dfs['category'].map(category_dict)
         df_box = dfs[['category', 'center_x', 'center_y', 'width', 'height', 'image']].copy()
         if mdet:
