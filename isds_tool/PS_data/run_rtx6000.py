@@ -1,5 +1,5 @@
 import os.path
-
+import sys
 from yolo_mask_crop import *
 from yolo_tools import copy_ref_xlsx, psdata_add_pipline, data_tf_pipline, copy_ref_dir, random_select_exclude, psdata_add_piplines, data_tf_piplines, ref_split, copy_exclude_xlsx
 from data_vis.yolo_sta import yolo_sta
@@ -291,32 +291,35 @@ if __name__ == '__main__':
     # dataset_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c5_l2_1021_broken_refine'
     # dataset_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c6_1021_broken_refine'
     # dataset_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1023_src'
-    dataset_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c6_1029_abandonment_refine'
+    # dataset_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c6_1021_broken_refine'
+    # dataset_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c6_1030_abandonment_refine'
+    # dataset_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c6_1030'
+    dataset_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c6_1031_v4'
     image_dir = os.path.join(dataset_dir, 'images')
-    # labels_dir = os.path.join(dataset_dir, 'labels')
-    labels_dir = r'/localnvme/project/ultralytics/runs/msegment/val627/labels'
+    labels_dir = os.path.join(dataset_dir, 'labels')
+    # labels_dir = r'/localnvme/project/ultralytics/runs/msegment/val694/labels'
     # labels_dir = os.path.join(dataset_dir, 'val_80p_ref', 'images_infer', 'labels')
     # labels_dir = os.path.join(dataset_dir, 'labels_refine')
     image_vis_dir = os.path.join(dataset_dir, 'result_analysis', 'image_vis')
     json_dir = os.path.join(dataset_dir, 'jsons')
     labels_sta_dir = os.path.join(dataset_dir, 'labels_sta')
-    # image_crop_dir = os.path.join(dataset_dir, 'result_analysis', 'images_crop_defect')
-    image_crop_dir = os.path.join(dataset_dir, 'result_analysis', 'val627', 'all')
+    image_crop_dir = os.path.join(dataset_dir, 'result_analysis', 'all_gt')
+    # image_crop_dir = os.path.join(dataset_dir, 'result_analysis', 'val694', 'all')
     class_file = os.path.join(dataset_dir, 'class.txt')
     attribute_file = os.path.join(dataset_dir, 'attribute.yaml')
-    ref_txt = os.path.join(dataset_dir, "train_80p_ref.txt")
-    # yolo_sta(
-    #     # img_dir=os.path.join(dataset_dir, "images"),
-    #     gt_dir=labels_dir,
-    #     result_dir=labels_sta_dir,
-    #     class_path=class_file,
-    #     attribute_path=attribute_file,
-    #     # ref_txt=ref_txt,
-    #     seg=True,
-    # )
+    ref_txt = os.path.join(dataset_dir, "val_test.txt")
+    yolo_sta(
+        # img_dir=os.path.join(dataset_dir, "images"),
+        gt_dir=labels_dir,
+        result_dir=labels_sta_dir,
+        class_path=class_file,
+        attribute_path=attribute_file,
+        ref_txt=ref_txt,
+        seg=True,
+    )
 
     # data_tf_pipline(dataset_dir, train_ratio=1, split_mseg_c6=True)
-    data_tf_pipline(dataset_dir, selected_suffix='_80p_ref', split_mseg_c6=False)
+    # data_tf_pipline(dataset_dir, selected_suffix='_80p_ref', split_mseg_c6=False)
 
     # myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
     #            attribute_file=attribute_file, seg=True, annotation=False,
@@ -325,8 +328,8 @@ if __name__ == '__main__':
 
     # myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
     #            attribute_file=attribute_file, seg=True, annotation=False,
-    #            save_method='all', only_defect=True, with_boundary=True,
-    #            crop_method='with_background_box_shape', with_conf=True)
+    #            save_method='all', only_defect=False, with_boundary=True,
+    #            crop_method='with_background_box_shape', with_conf=False)
 
     # myolo_crop(image_dir, labels_dir, image_crop_dir, class_file,
     #            attribute_file=attribute_file, seg=True, annotation=False,

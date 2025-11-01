@@ -1319,35 +1319,35 @@ def data_tf_pipline(dst_fused_mseg_c6_dir, train_ratio=1, selected_suffix='', co
     )
 
 
+    #
+    # # get fused seg c6 dataset
+    # if copy:
+    #     mseg2seg(
+    #         dst_fused_mseg_c6_dir,
+    #         dst_fused_seg_c6_dir,
+    #     )
+    #     shutil.copy(CLASS_C6_FILE, os.path.join(dst_fused_seg_c6_dir, 'class.txt'))
+    # ref_split(
+    #     os.path.join(dst_fused_mseg_c6_dir, f'val{selected_suffix}.txt'),
+    #     os.path.join(dst_fused_seg_c6_dir, 'images'),
+    #     os.path.join(dst_fused_seg_c6_dir, 'labels'),
+    #     add_suffix=selected_suffix
+    # )
 
-    # get fused seg c6 dataset
-    if copy:
-        mseg2seg(
-            dst_fused_mseg_c6_dir,
-            dst_fused_seg_c6_dir,
-        )
-        shutil.copy(CLASS_C6_FILE, os.path.join(dst_fused_seg_c6_dir, 'class.txt'))
-    ref_split(
-        os.path.join(dst_fused_mseg_c6_dir, f'val{selected_suffix}.txt'),
-        os.path.join(dst_fused_seg_c6_dir, 'images'),
-        os.path.join(dst_fused_seg_c6_dir, 'labels'),
-        add_suffix=selected_suffix
-    )
 
-
-    # get fused seg c5 dataset
-    if copy:
-        mseg2seg(
-            dst_fused_mseg_c5_dir,
-            dst_fused_seg_c5_dir,
-        )
-        shutil.copy(CLASS_C5_FILE, os.path.join(dst_fused_seg_c5_dir, 'class.txt'))
-    ref_split(
-        os.path.join(dst_fused_mseg_c5_dir, f'val{selected_suffix}.txt'),
-        os.path.join(dst_fused_seg_c5_dir, 'images'),
-        os.path.join(dst_fused_seg_c5_dir, 'labels'),
-        add_suffix=selected_suffix
-    )
+    # # get fused seg c5 dataset
+    # if copy:
+    #     mseg2seg(
+    #         dst_fused_mseg_c5_dir,
+    #         dst_fused_seg_c5_dir,
+    #     )
+    #     shutil.copy(CLASS_C5_FILE, os.path.join(dst_fused_seg_c5_dir, 'class.txt'))
+    # ref_split(
+    #     os.path.join(dst_fused_mseg_c5_dir, f'val{selected_suffix}.txt'),
+    #     os.path.join(dst_fused_seg_c5_dir, 'images'),
+    #     os.path.join(dst_fused_seg_c5_dir, 'labels'),
+    #     add_suffix=selected_suffix
+    # )
 
 
 def att_check(input_dir):
