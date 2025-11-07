@@ -294,17 +294,15 @@ if __name__ == '__main__':
     # dataset_dir = r'/localnvme/data/added_data/test_data/test_data_mseg_c6_1021_broken_refine'
     # dataset_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c6_1030_abandonment_refine'
     # dataset_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c6_1030'
-    dataset_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c6_1031_v4'
+    # dataset_dir = r'/localnvme/data/billboard/all_data/mseg_c6/data7961_mseg_c6_1030'
+    dataset_dir = r'/localnvme/data/billboard/all_data/mseg_c6/data7961_mseg_c6_1106_v11'
     image_dir = os.path.join(dataset_dir, 'images')
     labels_dir = os.path.join(dataset_dir, 'labels')
-    # labels_dir = r'/localnvme/project/ultralytics/runs/msegment/val694/labels'
-    # labels_dir = os.path.join(dataset_dir, 'val_80p_ref', 'images_infer', 'labels')
-    # labels_dir = os.path.join(dataset_dir, 'labels_refine')
-    image_vis_dir = os.path.join(dataset_dir, 'result_analysis', 'image_vis')
+    # labels_dir = os.path.join(dataset_dir, 'labels_v4')
     json_dir = os.path.join(dataset_dir, 'jsons')
-    labels_sta_dir = os.path.join(dataset_dir, 'labels_sta')
-    image_crop_dir = os.path.join(dataset_dir, 'result_analysis', 'all_gt')
-    # image_crop_dir = os.path.join(dataset_dir, 'result_analysis', 'val694', 'all')
+    image_vis_dir = os.path.join(dataset_dir, 'label_analysis', 'image_vis')
+    labels_sta_dir = os.path.join(dataset_dir, 'label_analysis','labels_sta')
+    image_crop_dir = os.path.join(dataset_dir, 'label_analysis', 'all_gt')
     class_file = os.path.join(dataset_dir, 'class.txt')
     attribute_file = os.path.join(dataset_dir, 'attribute.yaml')
     ref_txt = os.path.join(dataset_dir, "val_test.txt")
@@ -314,7 +312,7 @@ if __name__ == '__main__':
         result_dir=labels_sta_dir,
         class_path=class_file,
         attribute_path=attribute_file,
-        ref_txt=ref_txt,
+        # ref_txt=ref_txt,
         seg=True,
     )
 
@@ -341,3 +339,15 @@ if __name__ == '__main__':
     # yolo_mdet_vis(image_dir, labels_dir, image_vis_dir, class_file, crop_dir=None, seg=True,
     #               attribute_file=attribute_file, filter_no=True, crop_keep_shape=False, seg_crop=False)
     # print(len(os.listdir(image_crop_dir)))
+
+    # base_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine'
+    # image_dir = os.path.join(base_dir, 'images')
+    # label_dir_root = os.path.join(base_dir, 'result_analysis', 'keep', 'pred_no_label_background')
+    # label_dir = os.path.join(label_dir_root, 'merge_1105_labels')
+    # image_crop_dir = os.path.join(label_dir_root, 'merge_1105_labels_crop')
+    # attribute_file = os.path.join(base_dir, 'attribute.yaml')
+    # class_file = os.path.join(base_dir, 'class.txt')
+    # myolo_crop(image_dir, label_dir, image_crop_dir, class_file,
+    #            attribute_file=attribute_file, seg=True, annotation=False,
+    #            save_method='attribute', only_defect=True, with_boundary=False,
+    #            crop_method='with_background_box_shape')

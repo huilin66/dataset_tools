@@ -266,7 +266,8 @@ def myolo_crop(image_dir, label_dir, crop_dir, class_file, attribute_file=None, 
         label = label_read(label_path, seg=seg, atts=atts, with_conf=with_conf)
         for idx, record in label.iterrows():
             image_object_name_stem = f'{Path(image_name).stem}_{idx}'
-            category = record['category']
+            category_id = record['category']
+            category = cats[category_id]
             if ref_list is not None and image_object_name_stem not in ref_list:
                 continue
             if seg:
