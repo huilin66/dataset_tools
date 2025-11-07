@@ -649,6 +649,18 @@ def ref_split(ref_path, img_dir, label_dir=None, save_dir=None, full_path=True, 
     df_all.to_csv(all_path, header=None, index=None)
     print('%d save to %s,\n%d save to %s!'%(len(train_list), train_path, len(val_list), val_path))
 
+def copy_split(input_path, output_path, abs_path=False):
+    df = pd.read_csv(input_path, header=None, index_col=None, names=['path'])
+    path_list = df['path'].tolist()
+    if abs_path:
+        output_dir = os.path.join(os.path.dirname(output_path), 'images')
+    else:
+        output_dir = 'images'
+    output_path_list = [os.path.join(output_dir, Path(file_path).name) for file_path in path_list]
+    df_output = pd.DataFrame({'path': output_path_list})
+    df_output.to_csv(output_path, header=None, index=None, encoding='utf-8')
+    print(f'copy {os.path.basename(input_path)}, {len(df_output)} records')
+
 def split_txt_merge(input_dir1, input_dir2, output_dir, suffix):
     input_train_path1 = os.path.join(input_dir1, f'train{suffix}.txt')
     input_train_path2 = os.path.join(input_dir2, f'train{suffix}.txt')
@@ -712,20 +724,31 @@ def get_attributes(attribute_path):
     attribute_keys = list(attribute_dict.keys())
     return attribute_keys
 
-def get_yolo_label_df(gt_path, mdet=False, attributes=None, with_track_id=False, with_object_id=False):
+def df_xywh_to_xyxy(df):
+    df = df.copy()
+    df["x1"] = df["x"] - df["w"] / 2
+    df["y1"] = df["y"] - df["h"] / 2
+    df["x2"] = df["x"] + df["w"] / 2
+    df["y2"] = df["y"] + df["h"] / 2
+    return df
+
+def get_yolo_label_df(gt_path, mdet=False, attributes=None, with_track_id=False, with_object_id=False, with_conf=False,
+                      conf_threshold=0.001, defect_conf_threshold=None):
     if mdet:
         assert attributes is not None, 'attribute_path must be provided, which is "%s"' % attributes
         if isinstance(attributes, str):
             attribute_keys = get_attributes(attributes)
         elif isinstance(attributes, list):
             attribute_keys = attributes
-        names = ['category'] + ['attribute_len'] + attribute_keys + [ 'center_x', 'center_y', 'width', 'height', 'image']
+        names = ['category'] + ['attribute_len'] + attribute_keys + ['x', 'y', 'w', 'h', 'image']
     else:
-        names = ['category', 'center_x', 'center_y', 'width', 'height', 'image_name']
+        names = ['category', 'x', 'y', 'w', 'h', 'image_name']
     if with_track_id:
         names = names + ['track_id']
     if with_object_id:
-        names = names + ['object_id']
+        names = names + ['id']
+    if with_conf:
+        names = names + ['conf']
 
 
     df = pd.DataFrame(None, columns=names)
@@ -733,6 +756,9 @@ def get_yolo_label_df(gt_path, mdet=False, attributes=None, with_track_id=False,
         data = f.readlines()
         for id_line, line in enumerate(data):
             parts = line.strip().split(' ')
+            if with_conf:
+                conf = float(parts[-1])
+                parts = parts[:-1]
             category = int(parts[0])
             image_name = Path(gt_path).name
             if mdet:
@@ -741,19 +767,39 @@ def get_yolo_label_df(gt_path, mdet=False, attributes=None, with_track_id=False,
                 if with_track_id:
                     track_id = int(parts[-1])
                     polygons = list(map(float, parts[2 + att_len:-1]))
+                    if len(polygons) < 4:
+                        continue
                     xywh = poly2xywh(polygons)
                     info = [category, att_len] + atts + xywh + [image_name, track_id]
                 else:
                     polygons = list(map(float, parts[2 + att_len:]))
+                    if len(polygons) < 4:
+                        continue
                     xywh = poly2xywh(polygons)
                     info = [category, att_len] + atts + xywh + [image_name]
-                if with_object_id:
-                    info += [id_line]
             else:
                 polygons = list(map(float, parts[1:]))
                 xywh = poly2xywh(polygons)
                 info = [category] + xywh + [image_name]
+            if with_object_id:
+                info += [id_line]
+            if with_conf:
+                info += [conf]
             df.loc[len(df)] = info
+
+    if mdet:
+        df['defect'] = (df[attribute_keys] > 0).any(axis=1)
+        attribute_keys_noc = [a for a in attribute_keys if a != 'corrosion']
+        df['defect_no_c'] = (df[attribute_keys_noc] > 0).any(axis=1)
+    if with_conf:
+        if defect_conf_threshold is None:
+            df = df[(df['conf'] >= conf_threshold)]
+        else:
+            df = df[~(
+                ((df['defect_no_c'] == True) & (df['conf'] < defect_conf_threshold)) |
+                ((df['defect_no_c'] == False) & (df['conf'] < conf_threshold))
+            )]
+    df = df_xywh_to_xyxy(df)
     return df
 
 def data_check(label_dir, attribute_path=None, mdet=False, check_item='category'):
@@ -1350,6 +1396,35 @@ def data_tf_pipline(dst_fused_mseg_c6_dir, train_ratio=1, selected_suffix='', co
     # )
 
 
+def data_tf_pipline_new(dst_fused_mseg_c6_dir,  copy_list=['mseg_c5', 'mseg_c5_l2', 'seg_c5']):
+    dst_fused_mseg_c5_dir = dst_fused_mseg_c6_dir.replace('_c6', '_c5')
+    dst_fused_mseg_c5_l2_dir = dst_fused_mseg_c5_dir.replace('_c5', '_c5_l2')
+    dst_fused_seg_c5_dir = dst_fused_mseg_c5_dir.replace('mseg', 'seg')
+
+    # get fused mseg c5 dataset
+    if 'mseg_c5' in copy_list or 'mseg_c5_l2' in copy_list or 'seg_c5' in copy_list:
+        mseg_class_update2(
+            dst_fused_mseg_c6_dir,
+            dst_fused_mseg_c5_dir,
+        )
+        shutil.copy(ATT_FILE, os.path.join(dst_fused_mseg_c5_dir, 'attribute.yaml'))
+        shutil.copy(CLASS_C5_FILE, os.path.join(dst_fused_mseg_c5_dir, 'class.txt'))
+
+    # get fused mseg c5 l2 dataset
+    if 'mseg_c5_l2' in copy_list:
+        mseg_attribute_update2(dst_fused_mseg_c5_dir, dst_fused_mseg_c5_l2_dir)
+        shutil.copy(ATT_L2_FILE, os.path.join(dst_fused_mseg_c5_l2_dir, 'attribute.yaml'))
+        shutil.copy(CLASS_C5_FILE, os.path.join(dst_fused_mseg_c5_l2_dir, 'class.txt'))
+
+    # get fused seg c5 dataset
+    if 'seg_c5' in copy_list:
+        mseg2seg(
+            dst_fused_mseg_c5_dir,
+            dst_fused_seg_c5_dir,
+        )
+        shutil.copy(CLASS_C5_FILE, os.path.join(dst_fused_seg_c5_dir, 'class.txt'))
+
+
 def att_check(input_dir):
     label_list = os.listdir(input_dir)
     for label_name in tqdm(label_list):
@@ -1532,7 +1607,7 @@ def copy_exclude_xlsx(input_dir, output_dir, exclude_path, column='file_name'):
     copy_exclude_list(input_dir, output_dir, exclude_list)
 
 def get_stem2img_dict(img_dir):
-    img_list = [img_name for img_name in os.listdir(img_dir) if img_name.endswith('.jpg')]
+    img_list = [img_name for img_name in os.listdir(img_dir) if Path(img_name).suffix.lower() in ['.jpg', '.jpeg', '.png'] ]
     stem_list = [Path(img).stem for img in img_list]
     stem2img_dict = dict(zip(stem_list, img_list))
     return stem2img_dict

@@ -1,49 +1,15 @@
-import os.path
-import shutil
+# from pathlib import Path
+#
+# img_name = r'/localnvme/data/billboard/all_data/mseg_c6/data7961_mseg_c6_1030/images/頭頸肩200.png'
+# if Path(img_name).suffix.lower() in ['.jpg', 'jpeg', 'png']:
+#     print('true')
+# else:
+#     print(Path(img_name).suffix.lower())
 
-import pandas
-import pandas as pd
-
-
-def get_img_list(input_csv_path):
-    df = pd.read_csv(input_csv_path, index_col=None, names=['file_name'])
-    img_list = df['file_name'].to_list()
-    img_list = [os.path.basename(file_path) for file_path in img_list]
-    return img_list
+import os
 
 
-
-if __name__ == '__main__':
-    pass
-    train_path = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1031_v4/train_test.txt'
-    img_list_train = get_img_list(train_path)
-    val_path = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1031_v4/val_test.txt'
-    img_list_val = get_img_list(val_path)
-    test_path = r'/localnvme/data/added_data/test_data/test_data_mseg_c5_1021/val.txt'
-    img_list_test = get_img_list(test_path)
-    common_list1 = []
-    for img_path in img_list_train:
-        if img_path in img_list_val:
-            common_list1.append(img_path)
-    print(common_list1)
-
-    common_list2 = []
-    for img_path in img_list_train:
-        if img_path in img_list_test:
-            common_list2.append(img_path)
-    print(common_list2)
-
-    common_list3 = []
-    for img_path in img_list_val:
-        if img_path in img_list_test:
-            common_list3.append(img_path)
-    print(common_list3)
-
-    # root_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine/result_analysis/keep/pred_no_label_background'
-    # sub_dir_list = os.listdir(root_dir)
-    # for sub_dir in sub_dir_list:
-    #     sub_dir_path = os.path.join(root_dir, sub_dir)
-    #     for filename in os.listdir(sub_dir_path):
-    #         input_file_path = os.path.join(sub_dir_path, filename)
-    #         output_file_path = os.path.join(root_dir, filename)
-    #         shutil.move(input_file_path, output_file_path)
+print(len(os.listdir(r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine/result_analysis/val694/risk_abandonment_pred_no_label_background')))
+print(len(os.listdir(r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine/result_analysis/val694/risk_broken_pred_no_label_background')))
+print(len(os.listdir(r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine/result_analysis/val694/risk_corrosion_pred_no_label_background')))
+print(len(os.listdir(r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine/result_analysis/val694/risk_deformation_pred_no_label_background')))
