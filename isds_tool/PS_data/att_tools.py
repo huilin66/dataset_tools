@@ -1,11 +1,13 @@
 import os
+import cv2
 import shutil
 import yaml
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
 from pathlib import Path
-from yolo_tools import get_yolo_label_df, get_attributes
+from yolo_mask_crop import myolo_crop
+from yolo_tools import get_yolo_label_df, get_attributes, remove_conf, get_stem2name, copy_all_by_tree
 
 def list_remove_index(input_list, remove_index):
     output_list = [item for i, item in enumerate(input_list) if i not in remove_index]
@@ -23,6 +25,7 @@ def extract_single_risk_keep_len(input_dir, output_dir, risk):
             new_lines = []
             for idx, line in enumerate(lines):
                 parts = line.strip().split(' ')
+                assert int(parts[1]) == 4, f"{label_name} {idx} error, {parts}"
                 if risk == 'd':
                     parts[3], parts[4], parts[5] = '0', '0', '0'
                 elif risk == 'b':
@@ -50,6 +53,7 @@ def extract_single_risk_keep_single(input_dir, output_dir, risk):
             new_lines = []
             for idx, line in enumerate(lines):
                 parts = line.strip().split(' ')
+                assert int(parts[1]) == 4, f"{label_name} {idx} error, {parts}"
                 parts[1] = '1'
                 if risk == 'd':
                     parts = list_remove_index(parts, [3, 4, 5])
@@ -66,9 +70,6 @@ def extract_single_risk_keep_single(input_dir, output_dir, risk):
 
         with open(output_path, 'w') as f:
             f.writelines(new_lines)
-
-
-
 
 def risk_refine_single(input_gt_dir, output_gt_dir, ref_dir,  risk='b'):
     os.makedirs(output_gt_dir, exist_ok=True)
@@ -109,6 +110,40 @@ def risk_refine_single(input_gt_dir, output_gt_dir, ref_dir,  risk='b'):
     print(f'change {diff_count}, all {len(ref_list)}')
 
 
+def risk_remove_high(input_gt_dir, output_gt_dir,  risk='b'):
+    os.makedirs(output_gt_dir, exist_ok=True)
+    gt_list = os.listdir(input_gt_dir)
+
+    # c 4 d b a c
+    if risk == 'd':
+        risk_index = 2
+    elif risk == 'b':
+        risk_index = 3
+    elif risk == 'a':
+        risk_index = 4
+    elif risk == 'c':
+        risk_index = 5
+    else:
+        ValueError(f"{risk} risk must be 'd' or 'b' or 'a' or 'c'")
+
+    diff_count = 0
+    for label_name in tqdm(gt_list):
+        input_gt_path = os.path.join(input_gt_dir, label_name)
+        output_gt_path = os.path.join(output_gt_dir, label_name)
+        with open(input_gt_path, 'r') as fi:
+            lines = fi.readlines()
+            new_lines = []
+            for id_line, line in enumerate(lines):
+                parts = line.strip().split(' ')
+                if parts[risk_index] == '2':
+                    parts[risk_index] = '0'
+                    diff_count += 1
+                new_line = ' '.join(parts) +'\n'
+                new_lines.append(new_line)
+        with open(output_gt_path, 'w') as fo:
+            fo.writelines(new_lines)
+    print(f'change {diff_count}')
+
 def risk_change_line(parts, src_risk, dst_risk):
     # c 4 d b a c
     change = False
@@ -141,6 +176,50 @@ def risk_change(input_gt_dir, output_gt_dir, src_risk='a-h', dst_risk='b-h'):
             fo.writelines(new_lines)
     print(f'change {change_count}')
 
+def update_risk_by_ref(input_gt_dir, output_gt_dir, ref_dir, dst_risk='b-h'):
+    os.makedirs(output_gt_dir, exist_ok=True)
+    gt_list = os.listdir(input_gt_dir)
+
+    obj_dict = {}
+    obj_list = os.listdir(ref_dir)
+    for object_name in tqdm(obj_list, desc='load obj info'):
+        object_stem = Path(object_name).stem
+        file_stem, object_id = object_stem.rsplit('_', 1)
+        object_id = int(object_id)
+        if file_stem not in obj_dict:
+            obj_dict[file_stem] = [object_id]
+        else:
+            obj_dict[file_stem].append(object_id)
+
+    change_count = 0
+    # c 4 d b a c
+    for label_name in tqdm(gt_list):
+        input_gt_path = os.path.join(input_gt_dir, label_name)
+        output_gt_path = os.path.join(output_gt_dir, label_name)
+        label_stem = Path(label_name).stem
+        if label_stem not in obj_dict:
+            shutil.copy(input_gt_path, output_gt_path)
+        else:
+            with open(input_gt_path, 'r') as fi:
+                lines = fi.readlines()
+                new_lines = []
+                for id_line, line in enumerate(lines):
+                    if id_line not in obj_dict[label_stem]:
+                        new_lines.append(line)
+                    else:
+                        change_count += 1
+                        parts = line.strip().split(' ')
+                        if dst_risk == 'b-n':
+                            parts[3] = '0'
+                        elif dst_risk == 'b-m':
+                            parts[3] = '1'
+                        elif dst_risk == 'b-h':
+                            parts[3] = '2'
+                        new_line = ' '.join(parts) +'\n'
+                        new_lines.append(new_line)
+            with open(output_gt_path, 'w') as fo:
+                fo.writelines(new_lines)
+    print(f'find {len(obj_list)}, change {change_count}')
 
 def get_img_list(input_csv_path):
     df = pd.read_csv(input_csv_path, index_col=None, names=['file_name'])
@@ -231,7 +310,6 @@ def copy_files_list(input_dir_list, output_dir):
             ValueError(input_dir_list, 'error!')
     else:
         ValueError(input_dir_list, 'error!')
-
 
 def box_iou(box1, box2, eps=1e-7):
     inter_x1 = max(box1[0], box2[0])
@@ -327,8 +405,6 @@ def load_all_label(label_dir, attributes):
         label_df_dict = HDFManager(label_all_path)
         print('finish!\n')
     return label_df_dict
-
-
 
 def pred_check_iou(label_dir, pred_dir, pred_obj_dir, attributes=None, with_conf=True, conf_threshold=0.3, iou_thr=0.3, defect_conf_threshold=None):
     attributes = get_attributes(attributes)
@@ -428,7 +504,6 @@ def pred2label(pred_dir, pred_obj_dir, output_pred_dir, with_conf=True):
 
     print(f'change {change_image_count}/{change_obj_count} records,')
 
-
 def get_risk_by_ref(risk_objects_dict, risks, pred_name, line_id):
     object_name = f'{Path(pred_name).stem}_{line_id}'
     results = ['0', '0', '0', '0']
@@ -440,7 +515,6 @@ def get_risk_by_ref(risk_objects_dict, risks, pred_name, line_id):
         elif object_name in risk_objects_dict[pm_lb_str]:
             results[id] = '1'
     return results
-
 
 def get_risk_objects(ref_dir, risks):
     risk_objects_dict = {}
@@ -500,7 +574,6 @@ def pred2label_ref(pred_dir, pred_obj_dir, output_pred_dir, ref_dir, attributes=
 
     print(f'change {change_image_count}/{change_obj_count} records,')
 
-
 def labels_merge(input_dir1, input_dir2, output_dir):
     os.makedirs(output_dir, exist_ok=True)
     input_dir_list1 = os.listdir(input_dir1)
@@ -524,20 +597,13 @@ def get_cats(class_file):
     cats = df['category'].to_list()
     return cats
 
-def get_category_by_ref(ref_dir, cats, label_name, line_id):
+def get_category_by_ref(obj_cat_dict, label_name, line_id):
     obj_name = f'{Path(label_name).stem}_{line_id}'
-    cat_result=None
-    for id, cat in enumerate(cats):
-        cat_dir = os.path.join(ref_dir, cat)
-        if os.path.exists(cat_dir) and os.path.exists(os.path.join(cat_dir, obj_name)):
-            cat_result = id
-    no_dir = os.path.join(ref_dir, 'no')
-    if os.path.exists(no_dir) and os.path.exists(os.path.join(no_dir, obj_name)):
-        cat_result = -1
-    if cat_result is None:
-        ValueError(f'cannot find {label_name} in {ref_dir}')
+    if obj_name in obj_cat_dict:
+        return obj_cat_dict[obj_name]
     else:
-        return str(cat_result)
+        print(f'cannot find {label_name}')
+        return None
 
 def category_update_by_ref(input_dir, output_dir, ref_dir, class_file):
     cats = get_cats(class_file)
@@ -545,6 +611,7 @@ def category_update_by_ref(input_dir, output_dir, ref_dir, class_file):
     shutil.rmtree(output_dir) if os.path.exists(output_dir) else None
     os.makedirs(output_dir, exist_ok=True)
     label_obj_dict = {}
+    obj_cat_dict = {}
     obj_count = 0
     for cat in cats+['no']:
         cat_dir = os.path.join(ref_dir, cat)
@@ -562,10 +629,11 @@ def category_update_by_ref(input_dir, output_dir, ref_dir, class_file):
                 label_obj_dict[file_name].append(object_id)
             else:
                 label_obj_dict[file_name] = [object_id]
+            obj_cat_dict[object_stem] = cats.index(cat) if cat in cats else '-1'
     print(f'load {len(label_obj_dict)}/{obj_count} records,')
 
 
-    change_image_count, change_obj_count = 0, 0
+    change_image_count, change_obj_count, remove_obj_count = 0, 0, 0
     input_list = os.listdir(input_dir)
     for label_name in tqdm(input_list, desc='update label'):
         input_label_path = os.path.join(input_dir, label_name)
@@ -580,14 +648,16 @@ def category_update_by_ref(input_dir, output_dir, ref_dir, class_file):
                 new_lines = []
                 for line_id, line in enumerate(lines):
                     if line_id in label_obj_dict[label_name]:
-                        change_obj_count += 1
                         parts = line.strip().split(' ')
-                        cat = get_category_by_ref(ref_dir, cats, label_name, line_id)
-                        if cat is None or cat == 'None':
-                            ValueError(f'cannot find {label_name} in {ref_dir}')
-                        elif cat != '-1':
-                            parts[0] = cat
+                        cat_id = get_category_by_ref(obj_cat_dict, label_name, line_id)
+                        if cat_id == '-1':
+                            remove_obj_count += 1
+                            continue
+                        elif int(cat_id) in list(range(len(cats))):
+                            change_obj_count += 1
+                            parts[0] = str(cat_id)
                         else:
+                            print(f'cannot find {label_name} in {ref_dir}, {cat_id}')
                             continue
                         new_line = ' '.join(parts) + '\n'
                     else:
@@ -596,33 +666,221 @@ def category_update_by_ref(input_dir, output_dir, ref_dir, class_file):
                 with open(output_label_path, 'w') as fw:
                     fw.writelines(new_lines)
 
-    print(f'change {change_image_count}/{change_obj_count} records, total {len(input_list)} records,')
+    print(f'change {change_image_count}/{change_obj_count} records, remove {remove_obj_count}, total {len(input_list)} records,')
+
+def vis_matched(df_match, txt_name, label_vis_dict, pred_vis_dict, vis_matched_dir, label_vis_dir, pred_vis_dir, match_save_method, attributes):
+    for idx, row in df_match.iterrows():
+        if not pd.isna(row['pred_defect']) and not pd.isna(row['gt_defect']):
+            if row['pred_defect'] or row['gt_defect']:
+                label_stem = f'{Path(txt_name).stem}_{int(row['gt_id'])}'
+                label_name = label_vis_dict[label_stem]
+                label_vis_path = os.path.join(label_vis_dir, label_name)
+                pred_stem = f'{Path(txt_name).stem}_{int(row['pred_id'])}'
+                pred_name = pred_vis_dict[pred_stem]
+                pred_vis_path = os.path.join(pred_vis_dir, pred_name)
+
+                vis_match_name = f'{Path(txt_name).stem}_label_{int(row['gt_id'])}_pred_{int(row['pred_id'])}.png'
+                vis_match_path = os.path.join(vis_matched_dir, vis_match_name)
+                label_vis_image = cv2.imread(label_vis_path) if os.path.exists(label_vis_path) else None
+                pred_vis_image = cv2.imread(pred_vis_path) if os.path.exists(pred_vis_path) else None
+                pred_vis_image = cv2.resize(pred_vis_image, (int(pred_vis_image.shape[1] * label_vis_image.shape[0] / pred_vis_image.shape[0]), label_vis_image.shape[0]))
+            else:
+                continue
+        elif pd.isna(row['pred_defect']) and pd.isna(row['gt_defect']):
+            print(f'{txt_name} : {idx}')
+            continue
+        elif pd.isna(row['pred_defect']) and row['gt_defect']:
+            label_stem = f'{Path(txt_name).stem}_{int(row['gt_id'])}'
+            label_name = label_vis_dict[label_stem]
+            label_vis_path = os.path.join(label_vis_dir, label_name)
+
+            vis_match_name = f'{Path(txt_name).stem}_label_{int(row['gt_id'])}_pred_no.png'
+            vis_match_path = os.path.join(vis_matched_dir, vis_match_name)
+            label_vis_image = cv2.imread(label_vis_path) if os.path.exists(label_vis_path) else None
+            pred_vis_image = np.zeros_like(label_vis_image)+255
+        elif pd.isna(row['gt_defect']) and row['pred_defect']:
+            pred_stem = f'{Path(txt_name).stem}_{int(row['pred_id'])}'
+            pred_name = pred_vis_dict[pred_stem]
+            pred_vis_path = os.path.join(pred_vis_dir, pred_name)
+            vis_match_name = f'{Path(txt_name).stem}_label_no_pred_{int(row['pred_id'])}.png'
+            vis_match_path = os.path.join(vis_matched_dir, vis_match_name)
+            pred_vis_image = cv2.imread(pred_vis_path) if os.path.exists(pred_vis_path) else None
+            label_vis_image = np.zeros_like(pred_vis_image)+255
+        else:
+            continue
+        result = np.hstack([label_vis_image, pred_vis_image])
+        if match_save_method == 'all':
+            save_path = os.path.join(os.path.dirname(vis_match_path), 'all', os.path.basename(vis_match_path))
+            cv2.imwrite(save_path, result)
+        elif match_save_method == 'attribute':
+            if not pd.isna(row['gt_defect']) and row['gt_defect']:
+                for att in attributes:
+                    if row[f'gt_{att}']>0:
+                        save_path = os.path.join(os.path.dirname(vis_match_path), 'gt', att, os.path.basename(vis_match_path))
+                        cv2.imwrite(save_path, result)
+            if not pd.isna(row['pred_defect']) and row['pred_defect']:
+                for att in attributes:
+                    if row[f'pred_{att}']>0:
+                        save_path = os.path.join(os.path.dirname(vis_match_path), 'pred', att, os.path.basename(vis_match_path))
+                        cv2.imwrite(save_path, result)
+
+def vis_matched_result(image_dir, label_dir, pred_dir, vis_dir, class_path, att_path,
+                       with_conf=True, iou_thr=0.3, conf_threshold=0.4, defect_conf_threshold=0.4, filter_small=0.05,
+                       save_method='attribute', crop_method='with_background_box_shape', annotation=False,
+                       match_save_method='attribute',
+                       ):
+    attributes = get_attributes(att_path)
+    temp_dir = os.path.join(vis_dir, 'temp')
+    label_vis_dir = os.path.join(temp_dir, 'label_vis')
+    label_vis_all_dir = label_vis_dir+'_all'
+    pred_vis_dir = os.path.join(temp_dir, 'pred_vis')
+    pred_vis_all_dir = pred_vis_dir+'_all'
+    vis_matched_dir = os.path.join(vis_dir, 'vis_matched')
+    shutil.rmtree(vis_matched_dir) if os.path.exists(vis_matched_dir) else None
+    os.makedirs(vis_matched_dir, exist_ok=True)
+    if match_save_method == 'all':
+        os.makedirs(os.path.join(vis_matched_dir, 'all'), exist_ok=True)
+    elif match_save_method == 'attribute':
+        for att in attributes:
+            os.makedirs(os.path.join(vis_matched_dir, 'gt', att), exist_ok=True)
+            os.makedirs(os.path.join(vis_matched_dir, 'pred', att), exist_ok=True)
+    else:
+        print(f'{match_save_method} not support!')
+
+    if with_conf:
+        pred_dir_without_conf = os.path.join(temp_dir, 'pred_dir_without_conf')
+        remove_conf(pred_dir, pred_dir_without_conf, conf_threshold=None, filter_small=None)
+    else:
+        pred_dir_without_conf = pred_dir
+
+    myolo_crop(image_dir, label_dir, label_vis_dir,
+        class_file = class_path,
+        attribute_file= att_path,
+        seg=True,
+        annotation=annotation,
+        save_method=save_method,
+        only_defect=False,
+        with_boundary=False,
+        crop_method=crop_method
+    )
+    myolo_crop(image_dir, pred_dir_without_conf, pred_vis_dir,
+        class_file = class_path,
+        attribute_file= att_path,
+        seg=True,
+        annotation=annotation,
+        save_method=save_method,
+        only_defect=False,
+        with_boundary=False,
+        crop_method=crop_method
+    )
+    copy_all_by_tree(label_vis_dir, label_vis_all_dir)
+    copy_all_by_tree(pred_vis_dir, pred_vis_all_dir)
+
+    label_vis_dict = get_stem2name(label_vis_all_dir)
+    pred_vis_dict = get_stem2name(pred_vis_all_dir)
+
+    txt_list = os.listdir(label_dir)
+    count_c_sum = 0
+    for txt_name in tqdm(txt_list, desc='read and process label'):
+        label_path = os.path.join(label_dir, txt_name)
+        pred_path = os.path.join(pred_dir, txt_name)
+
+        df_label = get_yolo_label_df(label_path, mdet=True, attributes=attributes, with_object_id=True)
+        if not os.path.exists(pred_path):
+            df_pred = pd.DataFrame(columns=df_label.columns)
+        else:
+            df_pred = get_yolo_label_df(pred_path, mdet=True, attributes=attributes, with_object_id=True, with_conf=with_conf, conf_threshold=conf_threshold, defect_conf_threshold=defect_conf_threshold)
+
+        if filter_small is not None:
+            df_label = df_label.loc[(df_label['w']>filter_small) | (df_label['h']>filter_small)]
+            df_pred = df_pred.loc[(df_pred['w']>filter_small) | (df_pred['h']>filter_small)]
+
+        df_match = match_and_merge(df_pred, df_label, iou_thr=iou_thr, att_list=attributes)
+
+        count_c = df_match['pred_broken'].sum()
+        if count_c > 0:
+            count_c_sum += count_c
+
+        vis_matched(df_match, txt_name, label_vis_dict, pred_vis_dict, vis_matched_dir, label_vis_all_dir, pred_vis_all_dir, match_save_method, attributes)
+
+    print(count_c_sum)
+
+def get_all_high(input_dir, ref_txt=None, attributes=None, with_conf=False, conf_threshold=0.4, filter_small=None):
+    attributes = get_attributes(attributes)
+    file_list = os.listdir(input_dir)
+    if ref_txt is not None:
+        ref_df = pd.read_csv(ref_txt, header=None, index_col=None, names=['file_name'])
+        ref_list = [Path(file_name).stem for file_name in ref_df['file_name'].to_list()]
+        file_list = [file_name for file_name in file_list if Path(file_name).stem in ref_list]
+    counts = [[0, 0, 0] for _ in attributes]
+    for file_name in tqdm(file_list):
+        file_path = os.path.join(input_dir, file_name)
+        df = get_yolo_label_df(file_path, mdet=True, attributes=attributes, with_conf=with_conf, conf_threshold=conf_threshold)
+        if filter_small is not None:
+            df = df.loc[(df['w']>filter_small) | (df['h']>filter_small)]
+        for idx, row in df.iterrows():
+            for idx, risk in enumerate(attributes):
+                if int(row[risk]) == 0:
+                    counts[idx][0] += 1
+                elif int(row[risk]) == 1:
+                    counts[idx][1] += 1
+                elif int(row[risk]) == 2:
+                    counts[idx][2] += 2
+                else:
+                    print('error!')
+    print(counts)
+
+def get_single_high(input_dir, risk, ref_txt=None, attributes=None, with_conf=False, conf_threshold=0.4, filter_small=None):
+    attributes = get_attributes(attributes)
+    file_list = os.listdir(input_dir)
+    if ref_txt is not None:
+        ref_df = pd.read_csv(ref_txt, header=None, index_col=None, names=['file_name'])
+        ref_list = [Path(file_name).stem for file_name in ref_df['file_name'].to_list()]
+        file_list = [file_name for file_name in file_list if Path(file_name).stem in ref_list]
+    counts = [0, 0, 0]
+    for file_name in tqdm(file_list):
+        file_path = os.path.join(input_dir, file_name)
+        df = get_yolo_label_df(file_path, mdet=True, attributes=attributes, with_conf=with_conf, conf_threshold=conf_threshold)
+        if filter_small is not None:
+            df = df.loc[(df['w']>filter_small) | (df['h']>filter_small)]
+        for idx, row in df.iterrows():
+            if int(row[risk]) == 0:
+                counts[0] += 1
+            elif int(row[risk]) == 1:
+                counts[1] += 1
+            elif int(row[risk]) == 2:
+                counts[2] += 1
+
+    print(counts)
+
 if __name__ == '__main__':
     pass
-    # pred_check_iou(
-    #     r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine/labels',
-    #     r'/localnvme/project/ultralytics/runs/msegment/val694/labels',
-    #     r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine/result_analysis/keep/pred_no_label_background/all_without_risk',
-    #     # r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine/result_analysis/keep/pred_no_label_background/all_with_risk',
-    #     attributes=r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine/attribute.yaml',
-    # )
+    base_dir = r'/localnvme/data/billboard/all_data/mseg_c5_l2/data80_v15'
+    image_dir = os.path.join(base_dir, 'images')
+    label_dir = os.path.join(base_dir, 'labels')
+    val_test_dir = os.path.join(base_dir, 'val_test')
+    image_test_dir = os.path.join(val_test_dir, 'images')
+    label_test_dir = os.path.join(val_test_dir, 'labels')
+    result_analysis_dir = os.path.join(base_dir, 'result_analysis')
+    vis_dir = os.path.join(result_analysis_dir, 'vis')
+    class_path = os.path.join(base_dir, 'class.txt')
+    att_path = os.path.join(base_dir, 'attribute.yaml')
+    val_test_path = os.path.join(base_dir, 'val_test.txt')
+    pred_dir = os.path.join(base_dir, 'val749')
 
-    # remove_by_list(
-    #     r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine/result_analysis/keep/pred_no_label_background/all_without_risk_iou_check.csv',
-    #     r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine/result_analysis/keep/pred_no_label_background/all_without_risk',
-    #     r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine/result_analysis/keep/pred_no_label_background/all_without_risk_iou_check',
-    # )
-    # remove_by_list(
-    #     r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine/result_analysis/keep/pred_no_label_background/all_with_risk_iou_check.csv',
-    #     r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine/result_analysis/keep/pred_no_label_background/all_with_risk',
-    #     r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine/result_analysis/keep/pred_no_label_background/all_with_risk_iou_check',
-    # )
-
-    # pred2label(
-    #     r'/localnvme/project/ultralytics/runs/msegment/val694/labels',
-    #     r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine/result_analysis/keep/pred_no_label_background/merge_1105/all',
-    #     r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine/result_analysis/keep/pred_no_label_background/merge_1105_labels',
-    #     attributes=r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine/attribute.yaml',
-    # )
-    copy_files_list(r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine/result_analysis/keep/pred_no_label_background/merge_1106/all_with_risk',
-                    None)
+    vis_matched_result(
+        image_dir,
+        label_dir,
+        pred_dir,
+        vis_dir,
+        class_path,
+        att_path,
+        with_conf=False,
+        annotation=True,
+        iou_thr=0.3,
+        conf_threshold=0.4,
+        defect_conf_threshold=0.001,
+        filter_small=0.05,
+        save_method='attribute',
+        crop_method='with_background_box_shape',
+    )

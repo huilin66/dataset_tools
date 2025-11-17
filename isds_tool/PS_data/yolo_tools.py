@@ -682,6 +682,37 @@ def split_txt_merge(input_dir1, input_dir2, output_dir, suffix):
     df_output_val.to_csv(output_val_path, index=False, header=False)
     print(f'merge {input_train_path1} + {input_train_path2} -> {output_train_path}')
 
+def select_val(input_dir, val_txt='val.txt'):
+    pass
+    print(f'select {input_dir} by {val_txt}')
+    val_txt_path = os.path.join(input_dir, val_txt)
+    image_dir = os.path.join(input_dir, 'images')
+    label_dir = os.path.join(input_dir, 'labels')
+    val_dir = os.path.join(input_dir, val_txt_path.replace('.txt', ''))
+    val_image_dir = os.path.join(val_dir, 'images')
+    val_label_dir = os.path.join(val_dir, 'labels')
+    if os.path.exists(val_label_dir):
+        shutil.rmtree(val_label_dir)
+    if os.path.exists(val_image_dir):
+        shutil.rmtree(val_image_dir)
+    os.makedirs(val_image_dir, exist_ok=True)
+    os.makedirs(val_label_dir, exist_ok=True)
+
+    df = pd.read_csv(val_txt_path, header=None, index_col=False, names=['image_name'])
+    img_list = df['image_name'].to_list()
+    for image_path in tqdm(img_list):
+        image_name = Path(image_path).name
+        txt_name = Path(image_name).stem + '.txt'
+        input_image_path = os.path.join(image_dir, image_name)
+        ouput_image_path = os.path.join(val_image_dir, image_name)
+        input_label_path = os.path.join(label_dir, txt_name)
+        output_label_path = os.path.join(val_label_dir, txt_name)
+        shutil.copy(input_image_path, ouput_image_path)
+        shutil.copy(input_label_path, output_label_path)
+
+    print('select finish!\n')
+
+
 def data_merge(input_dir1, input_dir2, output_dir, cp_split=True, suffix=''):
     print(f'merging {input_dir1} + {input_dir2} --> {output_dir}...')
     data_copy(input_dir1, output_dir)
@@ -795,9 +826,13 @@ def get_yolo_label_df(gt_path, mdet=False, attributes=None, with_track_id=False,
         if defect_conf_threshold is None:
             df = df[(df['conf'] >= conf_threshold)]
         else:
+            # df = df[~(
+            #     ((df['defect_no_c'] == True) & (df['conf'] < defect_conf_threshold)) |
+            #     ((df['defect_no_c'] == False) & (df['conf'] < conf_threshold))
+            # )]
             df = df[~(
-                ((df['defect_no_c'] == True) & (df['conf'] < defect_conf_threshold)) |
-                ((df['defect_no_c'] == False) & (df['conf'] < conf_threshold))
+                ((df['defect'] == True) & (df['conf'] < defect_conf_threshold)) |
+                ((df['defect'] == False) & (df['conf'] < conf_threshold))
             )]
     df = df_xywh_to_xyxy(df)
     return df
@@ -1585,6 +1620,10 @@ def copy_ref_xlsx(input_dir, output_dir, ref_path, column='file_name'):
     ref_list = df[column].to_list()
     copy_ref_list(input_dir, output_dir, ref_list)
 
+def copy_ref_csv(input_dir, output_dir, ref_path):
+    df = pd.read_csv(ref_path, names=['path'])
+    ref_list = df['path'].to_list()
+    copy_ref_list(input_dir, output_dir, ref_list)
 
 def copy_exclude_list(input_dir, output_dir, exclude_list):
     os.makedirs(output_dir, exist_ok=True)
@@ -1703,6 +1742,75 @@ def only_keep_defect_object(input_dir, output_dir):
                 if with_risk:
                     new_lines.append(line)
             f2.writelines(new_lines)
+
+def small_judge(parts, filter_small):
+    if filter_small is None:
+        return False
+    # cat = int(parts[0])
+    att_len = int(parts[1])
+    # atts = list(map(float, parts[2:2 + att_len]))
+    polygons = list(map(float, parts[2 + att_len:]))
+    if len(polygons)==0:
+        return True
+    x, y, w, h = poly2xywh(polygons)
+    if w>filter_small or h>filter_small:
+        return False
+    else:
+        return True
+
+def remove_conf(input_dir, output_dir, conf_threshold=None, filter_small=None):
+    shutil.rmtree(output_dir) if os.path.exists(output_dir) else None
+    os.makedirs(output_dir, exist_ok=True)
+    input_list = os.listdir(input_dir)
+    for label_name in tqdm(input_list, desc='remove_conf'):
+        input_path = os.path.join(input_dir, label_name)
+        output_path = os.path.join(output_dir, label_name)
+        with open(input_path, 'r') as f1, open(output_path, 'w') as f2:
+            lines = f1.readlines()
+            new_lines = []
+            for line in lines:
+                parts = line.strip().split(' ')
+                if conf_threshold is not None:
+                    conf = float(parts[-1])
+                    if conf<conf_threshold:
+                        continue
+                parts = parts[:-1]
+                small_obj = small_judge(parts, filter_small)
+                if small_obj:
+                    continue
+                new_line = ' '.join(parts) + '\n'
+                new_lines.append(new_line)
+            f2.writelines(new_lines)
+
+def copy_all_by_tree(input_dir, output_dir):
+    input_dir_path = Path(input_dir)
+    output_dir_path = Path(output_dir)
+    shutil.rmtree(output_dir) if os.path.exists(output_dir) else None
+    output_dir_path.mkdir(parents=True, exist_ok=True)
+
+    files = list(input_dir_path.rglob('*'))
+    files = [f for f in files if f.is_file()]
+
+    for f in tqdm(files, desc='copy'):
+        shutil.copy(f, output_dir_path/f.name)
+
+    # shutil.rmtree(output_dir) if os.path.exists(output_dir) else None
+    # os.makedirs(output_dir, exist_ok=True)
+    # [shutil.copy2(f, Path(output_dir)/f.name) for f in Path(input_dir).rglob('*') if f.is_file()]
+
+
+def find_empty_file(input_dir, output_path, attributes=None,):
+    attributes = get_attributes(attributes)
+    input_list = os.listdir(input_dir)
+
+    df_empty = pd.DataFrame(None, columns=['file_path'])
+    for label_name in tqdm(input_list, desc='find_empty_file'):
+        label_path = os.path.join(input_dir, label_name)
+        df = get_yolo_label_df(label_path, mdet=True, attributes=attributes)
+        if df is None or df.empty or len(df) == 0:
+            df_empty.loc[len(df_empty)] = [label_name]
+    df_empty.to_csv(output_path, index=False, header=False)
+    print(f'find {len(df_empty)}/{len(input_list)} records')
 
 
 if __name__ == '__main__':

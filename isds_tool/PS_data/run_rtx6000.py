@@ -5,6 +5,8 @@ from yolo_tools import copy_ref_xlsx, psdata_add_pipline, data_tf_pipline, copy_
 from data_vis.yolo_sta import yolo_sta
 from data_vis.yolo_vis import yolo_mdet_vis
 from dataformat_swift.yolo2xanylabeling import yolo_to_xanylabeling_dir
+from att_tools import get_single_high, get_all_high
+
 if __name__ == '__main__':
     pass
     # dataset_dir = r'/localnvme/data/billboard/fused_data/data7436_mseg_c6_0922'
@@ -295,26 +297,32 @@ if __name__ == '__main__':
     # dataset_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c6_1030_abandonment_refine'
     # dataset_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c6_1030'
     # dataset_dir = r'/localnvme/data/billboard/all_data/mseg_c6/data7961_mseg_c6_1030'
-    dataset_dir = r'/localnvme/data/billboard/all_data/mseg_c6/data7961_mseg_c6_1106_v11'
-    image_dir = os.path.join(dataset_dir, 'images')
-    labels_dir = os.path.join(dataset_dir, 'labels')
-    # labels_dir = os.path.join(dataset_dir, 'labels_v4')
-    json_dir = os.path.join(dataset_dir, 'jsons')
-    image_vis_dir = os.path.join(dataset_dir, 'label_analysis', 'image_vis')
-    labels_sta_dir = os.path.join(dataset_dir, 'label_analysis','labels_sta')
-    image_crop_dir = os.path.join(dataset_dir, 'label_analysis', 'all_gt')
-    class_file = os.path.join(dataset_dir, 'class.txt')
-    attribute_file = os.path.join(dataset_dir, 'attribute.yaml')
-    ref_txt = os.path.join(dataset_dir, "val_test.txt")
-    yolo_sta(
-        # img_dir=os.path.join(dataset_dir, "images"),
-        gt_dir=labels_dir,
-        result_dir=labels_sta_dir,
-        class_path=class_file,
-        attribute_path=attribute_file,
-        # ref_txt=ref_txt,
-        seg=True,
-    )
+    # dataset_dir = r'/localnvme/data/billboard/all_data/mseg_c6/data7961_mseg_c6_1104_v9'
+    # dataset_dir = r'/localnvme/data/billboard/all_data/mseg_c6/data7961_mseg_c6_1104_v6'
+    # dataset_dir = r'/localnvme/data/billboard/all_data/mseg_c5_l2/data7961_mseg_c5_l2_1106_v12'
+    # dataset_dir = r'/localnvme/data/billboard/all_data/mseg_c6/data7961_mseg_c6_1112_v16'
+    # dataset_dir = r'/localnvme/data/billboard/fused_data/data7961_mseg_c6_1015'
+    # dataset_dir = r'/localnvme/data/billboard/all_data/mseg_c6/data7961_mseg_c6_1112_v16'
+    # dataset_dir = r'/localnvme/data/billboard/all_data/mseg_c6/data80_v16'
+    # image_dir = os.path.join(dataset_dir, 'images')
+    # labels_dir = os.path.join(dataset_dir, 'labels')
+    # # labels_dir = os.path.join(dataset_dir, 'labels_v4')
+    # json_dir = os.path.join(dataset_dir, 'jsons')
+    # image_vis_dir = os.path.join(dataset_dir, 'label_analysis', 'image_vis')
+    # labels_sta_dir = os.path.join(dataset_dir, 'label_analysis','labels_sta')
+    # image_crop_dir = os.path.join(dataset_dir, 'label_analysis', 'all_gt')
+    # class_file = os.path.join(dataset_dir, 'class.txt')
+    # attribute_file = os.path.join(dataset_dir, 'attribute.yaml')
+    # ref_txt = os.path.join(dataset_dir, "val_test.txt")
+    # yolo_sta(
+    #     # img_dir=os.path.join(dataset_dir, "images"),
+    #     gt_dir=labels_dir,
+    #     result_dir=labels_sta_dir,
+    #     class_path=class_file,
+    #     attribute_path=attribute_file,
+    #     # ref_txt=ref_txt,
+    #     seg=True,
+    # )
 
     # data_tf_pipline(dataset_dir, train_ratio=1, split_mseg_c6=True)
     # data_tf_pipline(dataset_dir, selected_suffix='_80p_ref', split_mseg_c6=False)
@@ -351,3 +359,98 @@ if __name__ == '__main__':
     #            attribute_file=attribute_file, seg=True, annotation=False,
     #            save_method='attribute', only_defect=True, with_boundary=False,
     #            crop_method='with_background_box_shape')
+
+
+    # input_label_dir = r'/localnvme/data/billboard/all_data/mseg_c5_l2/data7961_mseg_c5_l2_1110_v13/labels'
+    # att_path = r'/localnvme/data/billboard/all_data/mseg_c5_l2/data7961_mseg_c5_l2_1110_v13/attribute.yaml'
+    # get_all_high(input_label_dir, attributes=att_path)
+
+    # input_label_dir = r'/localnvme/data/billboard/all_data/mseg_c5_l2/data7961_mseg_c5_l2_1110_v13_single_risk/b/labels'
+    # att_path = r'/localnvme/data/billboard/all_data/mseg_c5_l2/data7961_mseg_c5_l2_1110_v13_single_risk/b/attribute.yaml'
+    # get_all_high(input_label_dir, attributes=att_path)
+
+    # from yolo_tools import data_tf_pipline_new
+    #
+    # datav16_dir = r'/localnvme/data/billboard/all_data/mseg_c6/data7961_mseg_c6_1112_v16'
+    # data_tf_pipline_new(datav16_dir, copy_list=['seg_c5'])
+    #
+    # datav16_dir = r'/localnvme/data/billboard/all_data/mseg_c6/data7961_mseg_c6_1113_v17'
+    # data80_dir = r'/localnvme/data/billboard/all_data/mseg_c6/data80_v17'
+    # input_image_dir = os.path.join(datav16_dir, 'images')
+    # input_label_dir = os.path.join(datav16_dir, 'labels')
+    # input_val_test_path = os.path.join(datav16_dir, 'val_test.txt')
+    # data80_image_dir = os.path.join(data80_dir, 'images')
+    # data80_label_dir = os.path.join(data80_dir, 'labels')
+    # image_crop_dir = os.path.join(data80_dir, 'labels_crop')
+    # class_c5_path = r'/localnvme/data/billboard/class_c5.txt'
+    # att_path = r'/localnvme/data/billboard/attribute.yaml'
+    # data80_class_path = os.path.join(data80_dir, 'class.txt')
+    # data80_att_path = os.path.join(data80_dir, 'attribute.yaml')
+    # import shutil
+    # from yolo_tools import copy_ref_csv
+    # copy_ref_csv(input_image_dir, data80_image_dir, input_val_test_path)
+    # copy_ref_csv(input_label_dir, data80_label_dir, input_val_test_path)
+    # shutil.copy(class_c5_path, data80_class_path)
+    # shutil.copy(att_path, data80_att_path)
+    #
+    #
+    # myolo_crop(
+    #     data80_image_dir,
+    #     data80_label_dir,
+    #     image_crop_dir,
+    #     data80_class_path,
+    #     attribute_file=data80_att_path,
+    #     seg=True,
+    #     annotation=False,
+    #     save_method='attribute',
+    #     only_defect=True,
+    #     with_boundary=True,
+    #     crop_method='with_background_box_shape'
+    # )
+    from att_tools import remove_conf, vis_matched_result
+    val_dir = r'/localnvme/project/ultralytics/runs/msegment/val844/labels'
+    base_dir = r'/localnvme/data/billboard/all_data/mseg_c5_l2/data80_v17'
+    image_dir = os.path.join(base_dir, 'images')
+    label_dir = os.path.join(base_dir, 'labels')
+    val_test_dir = os.path.join(base_dir, 'val_test')
+    image_test_dir = os.path.join(val_test_dir, 'images')
+    label_test_dir = os.path.join(val_test_dir, 'labels')
+    result_analysis_dir = os.path.join(base_dir, 'result_analysis')
+    vis_dir = os.path.join(result_analysis_dir, 'vis')
+    class_path = os.path.join(base_dir, 'class.txt')
+    att_path = os.path.join(base_dir, 'attribute.yaml')
+    val_test_path = os.path.join(base_dir, 'val_test.txt')
+    pred_dir = os.path.join(base_dir, 'val844')
+
+    # remove_conf(r'/localnvme/project/ultralytics/runs/msegment/val767/labels',
+    #             r'/localnvme/data/billboard/all_data/mseg_c5_l2/data80_v17/val767_no_conf',
+    #             conf_threshold=0.4, filter_small=0.05,
+    #             )
+    # get_all_high(r'/localnvme/data/billboard/all_data/mseg_c5_l2/data80_v17/val767_no_conf', attributes=att_path)
+    #
+    # remove_conf(r'/localnvme/project/ultralytics/runs/msegment/val767/labels',
+    #             r'/localnvme/data/billboard/all_data/mseg_c5_l2/data80_v17/val767_no_conf',
+    #             conf_threshold=0.1, filter_small=0.05,
+    #             )
+    # get_all_high(r'/localnvme/data/billboard/all_data/mseg_c5_l2/data80_v17/val767_no_conf', attributes=att_path)
+    # val_dir = r'/localnvme/data/billboard/infer8/labels'
+    # get_all_high(val_dir, attributes=att_path, with_conf=True, conf_threshold=0.1)
+    remove_conf(val_dir, pred_dir, conf_threshold=0.1, filter_small=0.05,)
+    get_all_high(pred_dir, attributes=att_path)
+
+    vis_matched_result(
+        image_dir,
+        label_dir,
+        pred_dir,
+        vis_dir,
+        class_path,
+        att_path,
+        with_conf=False,
+        annotation=True,
+        iou_thr=0.3,
+        conf_threshold=0.4,
+        defect_conf_threshold=0.1,
+        filter_small=0.05,
+        save_method='attribute',
+        crop_method='with_background_box_shape',
+    )
