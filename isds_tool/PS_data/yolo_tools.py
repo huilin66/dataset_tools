@@ -637,7 +637,9 @@ def ref_split(ref_path, img_dir, label_dir=None, save_dir=None, full_path=True, 
     if full_path:
         val_list = [os.path.join(img_dir, filename) for filename in val_list]
         train_list = [os.path.join(img_dir, filename) for filename in train_list]
-
+    else:
+        val_list = [os.path.join('images', filename) for filename in val_list]
+        train_list = [os.path.join('images', filename) for filename in train_list]
     df_train = pd.DataFrame({'filename': train_list})
     df_val = pd.DataFrame({'filename': val_list})
     df_all = pd.DataFrame({'filename': train_list+val_list})
@@ -1813,6 +1815,15 @@ def find_empty_file(input_dir, output_path, attributes=None,):
     print(f'find {len(df_empty)}/{len(input_list)} records')
 
 
+def copy_dir(input_dir, output_dir):
+    input_list = os.listdir(input_dir)
+    for input_name in tqdm(input_list, desc='copy_dir'):
+        input_path = os.path.join(input_dir, input_name)
+        output_path = os.path.join(output_dir, input_name)
+        if not os.path.exists(output_path):
+            shutil.copy(input_path, output_path)
+        else:
+            print(f'copy error, {input_name} exists')
 if __name__ == '__main__':
     pass
     # new_psdata_add_pipline(

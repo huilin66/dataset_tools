@@ -373,9 +373,9 @@ if __name__ == '__main__':
     #
     # datav16_dir = r'/localnvme/data/billboard/all_data/mseg_c6/data7961_mseg_c6_1112_v16'
     # data_tf_pipline_new(datav16_dir, copy_list=['seg_c5'])
-    #
-    # datav16_dir = r'/localnvme/data/billboard/all_data/mseg_c6/data7961_mseg_c6_1113_v17'
-    # data80_dir = r'/localnvme/data/billboard/all_data/mseg_c6/data80_v17'
+
+    # datav16_dir = r'/localnvme/data/billboard/all_data/mseg_c5_l2/data7961_mseg_c5_l2_1113_v17'
+    # data80_dir = r'/localnvme/data/billboard/all_data/mseg_c5_l2/data80_v15'
     # input_image_dir = os.path.join(datav16_dir, 'images')
     # input_label_dir = os.path.join(datav16_dir, 'labels')
     # input_val_test_path = os.path.join(datav16_dir, 'val_test.txt')
@@ -403,24 +403,24 @@ if __name__ == '__main__':
     #     seg=True,
     #     annotation=False,
     #     save_method='attribute',
-    #     only_defect=True,
+    #     only_defect=False,
     #     with_boundary=True,
     #     crop_method='with_background_box_shape'
     # )
-    from att_tools import remove_conf, vis_matched_result
-    val_dir = r'/localnvme/project/ultralytics/runs/msegment/val844/labels'
-    base_dir = r'/localnvme/data/billboard/all_data/mseg_c5_l2/data80_v17'
-    image_dir = os.path.join(base_dir, 'images')
-    label_dir = os.path.join(base_dir, 'labels')
-    val_test_dir = os.path.join(base_dir, 'val_test')
-    image_test_dir = os.path.join(val_test_dir, 'images')
-    label_test_dir = os.path.join(val_test_dir, 'labels')
-    result_analysis_dir = os.path.join(base_dir, 'result_analysis')
-    vis_dir = os.path.join(result_analysis_dir, 'vis')
-    class_path = os.path.join(base_dir, 'class.txt')
-    att_path = os.path.join(base_dir, 'attribute.yaml')
-    val_test_path = os.path.join(base_dir, 'val_test.txt')
-    pred_dir = os.path.join(base_dir, 'val844')
+    # from att_tools import remove_conf, vis_matched_result
+    # val_dir = r'/localnvme/project/ultralytics/runs/msegment/val844/labels'
+    # base_dir = r'/localnvme/data/billboard/all_data/mseg_c5_l2/data80_v17'
+    # image_dir = os.path.join(base_dir, 'images')
+    # label_dir = os.path.join(base_dir, 'labels')
+    # val_test_dir = os.path.join(base_dir, 'val_test')
+    # image_test_dir = os.path.join(val_test_dir, 'images')
+    # label_test_dir = os.path.join(val_test_dir, 'labels')
+    # result_analysis_dir = os.path.join(base_dir, 'result_analysis')
+    # vis_dir = os.path.join(result_analysis_dir, 'vis')
+    # class_path = os.path.join(base_dir, 'class.txt')
+    # att_path = os.path.join(base_dir, 'attribute.yaml')
+    # val_test_path = os.path.join(base_dir, 'val_test.txt')
+    # pred_dir = os.path.join(base_dir, 'val844')
 
     # remove_conf(r'/localnvme/project/ultralytics/runs/msegment/val767/labels',
     #             r'/localnvme/data/billboard/all_data/mseg_c5_l2/data80_v17/val767_no_conf',
@@ -435,22 +435,40 @@ if __name__ == '__main__':
     # get_all_high(r'/localnvme/data/billboard/all_data/mseg_c5_l2/data80_v17/val767_no_conf', attributes=att_path)
     # val_dir = r'/localnvme/data/billboard/infer8/labels'
     # get_all_high(val_dir, attributes=att_path, with_conf=True, conf_threshold=0.1)
-    remove_conf(val_dir, pred_dir, conf_threshold=0.1, filter_small=0.05,)
-    get_all_high(pred_dir, attributes=att_path)
+    # remove_conf(val_dir, pred_dir, conf_threshold=0.1, filter_small=0.05,)
+    # get_all_high(pred_dir, attributes=att_path)
+    #
+    # vis_matched_result(
+    #     image_dir,
+    #     label_dir,
+    #     pred_dir,
+    #     vis_dir,
+    #     class_path,
+    #     att_path,
+    #     with_conf=False,
+    #     annotation=True,
+    #     iou_thr=0.3,
+    #     conf_threshold=0.4,
+    #     defect_conf_threshold=0.1,
+    #     filter_small=0.05,
+    #     save_method='attribute',
+    #     crop_method='with_background_box_shape',
+    # )
 
-    vis_matched_result(
-        image_dir,
-        label_dir,
-        pred_dir,
-        vis_dir,
-        class_path,
-        att_path,
-        with_conf=False,
-        annotation=True,
-        iou_thr=0.3,
-        conf_threshold=0.4,
-        defect_conf_threshold=0.1,
-        filter_small=0.05,
-        save_method='attribute',
-        crop_method='with_background_box_shape',
-    )
+    get_all_high(r'/localnvme/data/added_data/test_data1121/images_infer5/labels',
+                 attributes=r'/localnvme/data/billboard/all_data/mseg_c5_l2/data7961_mseg_c5_l2_1117_v21_single_risk/b/attribute.yaml')
+    get_all_high(r'/localnvme/data/added_data/test_data1121/images_infer6/labels',
+                 attributes=r'/localnvme/data/billboard/all_data/mseg_c5_l2/data7961_mseg_c5_l2_1117_v21_single_risk/b/attribute.yaml')
+    # myolo_crop(
+    #     r'/scrinvme/huilin/isds/check_data/synthetic_data_add4_v1',
+    #     r'/scrinvme/huilin/isds/check_data/synthetic_data_add4_v1_labels',
+    #     r'/scrinvme/huilin/isds/check_data/synthetic_data_add4_v1_labels_crop',
+    #     r'/scrinvme/huilin/isds/check_data/class.txt',
+    #     attribute_file=r'/scrinvme/huilin/isds/check_data/attribute.yaml',
+    #     seg=True,
+    #     annotation=False,
+    #     save_method='attribute',
+    #     only_defect=False,
+    #     with_boundary=True,
+    #     crop_method='with_background_box_shape'
+    # )

@@ -1,15 +1,11 @@
-# from pathlib import Path
-#
-# img_name = r'/localnvme/data/billboard/all_data/mseg_c6/data7961_mseg_c6_1030/images/頭頸肩200.png'
-# if Path(img_name).suffix.lower() in ['.jpg', 'jpeg', 'png']:
-#     print('true')
-# else:
-#     print(Path(img_name).suffix.lower())
+import pandas as pd
+from isds_tool.PS_data.att_tools import find_common_list
+input_path1 = r'/localnvme/data/billboard/all_data/mseg_c6/data7961_mseg_c6_1030/val_test.txt'
+input_path2 = r'/localnvme/data/billboard/all_data/mseg_c6/data7961_mseg_c6_1030/train_test.txt'
+input1_df = pd.read_csv(input_path1, header=None, names=['file'])
+input2_df = pd.read_csv(input_path2, header=None, names=['file'])
+input1_list = input1_df['file'].to_list()
+input2_list = input2_df['file'].to_list()
 
-import os
-
-
-print(len(os.listdir(r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine/result_analysis/val694/risk_abandonment_pred_no_label_background')))
-print(len(os.listdir(r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine/result_analysis/val694/risk_broken_pred_no_label_background')))
-print(len(os.listdir(r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine/result_analysis/val694/risk_corrosion_pred_no_label_background')))
-print(len(os.listdir(r'/localnvme/data/billboard/fused_data/data7961_mseg_c5_l2_1029_abandonment_refine/result_analysis/val694/risk_deformation_pred_no_label_background')))
+common_list = find_common_list(input1_list, input2_list)
+print(common_list)
