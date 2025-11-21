@@ -727,7 +727,7 @@ def vis_matched(df_match, txt_name, label_vis_dict, pred_vis_dict, vis_matched_d
 def vis_matched_result(image_dir, label_dir, pred_dir, vis_dir, class_path, att_path,
                        with_conf=True, iou_thr=0.3, conf_threshold=0.4, defect_conf_threshold=0.4, filter_small=0.05,
                        save_method='attribute', crop_method='with_background_box_shape', annotation=False,
-                       match_save_method='attribute',
+                       match_save_method='attribute', crop_gt=True, crop_pred=True
                        ):
     attributes = get_attributes(att_path)
     temp_dir = os.path.join(vis_dir, 'temp')
@@ -753,28 +753,30 @@ def vis_matched_result(image_dir, label_dir, pred_dir, vis_dir, class_path, att_
     else:
         pred_dir_without_conf = pred_dir
 
-    myolo_crop(image_dir, label_dir, label_vis_dir,
-        class_file = class_path,
-        attribute_file= att_path,
-        seg=True,
-        annotation=annotation,
-        save_method=save_method,
-        only_defect=False,
-        with_boundary=False,
-        crop_method=crop_method
-    )
-    myolo_crop(image_dir, pred_dir_without_conf, pred_vis_dir,
-        class_file = class_path,
-        attribute_file= att_path,
-        seg=True,
-        annotation=annotation,
-        save_method=save_method,
-        only_defect=False,
-        with_boundary=False,
-        crop_method=crop_method
-    )
-    copy_all_by_tree(label_vis_dir, label_vis_all_dir)
-    copy_all_by_tree(pred_vis_dir, pred_vis_all_dir)
+    if crop_gt:
+        myolo_crop(image_dir, label_dir, label_vis_dir,
+            class_file = class_path,
+            attribute_file= att_path,
+            seg=True,
+            annotation=annotation,
+            save_method=save_method,
+            only_defect=False,
+            with_boundary=False,
+            crop_method=crop_method
+        )
+        copy_all_by_tree(label_vis_dir, label_vis_all_dir)
+    if crop_pred:
+        myolo_crop(image_dir, pred_dir_without_conf, pred_vis_dir,
+            class_file = class_path,
+            attribute_file= att_path,
+            seg=True,
+            annotation=annotation,
+            save_method=save_method,
+            only_defect=False,
+            with_boundary=False,
+            crop_method=crop_method
+        )
+        copy_all_by_tree(pred_vis_dir, pred_vis_all_dir)
 
     label_vis_dict = get_stem2name(label_vis_all_dir)
     pred_vis_dict = get_stem2name(pred_vis_all_dir)
@@ -855,32 +857,43 @@ def get_single_high(input_dir, risk, ref_txt=None, attributes=None, with_conf=Fa
 
 if __name__ == '__main__':
     pass
-    base_dir = r'/localnvme/data/billboard/all_data/mseg_c5_l2/data80_v15'
+    base_dir = r'/localnvme/data/billboard/all_data/mseg_c5_l2/data80_v21'
     image_dir = os.path.join(base_dir, 'images')
     label_dir = os.path.join(base_dir, 'labels')
     val_test_dir = os.path.join(base_dir, 'val_test')
     image_test_dir = os.path.join(val_test_dir, 'images')
     label_test_dir = os.path.join(val_test_dir, 'labels')
     result_analysis_dir = os.path.join(base_dir, 'result_analysis')
-    vis_dir = os.path.join(result_analysis_dir, 'vis')
     class_path = os.path.join(base_dir, 'class.txt')
     att_path = os.path.join(base_dir, 'attribute.yaml')
     val_test_path = os.path.join(base_dir, 'val_test.txt')
-    pred_dir = os.path.join(base_dir, 'val749')
 
-    vis_matched_result(
-        image_dir,
-        label_dir,
-        pred_dir,
-        vis_dir,
-        class_path,
-        att_path,
-        with_conf=False,
-        annotation=True,
-        iou_thr=0.3,
-        conf_threshold=0.4,
-        defect_conf_threshold=0.001,
-        filter_small=0.05,
-        save_method='attribute',
-        crop_method='with_background_box_shape',
-    )
+
+    data7961_dir = r'/localnvme/data/billboard/all_data/mseg_c5_l2/data7961_mseg_c5_l2_1117_v21/val_test_broken_syn_v1/result_analysis'
+
+
+    val_list = [
+        # 'val899',
+        'val894'
+    ]
+    for val in val_list:
+        pred_dir = os.path.join(data7961_dir, val)
+        vis_dir = os.path.join(result_analysis_dir, f'vis_{val}')
+        # pred_dir = os.path.join(base_dir, val)
+
+        vis_matched_result(
+            image_dir,
+            label_dir,
+            pred_dir,
+            vis_dir,
+            class_path,
+            att_path,
+            with_conf=True,
+            annotation=True,
+            iou_thr=0.3,
+            conf_threshold=0.4,
+            defect_conf_threshold=0.4,
+            filter_small=0.05,
+            save_method='attribute',
+            crop_method='with_background_box_shape',
+        )
