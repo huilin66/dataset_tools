@@ -6,6 +6,8 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 from pathlib import Path
+import sys
+sys.path.append('/localnvme/project/dataset_tools/isds_tool/PS_data')
 from yolo_mask_crop import myolo_crop
 from yolo_tools import get_yolo_label_df, get_attributes, remove_conf, get_stem2name, copy_all_by_tree
 
@@ -215,6 +217,47 @@ def update_risk_by_ref(input_gt_dir, output_gt_dir, ref_dir, dst_risk='b-h'):
                             parts[3] = '1'
                         elif dst_risk == 'b-h':
                             parts[3] = '2'
+                        new_line = ' '.join(parts) +'\n'
+                        new_lines.append(new_line)
+            with open(output_gt_path, 'w') as fo:
+                fo.writelines(new_lines)
+    print(f'find {len(obj_list)}, change {change_count}')
+
+def update_risk_by_ref_single(input_gt_dir, output_gt_dir, ref_dir):
+    os.makedirs(output_gt_dir, exist_ok=True)
+    gt_list = os.listdir(input_gt_dir)
+
+    obj_dict = {}
+    obj_list = os.listdir(ref_dir)
+    for object_name in tqdm(obj_list, desc='load obj info'):
+        object_stem = Path(object_name).stem
+        file_stem, object_id = object_stem.rsplit('_', 1)
+        object_id = int(object_id)
+        if file_stem not in obj_dict:
+            obj_dict[file_stem] = [object_id]
+        else:
+            obj_dict[file_stem].append(object_id)
+
+    change_count = 0
+    # c 1 b
+    for label_name in tqdm(gt_list):
+        input_gt_path = os.path.join(input_gt_dir, label_name)
+        output_gt_path = os.path.join(output_gt_dir, label_name)
+        label_stem = Path(label_name).stem
+        if label_stem not in obj_dict:
+            shutil.copy(input_gt_path, output_gt_path)
+        else:
+            with open(input_gt_path, 'r') as fi:
+                lines = fi.readlines()
+                new_lines = []
+                for id_line, line in enumerate(lines):
+                    if id_line not in obj_dict[label_stem]:
+                        new_lines.append(line)
+                    else:
+                        change_count += 1
+                        parts = line.strip().split(' ')
+                        assert int(parts[1]) == 1, f"{label_stem} error"
+                        parts[2] = "1"
                         new_line = ' '.join(parts) +'\n'
                         new_lines.append(new_line)
             with open(output_gt_path, 'w') as fo:
@@ -830,6 +873,24 @@ def get_all_high(input_dir, ref_txt=None, attributes=None, with_conf=False, conf
                     counts[idx][2] += 2
                 else:
                     print('error!')
+    print(counts)
+
+def get_all_category(input_dir, ref_txt=None, classes=None, attributes=None, with_conf=False, conf_threshold=0.001, filter_small=None):
+    classes = get_cats(classes)
+    attributes = get_attributes(attributes) if attributes is not None else attributes
+    file_list = os.listdir(input_dir)
+    if ref_txt is not None:
+        ref_df = pd.read_csv(ref_txt, header=None, index_col=None, names=['file_name'])
+        ref_list = [Path(file_name).stem for file_name in ref_df['file_name'].to_list()]
+        file_list = [file_name for file_name in file_list if Path(file_name).stem in ref_list]
+    counts = [0 for _ in classes]
+    for file_name in tqdm(file_list):
+        file_path = os.path.join(input_dir, file_name)
+        df = get_yolo_label_df(file_path, mdet=False, attributes=attributes, with_conf=with_conf, conf_threshold=conf_threshold)
+        if filter_small is not None:
+            df = df.loc[(df['w']>filter_small) | (df['h']>filter_small)]
+        for idx, row in df.iterrows():
+            counts[int(row['category'])] += 1
     print(counts)
 
 def get_single_high(input_dir, risk, ref_txt=None, attributes=None, with_conf=False, conf_threshold=0.4, filter_small=None):
