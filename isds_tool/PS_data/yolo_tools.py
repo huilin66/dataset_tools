@@ -663,6 +663,19 @@ def copy_split(input_path, output_path, abs_path=False):
     df_output.to_csv(output_path, header=None, index=None, encoding='utf-8')
     print(f'copy {os.path.basename(input_path)}, {len(df_output)} records')
 
+def split_add(input_path, ref_dir, output_path):
+    df = pd.read_csv(input_path, header=None, index_col=None, names=['path'])
+    path_list = df['path'].tolist()
+    base_dir = os.path.dirname(path_list[0])
+
+    ref_list = os.listdir(ref_dir)
+    ref_list_add = [os.path.join(base_dir, ref_name) for ref_name in ref_list if not ref_name.endswith('.json')]
+
+    output_path_list = path_list + ref_list_add
+    df_output = pd.DataFrame({'path': output_path_list})
+    df_output.to_csv(output_path, header=None, index=None, encoding='utf-8')
+    print(f'src {len(path_list)}, add {len(ref_list_add)}, total {len(output_path_list)} records')
+
 def split_txt_merge(input_dir1, input_dir2, output_dir, suffix):
     input_train_path1 = os.path.join(input_dir1, f'train{suffix}.txt')
     input_train_path2 = os.path.join(input_dir2, f'train{suffix}.txt')
