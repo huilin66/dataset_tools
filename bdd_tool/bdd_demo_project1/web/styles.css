@@ -1,0 +1,11 @@
+body { margin: 0; font-family: ui-sans-serif, system-ui, Arial; }
+.layout { display: flex; height: 100vh; }
+.sidebar { width: 360px; border-right: 1px solid #ddd; padding: 12px; overflow: auto; }
+.main { flex: 1; padding: 12px; overflow: auto; }
+.list { display: flex; flex-direction: column; gap: 6px; }
+.item { padding: 8px; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; }
+.item:hover { background: #f6f6f6; }
+.controls { display: grid; gap: 8px; margin-bottom: 12px; }
+.imgs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+img { width: 100%; max-height: 420px; object-fit: contain; background: #111; border-radius: 8px; }
+pre { background: #0b1020; color: #d7e0ff; padding: 12px; border-radius: 8px; overflow: auto; }

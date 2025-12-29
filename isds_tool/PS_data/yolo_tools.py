@@ -705,6 +705,11 @@ def poly2xywh(mask):
     height = y_max - y_min
     return [x_center, y_center, width, height]
 
+def poly2xyxy(mask):
+    mask = np.array([mask[::2], mask[1::2]])
+    x_min,y_min = np.min(mask, axis=1)
+    x_max,y_max = np.max(mask, axis=1)
+    return [x_min,y_min, x_max,y_max]
 
 def get_attributes(attribute_path):
     with open(attribute_path, 'r') as file:
