@@ -56,12 +56,103 @@ class ReportEngine:
         self.colors = config.COLOR_PALETTE
         self.metadata_getter = metadata_getter  # <--- 新增接口
         
+
+
+        self._init_metadata_store()
+
+    def _init_metadata_store(self):
+        """
+        初始化或重置全局元数据容器。
+        支持连续运行多组数据时清理上一组的状态。
+        """
+        self.global_drone_info = {}
+
         # 临时路径
+        self.base_dir = None
         self.vis_dir = None
         self.crop_dir = None
 
-        self.global_drone_info = {}
+    def _get_unified_metadata(self, img_path, img_pil):
+        """
+        【修改点】在返回的 meta 中增加 '_parsing_method' 字段
+        """
+        meta = {}
+        method_used = "Unknown"
 
+        # --- 策略 1: 尝试 PyExif ---
+        try:
+            import pyexif
+            exif_editor = pyexif.ExifEditor(str(img_path))
+            meta = exif_editor.getDictTags()
+            method_used = "PyExif (ExifTool)"
+        except (ImportError, FileNotFoundError, Exception):
+            # --- 策略 2: Fallback ---
+            method_used = "Fallback (PIL + XMP)"
+            
+            # A. 标准 EXIF
+            std_exif = self._get_standard_exif(img_pil)
+            meta.update(std_exif)
+            
+            # B. DJI XMP
+            xmp_data = parse_dji_xmp(img_path)
+            meta.update(xmp_data)
+
+        # --- 3. 标准化 ---
+        if 'Model' not in meta and 'DroneModel' in meta:
+            meta['Model'] = meta['DroneModel']
+
+        # 【新增】记录解析方式，方便日志打印
+        meta['_parsing_method'] = method_used
+        
+        return meta
+
+    def _load_global_metadata(self, first_img_path):
+        """
+        【修改点】增强日志输出，显示解析方式和镜头物理参数
+        """
+        try:
+            img = Image.open(first_img_path)
+            all_meta = self._get_unified_metadata(first_img_path, img)
+            stem_name = Path(first_img_path).stem
+            
+            # 1. 提取基础信息
+            self.global_drone_info = {
+                'Model': all_meta.get('Model', 'Unknown'),
+                'Camera': all_meta.get('ImageSource', 'Unknown'),
+                'Firmware': all_meta.get('Firmware', all_meta.get('Version', 'Unknown'))
+            }
+
+            # 2. 计算物理参数 (用于展示)
+            specs, _ = self._get_camera_specs_unified(all_meta, stem_name)
+            sensor_width = specs['sensor_width_mm']
+            
+            # 判定焦距来源
+            raw_focal = safe_float(all_meta.get('FocalLength'))
+            if raw_focal > 0:
+                actual_focal = raw_focal
+                focal_source = "Exif Data"
+            else:
+                actual_focal = specs['focal_length_mm']
+                focal_source = "Config Default"
+
+            # 3. 打印增强版日志
+            print("\n" + "="*50)
+            print(f"--- [Metadata Declaration] ---")
+            print(f" Source Image   : {Path(first_img_path).name}")
+            print(f" Parsing Method : {all_meta.get('_parsing_method', 'Unknown')}")
+            print("-" * 50)
+            print(f" Drone Model    : {self.global_drone_info['Model']}")
+            print(f" Camera Source  : {self.global_drone_info['Camera']}")
+            print(f" Firmware Ver   : {self.global_drone_info['Firmware']}")
+            print("-" * 50)
+            print(f" [Lens Physics] (Used for GSD Calculation)")
+            print(f" Sensor Width   : {sensor_width} mm")
+            print(f" Focal Length   : {actual_focal} mm (Source: {focal_source})")
+            print("="*50 + "\n")
+            
+        except Exception as e:
+            print(f"Warning: Failed to load global metadata from {first_img_path}: {e}")
+            self.global_drone_info = {'Model': 'Unknown', 'Camera': 'Unknown'}
 
     def _get_standard_exif(self, img):
         """[Fallback组件] 使用 PIL 获取标准 EXIF，尝试读取 SubIFD 以获取焦距"""
@@ -86,62 +177,6 @@ class ReportEngine:
         except Exception:
             pass
         return exif_data
-
-    def _get_unified_metadata(self, img_path, img_pil):
-        """
-        【核心修改】双保险元数据获取策略 + 格式统一化
-        目标：无论使用 PyExif 还是 Fallback，返回的字典结构保持一致。
-        """
-        meta = {}
-        method_used = "unknown"
-
-        # -----------------------------------------------------------
-        # 策略 1: 尝试 PyExif (ExifTool) - 黄金标准
-        # -----------------------------------------------------------
-        try:
-            import pyexif
-            # 尝试使用 pyexif 读取 (前提是系统装了 exiftool)
-            exif_editor = pyexif.ExifEditor(str(img_path))
-            meta = exif_editor.getDictTags()
-            method_used = "pyexif"
-            
-        except (ImportError, FileNotFoundError, Exception):
-            # -------------------------------------------------------
-            # 策略 2: Fallback (PIL + Regex XMP) - 手动合并
-            # -------------------------------------------------------
-            method_used = "fallback"
-            
-            # A. 获取标准 EXIF (提供 Model, FocalLength 等光学参数)
-            # 使用之前的 _get_standard_exif 函数
-            std_exif = self._get_standard_exif(img_pil)
-            meta.update(std_exif)
-            
-            # B. 获取 DJI XMP (提供 AbsoluteAltitude, LRFTargetDistance 等飞行参数)
-            xmp_data = parse_dji_xmp(img_path)
-            meta.update(xmp_data)
-
-        # -----------------------------------------------------------
-        # 3. 统一化 / 标准化 (Standardization)
-        # -----------------------------------------------------------
-        # 无论数据来源是 pyexif 还是 fallback，确保关键键名一致
-        
-        # [规则1] 统一相机型号键名
-        # ExifTool/PIL 通常用 'Model'，DJI XMP 用 'DroneModel'
-        if 'Model' not in meta and 'DroneModel' in meta:
-            meta['Model'] = meta['DroneModel']
-
-        # [规则2] 统一焦距键名 (以防万一)
-        # 确保 'FocalLength' 存在，方便后续计算
-        # 如果 PIL 没读到 (None)，pyexif 也没读到，这里就保持现状，后续由 specs 兜底
-
-        # [规则3] 统一距离键名 (可选)
-        # 某些旧版固件可能叫 'SubjectDistance'，新版叫 'LRFTargetDistance'
-        # 我们的业务逻辑优先找 LRF，这里可以不做额外映射，保持原样即可
-
-        # [调试打印]
-        # print(f"DEBUG [{method_used}]: Model={meta.get('Model')}, Focal={meta.get('FocalLength')}")
-        
-        return meta
 
     def _get_camera_specs_unified(self, meta_dict, filename):
         """根据元数据字典获取 config 参数"""
@@ -209,22 +244,6 @@ class ReportEngine:
         # --- 1. 【核心修改】统一获取所有元数据 ---
         # 替代了之前的 _get_standard_exif 和 parse_dji_xmp
         all_meta = self._get_unified_metadata(img_path, img)
-        
-        # 调试：看看焦距读出来是什么格式
-        # print(f"DEBUG: {stem_name} Focal: {all_meta.get('FocalLength')}")
-
-        # ==========================================
-        # 1. 获取元数据 (双保险策略)
-        # ==========================================
-        all_meta = self._get_unified_metadata(img_path, img)
-
-        # 收集全局信息
-        if not self.global_drone_info:
-            self.global_drone_info = {
-                'Model': all_meta.get('Model', 'Unknown'),
-                'Camera': all_meta.get('ImageSource', 'Unknown'),
-                'Firmware': all_meta.get('Firmware', all_meta.get('Version', 'Unknown'))
-            }
 
         # ==========================================
         # 2. 计算物理参数 (使用统一后的 meta)
@@ -325,56 +344,7 @@ class ReportEngine:
             records.append(record)
         
         return pd.DataFrame(records)
-        stem_name = Path(img_path).stem
-        os.makedirs(self.vis_dir, exist_ok=True)
-        crop_subdir = os.path.join(self.crop_dir, stem_name)
-        os.makedirs(crop_subdir, exist_ok=True)
 
-        img = Image.open(img_path).convert('RGB')
-        
-        # 1. 可视化
-        img_vis = img.copy()
-        if len(detections) > 0:
-            img_vis = draw_box(img_vis, detections, self.labels, self.colors)
-        vis_path = os.path.join(self.vis_dir, stem_name + '.png')
-        img_vis.save(vis_path)
-
-        # 2. 获取该图片的元数据 (新增)
-        img_meta = self._get_metadata(img_path)
-
-        # 3. 裁剪并记录
-        records = []
-        crops = crop_box(img, detections)
-        
-        for i, bbox in enumerate(detections):
-            cls_id = int(bbox[0])
-            score = float(bbox[1])
-            box = bbox[2:]
-            
-            cat_name = self.labels[cls_id] if cls_id < len(self.labels) else f"Class_{cls_id}"
-            level = level_judge(box)
-            
-            crop_filename = f"{stem_name}_{i}_{cls_id}.png"
-            crop_path = os.path.join(crop_subdir, crop_filename)
-            crops[i].save(crop_path)
-
-            # 基础记录
-            record = {
-                'Path': img_path,
-                'VisPath': vis_path,
-                'CropPath': crop_path,
-                'Category': cat_name.title(),
-                'Level': level,
-                'Score': score,
-                'Bbox': str(list(box)),
-                'Action': action_judge(level),
-            }
-            # 合并元数据 (新增字段)
-            record.update(img_meta)
-            
-            records.append(record)
-        
-        return pd.DataFrame(records)
     def _get_metadata(self, img_path, meta_dict=None):
         """
         获取楼层、XYZ等展示信息。
@@ -395,9 +365,10 @@ class ReportEngine:
         return default_meta
     def run(self, output_path, model_name="Generic-Model", style_id=0):
         # 初始化目录
-        base_dir = os.path.dirname(os.path.abspath(output_path))
-        self.vis_dir = os.path.join(base_dir, 'report_vis')
-        self.crop_dir = os.path.join(base_dir, 'report_crop')
+        if self.base_dir is None:
+            self.base_dir = os.path.dirname(os.path.abspath(output_path))
+            self.vis_dir = os.path.join(self.base_dir, 'report_vis')
+            self.crop_dir = os.path.join(self.base_dir, 'report_crop')
 
         print("--- Loading Data ---")
         raw_data = self.loader.load()
@@ -406,6 +377,18 @@ class ReportEngine:
         all_results_dfs = []
         img_paths_list = []
         
+        # --- 【修改点3】元数据预加载逻辑 ---
+        # 如果当前元数据为空，且数据列表不为空，则使用第一组数据初始化
+        if not self.global_drone_info and raw_data:
+            # 获取第一个数据单元 (YoloLoader 返回的是 dict list)
+            first_item = raw_data[0]
+            first_img_path = first_item['image_path']
+            
+            # 未来如果是 RGB+T 对，loader 可能会返回 {'rgb': '...', 'thermal': '...'}
+            # 这里可以预留逻辑：if isinstance(first_img_path, dict): ...
+            
+            self._load_global_metadata(first_img_path)
+
         for item in tqdm(raw_data, desc="Visualizing"):
             img_path = item['image_path']
             dets = item['detections']
@@ -454,6 +437,10 @@ class ReportEngine:
         # 执行导出
         exporter_instance.export(report_info, output_path)
 
+        # --- 【修改点4】运行结束后重置元数据 ---
+        # 方便同一个 engine 实例被用于下一次 run 调用
+        print("--- Resetting Metadata for next run ---")
+        self._init_metadata_store()
 def load_class_list(class_path):
     with open(class_path, 'r') as f:
         return [line.strip() for line in f.readlines()]
