@@ -49,7 +49,12 @@ class BasePDFExporter:
 
     def export(self, report_data, save_path):
         print(f"[{time.strftime('%H:%M:%S')}] PDF Generation started ({self.__class__.__name__})...")
-        doc = SimpleDocTemplate(save_path, pagesize=letter)
+
+        # --- 【修改点】动态页面大小 ---
+        # 默认使用 Letter 纵向，如果子类定义了 pagesize 属性（如横向），则使用子类的
+        target_pagesize = getattr(self, 'pagesize', letter)
+        doc = SimpleDocTemplate(save_path, pagesize=target_pagesize)
+        
         elements = []
 
         # --- 1. 通用表头与摘要 ---
@@ -60,39 +65,68 @@ class BasePDFExporter:
         elements.append(Spacer(1, 10))
 
         records_df_list = report_data['records']
-        all_data_rows = []
-        all_row_heights = []
 
-        from tqdm import tqdm
-        for df_record in tqdm(records_df_list, desc="Building Table Rows"):
-            if df_record.empty: continue
+        # ==========================================
+        # 【修改核心】：分支处理流式布局 vs 表格布局
+        # ==========================================
+        
+        # 模式 A: 流式布局 (Style 3 - 解决超长表格跨页问题)
+        if hasattr(self, 'generate_flowables'):
+            from tqdm import tqdm
+            print("Generating flowables (Stream Mode)...")
             
-            # 调用子类的方法获取行数据
-            rows, heights = self.generate_row_content(df_record)
-            all_data_rows.extend(rows)
-            all_row_heights.extend(heights)
+            for df_record in tqdm(records_df_list, desc="Processing Images"):
+                if df_record.empty: continue
+                # 直接获取元素列表（标题、图、表...）并加入主流程
+                record_elements = self.generate_flowables(df_record)
+                elements.extend(record_elements)
+                # 每张图片处理完后强制分页，保持报告整洁（可选，也可改为 Spacer）
+                elements.append(PageBreak())
 
-        # --- 3. 构建并保存表格 ---
-        if all_data_rows:
-            # 简单的长度保护
-            min_len = min(len(all_data_rows), len(all_row_heights))
-            all_data_rows = all_data_rows[:min_len]
-            all_row_heights = all_row_heights[:min_len]
-
-            # 创建大表
-            from reportlab.lib.units import inch
-            t = Table(all_data_rows, hAlign='CENTER', colWidths=[2*inch, 4*inch], rowHeights=all_row_heights)
-            
-            # 应用斑马纹或合并文件名的样式
-            final_style = TableStyle(self.table_style_common.getCommands())
-            for i, row in enumerate(all_data_rows):
-                if row[0] == 'FileName':
-                    final_style.add('SPAN', (0, i), (-1, i))
-                    final_style.add('BACKGROUND', (0, i), (-1, i), colors.lightgrey)
-            t.setStyle(final_style)
-            elements.append(t)
+        # 模式 B: 统一大表格布局 (Style 0, 1, 2 - 保持原有逻辑)
         else:
-            elements.append(Paragraph("No defects detected.", self.styles["font_text"]))
+            all_data_rows = []
+            all_row_heights = []
+
+            from tqdm import tqdm
+            for df_record in tqdm(records_df_list, desc="Building Table Rows"):
+                if df_record.empty: continue
+                
+                # 调用子类的方法获取行数据
+                rows, heights = self.generate_row_content(df_record)
+                all_data_rows.extend(rows)
+                all_row_heights.extend(heights)
+
+            # --- 3. 构建并保存表格 ---
+            if all_data_rows:
+                # 简单的长度保护
+                min_len = min(len(all_data_rows), len(all_row_heights))
+                all_data_rows = all_data_rows[:min_len]
+                all_row_heights = all_row_heights[:min_len]
+
+                from reportlab.lib.units import inch
+                # 基础布局还是 2 列，但我们会通过 Span 让 Style 3 变宽
+                t = Table(all_data_rows, hAlign='CENTER', colWidths=[2.5*inch, 4.5*inch], rowHeights=all_row_heights)
+                
+                final_style = TableStyle(self.table_style_common.getCommands())
+                
+                for i, row in enumerate(all_data_rows):
+                    # 1. 文件名行 (灰色背景 + 跨列)
+                    if row[0] == 'FileName':
+                        final_style.add('SPAN', (0, i), (-1, i))
+                        final_style.add('BACKGROUND', (0, i), (-1, i), colors.lightgrey)
+                    
+                    # 2. 【新增】全宽行支持 (用于 Style 3 的横向表格)
+                    # 如果行的第一个元素是 'FullWidth'，我们只显示第二个元素的内容，并让它跨列
+                    elif row[0] == 'FullWidth':
+                        final_style.add('SPAN', (0, i), (-1, i))
+                        # 去掉中间的分隔线，只保留外框（可选）
+                        # final_style.add('BOX', (0, i), (-1, i), 1, colors.black)
+
+                t.setStyle(final_style)
+                elements.append(t)
+            else:
+                elements.append(Paragraph("No defects detected.", self.styles["font_text"]))
 
         try:
             # ==========================================

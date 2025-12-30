@@ -61,3 +61,32 @@ DEFAULT_DISTANCE_M = 15.0
 # 热成像(_T)通常读不到EXIF，建议设置为热成像镜头的物理焦距 (例如 13.5mm 或 9.1mm，取决于机型)
 # 如果是 M4T/M3T 的广角镜头，通常是 4.5mm
 DEFAULT_FOCAL_LENGTH_MM = 13.5
+
+
+# --- 8. 多机型相机参数库 (核心新增) ---
+# 结构: '机型型号_相机类型': { ... }
+# Sensor Width 计算参考: 
+# - 1/2 inch CMOS ≈ 6.4 mm
+# - 4/3 inch CMOS ≈ 17.3 mm
+# - 1 inch CMOS ≈ 13.2 mm
+# - Thermal (640px, 12um pixel pitch) ≈ 7.68 mm
+
+DRONE_PARAMS = {
+    # === 默认兜底配置 ===
+    'default': {
+        'sensor_width_mm': 9.6, 
+        'focal_length_mm': 6.7
+    },
+
+    # M4T: 专为巡检/安防设计，主摄为 1/1.3 CMOS
+    'M4T_Wide': {
+        'sensor_width_mm': 9.6,  # 1/1.3 inch (注意：之前估算的 6.4mm 是错误的)
+        'focal_length_mm': 6.7   # 基于等效24mm换算 (9.6 * 24 / 36 ≈ 6.4, 实际上通常在 6.7mm 左右)
+    },
+    
+    # M4T 热成像: 640x512, 12um, 等效焦距 53mm
+    'M4T_Thermal': {
+        'sensor_width_mm': 7.68, # 640 pixels * 12 um
+        'focal_length_mm': 12.0  # 物理焦距 (根据 DFOV 45度反推约为 11.9~12mm)
+    },
+}

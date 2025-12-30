@@ -23,7 +23,8 @@ from utils.exif_dji_xmp import parse_dji_xmp
 EXPORTER_MAP = {
     0: PDFExporterBasic,
     1: PDFExporterDetailed,
-    2: PDFExporterMeasurement # <--- 新增样式 3
+    2: PDFExporterMeasurement,
+    3: PDFExporterCompact,
 }
 
 
@@ -76,8 +77,43 @@ class ReportEngine:
                 print(f"Warning: Failed to get metadata for {img_path}: {e}")
         
         return default_meta
+
+    def _get_camera_specs(self, xmp_data, filename):
+        """
+        辅助函数：根据 XMP 和文件名，从 config 中匹配相机参数
+        """
+        # 1. 获取机型 (e.g., 'M4T', 'M3T', 'Mavic 3 Enterprise')
+        # 你的日志显示字段是 'DroneModel'
+        model = xmp_data.get('DroneModel', 'Unknown')
+        
+        # 简单清洗型号字符串 (去掉 DJI 前缀等，防止匹配不上)
+        if 'Matrice 4T' in xmp_data.get('ProductName', ''): model = 'M4T'
+        if 'Mavic 3 Thermal' in xmp_data.get('ProductName', ''): model = 'M3T'
+        if 'Mavic 3 Enterprise' in xmp_data.get('ProductName', ''): model = 'M3E'
+
+        # 2. 获取相机类型 (Wide vs Thermal)
+        # 优先判断文件名是否包含 _T，或者 XMP ImageSource 是否包含 Thermal
+        img_source = xmp_data.get('ImageSource', '')
+        is_thermal = '_T' in filename or 'Thermal' in img_source or 'IR' in img_source
+        
+        cam_type = 'Thermal' if is_thermal else 'Wide'
+        
+        # 3. 拼接键名并查找
+        config_key = f"{model}_{cam_type}"
+        
+        # 尝试精确匹配
+        specs = config.DRONE_PARAMS.get(config_key)
+        
+        if specs:
+            # print(f"DEBUG: Matched Camera Config: [{config_key}] -> {specs}")
+            return specs
+            
+        # 4. 如果没找到，尝试模糊匹配 (例如只有 M4T 没写 Thermal)
+        # 或者回退到 config 中定义的默认值
+        # print(f"WARNING: Unknown camera config [{config_key}], using default.")
+        return config.DRONE_PARAMS['default']
+
     def _process_single_image(self, img_path, detections):
-        """【核心修改】在此处计算 W_pix, W_cm 等字段"""
         stem_name = Path(img_path).stem
         os.makedirs(self.vis_dir, exist_ok=True)
         crop_subdir = os.path.join(self.crop_dir, stem_name)
@@ -86,52 +122,11 @@ class ReportEngine:
         img = Image.open(img_path).convert('RGB')
         img_w, img_h = img.size
 
-        # --- 1. 计算 GSD 和获取元数据 ---
-        # 获取标准 EXIF (焦距)
-        exif_info = self._get_standard_exif(img)
-        focal_length = exif_info.get('FocalLength', None)
-
-        # 【新增】如果读不到焦距，或者焦距为0，强制使用默认值
-        if focal_length is None or float(focal_length) == 0:
-            # print(f"DEBUG: No FocalLength for {stem_name}, using default.")
-            focal_length = getattr(config, 'DEFAULT_FOCAL_LENGTH_MM', 4.5)
-
-        # 获取 DJI XMP 信息 (用于 GSD 计算)
+        # --- 1. 获取 XMP 元数据 ---
+        from utils.exif_dji_xmp import parse_dji_xmp
         xmp_data = parse_dji_xmp(img_path)
 
-        # print(f"DEBUG: {stem_name} XMP: {xmp_data.get('LRFTargetDistance')}")
-
-        # --- 计算距离 (优化版逻辑) ---
-        distance_mm = 0
-        
-        # 1. 优先尝试读取激光测距 (LRFTargetDistance)
-        lrf_dist = xmp_data.get('LRFTargetDistance', '0')
-        try:
-            val = float(lrf_dist)
-            if val > 0:
-                distance_mm = val * 1000
-                # print(f"Using LRF Distance: {val}m")
-        except ValueError:
-            pass
-
-        # 2. 如果激光无效，尝试使用相对高度 (RelativeAltitude)
-        if distance_mm == 0:
-            rel_alt = xmp_data.get('RelativeAltitude', '0')
-            try:
-                val = float(rel_alt)
-                if val != 0:
-                    distance_mm = abs(val) * 1000 # 取绝对值防止负高度
-                    print(f"Using Relative Altitude: {val}m")
-            except ValueError:
-                pass
-
-        # 3. 如果还是 0 (说明是PNG或数据丢失)，才使用默认值兜底
-        if distance_mm == 0:
-            # 这里使用 config.py 里定义的默认距离
-            distance_mm = getattr(config, 'DEFAULT_DISTANCE_M', 15.0) * 1000 
-            print("Using Default Distance Estimate")
-
-        # 收集第一张图的无人机信息
+        # 收集全局无人机信息 (用于报告摘要)
         if not self.global_drone_info and xmp_data:
             self.global_drone_info = {
                 'Model': xmp_data.get('DroneModel', 'Unknown'),
@@ -139,20 +134,124 @@ class ReportEngine:
                 'Firmware': xmp_data.get('Version', 'Unknown')
             }
 
-        # 计算 GSD
-        dist_str = xmp_data.get('LRFTargetDistance', '0')
-        if float(dist_str) == 0:
-             dist_str = xmp_data.get('RelativeAltitude', '0')
+        # --- 2. 【核心修改】智能获取相机参数 ---
+        camera_specs = self._get_camera_specs(xmp_data, stem_name)
+        sensor_width = camera_specs['sensor_width_mm']
+        default_focal = camera_specs['focal_length_mm']
+
+        # --- 3. 获取/计算焦距 ---
+        # 优先读取 EXIF 里的真实焦距
+        exif_info = self._get_standard_exif(img)
+        focal_length = exif_info.get('FocalLength', None)
         
-        distance_mm = float(dist_str) * 1000 
-        
-        # 计算 GSD (mm/pixel)
+        # 如果 EXIF 读不到 (比如热成像)，使用 Config 里的参数
+        if focal_length is None or float(focal_length) == 0:
+            focal_length = default_focal
+
+        # --- 4. 获取/计算距离 ---
+        # (保持之前的逻辑: LRF -> RelAlt -> Default)
+        distance_mm = 0
+        lrf_dist = xmp_data.get('LRFTargetDistance', '0')
+        try:
+            val = float(lrf_dist)
+            if val > 0: distance_mm = val * 1000
+        except ValueError: pass
+
+        if distance_mm == 0:
+            rel_alt = xmp_data.get('RelativeAltitude', '0')
+            try:
+                val = float(rel_alt)
+                if val != 0: distance_mm = abs(val) * 1000
+            except ValueError: pass
+            
+        if distance_mm == 0:
+            distance_mm = getattr(config, 'DEFAULT_DISTANCE_M', 15.0) * 1000
+
+        # --- 5. 计算 GSD ---
         gsd = calculate_gsd(
             distance_mm=distance_mm,
             focal_length_mm=focal_length,
-            sensor_width_mm=config.SENSOR_WIDTH_MM,
+            sensor_width_mm=sensor_width,  # <--- 这里使用的是动态获取的参数
             image_width_pix=img_w
         )
+
+    # def _process_single_image(self, img_path, detections):
+    #     """【核心修改】在此处计算 W_pix, W_cm 等字段"""
+    #     stem_name = Path(img_path).stem
+    #     os.makedirs(self.vis_dir, exist_ok=True)
+    #     crop_subdir = os.path.join(self.crop_dir, stem_name)
+    #     os.makedirs(crop_subdir, exist_ok=True)
+
+    #     img = Image.open(img_path).convert('RGB')
+    #     img_w, img_h = img.size
+
+    #     # --- 1. 计算 GSD 和获取元数据 ---
+    #     # 获取标准 EXIF (焦距)
+    #     exif_info = self._get_standard_exif(img)
+    #     focal_length = exif_info.get('FocalLength', None)
+
+    #     # 【新增】如果读不到焦距，或者焦距为0，强制使用默认值
+    #     if focal_length is None or float(focal_length) == 0:
+    #         # print(f"DEBUG: No FocalLength for {stem_name}, using default.")
+    #         focal_length = getattr(config, 'DEFAULT_FOCAL_LENGTH_MM', 4.5)
+
+    #     # 获取 DJI XMP 信息 (用于 GSD 计算)
+    #     xmp_data = parse_dji_xmp(img_path)
+
+    #     # print(f"DEBUG: {stem_name} XMP: {xmp_data.get('LRFTargetDistance')}")
+
+    #     # --- 计算距离 (优化版逻辑) ---
+    #     distance_mm = 0
+        
+    #     # 1. 优先尝试读取激光测距 (LRFTargetDistance)
+    #     lrf_dist = xmp_data.get('LRFTargetDistance', '0')
+    #     try:
+    #         val = float(lrf_dist)
+    #         if val > 0:
+    #             distance_mm = val * 1000
+    #             # print(f"Using LRF Distance: {val}m")
+    #     except ValueError:
+    #         pass
+
+    #     # 2. 如果激光无效，尝试使用相对高度 (RelativeAltitude)
+    #     if distance_mm == 0:
+    #         rel_alt = xmp_data.get('RelativeAltitude', '0')
+    #         try:
+    #             val = float(rel_alt)
+    #             if val != 0:
+    #                 distance_mm = abs(val) * 1000 # 取绝对值防止负高度
+    #                 print(f"Using Relative Altitude: {val}m")
+    #         except ValueError:
+    #             pass
+
+    #     # 3. 如果还是 0 (说明是PNG或数据丢失)，才使用默认值兜底
+    #     if distance_mm == 0:
+    #         # 这里使用 config.py 里定义的默认距离
+    #         distance_mm = getattr(config, 'DEFAULT_DISTANCE_M', 15.0) * 1000 
+    #         print("Using Default Distance Estimate")
+
+    #     # 收集第一张图的无人机信息
+    #     if not self.global_drone_info and xmp_data:
+    #         self.global_drone_info = {
+    #             'Model': xmp_data.get('DroneModel', 'Unknown'),
+    #             'Camera': xmp_data.get('ImageSource', 'Unknown'),
+    #             'Firmware': xmp_data.get('Version', 'Unknown')
+    #         }
+
+    #     # 计算 GSD
+    #     dist_str = xmp_data.get('LRFTargetDistance', '0')
+    #     if float(dist_str) == 0:
+    #          dist_str = xmp_data.get('RelativeAltitude', '0')
+        
+    #     distance_mm = float(dist_str) * 1000 
+        
+    #     # 计算 GSD (mm/pixel)
+    #     gsd = calculate_gsd(
+    #         distance_mm=distance_mm,
+    #         focal_length_mm=focal_length,
+    #         sensor_width_mm=config.SENSOR_WIDTH_MM,
+    #         image_width_pix=img_w
+    #     )
 
         # 获取位置元数据 (XYZ, Floor等)
         img_meta = self._get_metadata(img_path)
@@ -398,4 +497,4 @@ if __name__ == '__main__':
 
     # 2. 初始化引擎并运行
     engine = ReportEngine(loader=my_loader, labels=classes, metadata_getter=dji_metadata_provider)
-    engine.run(OUTPUT_PATH, model_name="BDD-MODEL", style_id=2)
+    engine.run(OUTPUT_PATH, model_name="BDD-MODEL", style_id=3)
