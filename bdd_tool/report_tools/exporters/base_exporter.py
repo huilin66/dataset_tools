@@ -75,7 +75,7 @@ class BasePDFExporter:
             from tqdm import tqdm
             print("Generating flowables (Stream Mode)...")
             
-            for df_record in tqdm(records_df_list, desc="Processing Images"):
+            for df_record in tqdm(records_df_list, desc="Adding Images"):
                 if df_record.empty: continue
                 # 直接获取元素列表（标题、图、表...）并加入主流程
                 record_elements = self.generate_flowables(df_record)
