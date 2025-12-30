@@ -7,9 +7,12 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
 import sys
-sys.path.append(r'/data/huilin/projects/dataset_tools/data_vis')
+sys.path.append(r'./')
 from data_sta import dir_shape_sta
 from matplotlib import rcParams
+pd.set_option('display.max_columns', None)
+pd.set_option('display.max_colwidth', None)
+pd.set_option('display.width', None)
 # rcParams['font.family'] = 'Times New Roman'
 rcParams['font.family'] = 'serif'
 shp_rate_bins = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2, 2.1, 2.2, 2.4, 2.6, 3, 3.5, 4, 5]
@@ -41,13 +44,20 @@ def segmented_bar(df, save_path):
 
 
 
-def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None, img_dir=None, seg=False):
+def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None, img_dir=None, seg=False,
+             sta_list=[]):
     os.makedirs(result_dir, exist_ok=True)
-
-    if img_dir is not None:
-        img_shape_df = dir_shape_sta(img_dir, os.path.join(result_dir, 'image_shape.png'))
-    else:
-        img_shape_df = None
+    if 'all' in sta_list:
+        sta_list = [
+            'image_shape',
+            'box_shape_pix',
+            'box_shape',
+            'box_shape_rate',
+            'box_pos_start',
+            'box_pos_center',
+            'box_pos_end',
+            'box_number',
+        ]
 
     df_class = pd.read_csv(class_path, header=None, index_col=None, names=['class_name'])
     classes = df_class['class_name'].to_list()
@@ -63,11 +73,10 @@ def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None, 
         print('csv save to', csv_path)
 
         print('+'*100)
-        no_defect_boxes = df_attribute[df_attribute['attribute sum'] == 0].shape[0]
-        defect_boxes = df_attribute[df_attribute['attribute sum'] > 0].shape[0]
-        print(f"总box数: {len(df_attribute)}")
-        print(f"没有缺陷的box数: {no_defect_boxes}")
-        print(f"有缺陷的box数: {defect_boxes}")
+        no_defect_boxes = df_attribute[df_attribute['with attribute'] == 0].shape[0]
+        defect_boxes = df_attribute[df_attribute['with attribute'] > 0].shape[0]
+        print(f"总box数: {len(df_attribute)}; 有缺陷的box数: {defect_boxes}; 没有缺陷的box数: {no_defect_boxes}")
+
 
         png_defect_num_path = os.path.join(result_dir, 'defects_num.png')
         plt.figure(figsize=(10, 8))
@@ -82,21 +91,22 @@ def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None, 
 
 
         unique_image_count = df_attribute['image'].nunique()
-        defect_images = df_attribute.groupby('image')['attribute sum'].sum()
-        no_defect_images = defect_images[defect_images == 0].count()
-        defect_images = defect_images[defect_images > 0].count()
-        print(f"总image数: {unique_image_count}")
-        print(f"没有缺陷的image数: {no_defect_images}")
-        print(f"有缺陷的image数: {defect_images}")
+        images_att_sta = df_attribute.groupby('image')['with attribute'].sum()
+        no_defect_images = images_att_sta[images_att_sta == 0].count()
+        defect_images = images_att_sta[images_att_sta > 0].count()
+        print(f"总image数: {unique_image_count}; 有缺陷的image数: {defect_images}; 没有缺陷的image数: {no_defect_images}")
+
+
         png_att_path = os.path.join(result_dir, 'attribute_num.png')
-        category_defects = df_attribute.groupby('category').sum().drop(columns=['image'])
+        category_defects = df_attribute.drop(columns=['image']).groupby('category').apply(lambda g:(g>0).sum())
+
         total_defects = category_defects.sum(axis=0)
         category_defects.loc['total'] = total_defects
         category_defects = category_defects.T
-
+        class_new = [c for c in classes if c in category_defects.columns]
+        category_defects = category_defects[class_new + [col for col in category_defects.columns if col not in class_new]]
 
         cats = category_defects.drop(index=['attribute sum', 'with attribute'])
-        cats = cats.sort_index()
         plt.rcParams.update({
             'font.size': 12,  # 增大字体
             'axes.titlesize': 14,  # 标题字体
@@ -140,6 +150,8 @@ def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None, 
                     ha='center', va='center', xytext=(0, 10), textcoords='offset points')
     plt.savefig(png_cat_path)
     plt.close()
+    cat_sta = cat_sta.to_frame().T
+    cat_sta = cat_sta[[c for c in classes if c in cat_sta.columns]]
     cat_sta.to_csv(png_cat_path.replace('.png', '.csv'))
     print('+'*100)
     print(cat_sta)
@@ -147,64 +159,75 @@ def yolo_sta(gt_dir, result_dir, class_path, attribute_path=None, ref_txt=None, 
     print('sta result save to', png_cat_path)
 
 
+    if 'image_shape' in sta_list:
+        if img_dir is not None:
+            img_shape_df = dir_shape_sta(img_dir, os.path.join(result_dir, 'image_shape.png'))
+        else:
+            img_shape_df = None
 
-    if img_dir is not None:
+    if 'box_shape_pix' in sta_list and img_shape_df is not None:
+        png_shape_path = os.path.join(result_dir, 'box_shape_pix.png')
         df_box = pd.merge(df_box, img_shape_df, on='image', how='left')
         df_box['box_width_pix'] = df_box['width'] * df_box['img_width']
         df_box['box_height_pix'] = df_box['height'] - df_box['img_width']
-        png_shape_path = os.path.join(result_dir, 'box_shape_pix.png')
         sns.jointplot(x='box_height_pix', y='box_width_pix', data=df_box, kind='hex')
         plt.savefig(png_shape_path)
         plt.close()
         print('sta result save to', png_shape_path)
 
-    png_shape_path = os.path.join(result_dir, 'box_shape.png')
-    sns.jointplot(x='height', y='width', data=df_box, kind='hex')
-    plt.savefig(png_shape_path)
-    plt.close()
-    print('sta result save to', png_shape_path)
+    if 'box_shape' in sta_list:
+        png_shape_path = os.path.join(result_dir, 'box_shape.png')
+        sns.jointplot(x='height', y='width', data=df_box, kind='hex')
+        plt.savefig(png_shape_path)
+        plt.close()
+        print('sta result save to', png_shape_path)
 
-    png_shapeRate_path = os.path.join(result_dir, 'box_shape_rate.png')
-    plt.figure(figsize=(12, 8))
-    df_box['shape_rate'] = (df_box['width'] / df_box['height']).round(1)
-    df_box['shape_rate'].value_counts(sort=False, bins=shp_rate_bins).plot(kind='bar', title='images shape rate')
-    plt.xticks(rotation=20)
-    plt.savefig(png_shapeRate_path)
-    plt.close()
-    print('sta result save to', png_shapeRate_path)
+    if 'box_shape_rate' in sta_list:
+        png_shapeRate_path = os.path.join(result_dir, 'box_shape_rate.png')
+        plt.figure(figsize=(12, 8))
+        df_box['shape_rate'] = (df_box['width'] / df_box['height']).round(1)
+        df_box['shape_rate'].value_counts(sort=False, bins=shp_rate_bins).plot(kind='bar', title='images shape rate')
+        plt.xticks(rotation=20)
+        plt.savefig(png_shapeRate_path)
+        plt.close()
+        print('sta result save to', png_shapeRate_path)
 
-    png_pos_start_path = os.path.join(result_dir, 'box_pos_start.png')
-    df_box['pos_sy'] = (df_box['center_y'] - df_box['height']*0.5).round(4)
-    df_box['pos_sx'] = (df_box['center_x'] - df_box['width']*0.5).round(4)
-    g=sns.jointplot(x='pos_sx', y='pos_sy', data=df_box, kind='hex')
-    g.ax_joint.invert_yaxis()
-    plt.savefig(png_pos_start_path)
-    plt.close()
-    print('sta result save to', png_pos_start_path)
+    if 'box_pos_start' in sta_list:
+        png_pos_start_path = os.path.join(result_dir, 'box_pos_start.png')
+        df_box['pos_sy'] = (df_box['center_y'] - df_box['height']*0.5).round(4)
+        df_box['pos_sx'] = (df_box['center_x'] - df_box['width']*0.5).round(4)
+        g=sns.jointplot(x='pos_sx', y='pos_sy', data=df_box, kind='hex')
+        g.ax_joint.invert_yaxis()
+        plt.savefig(png_pos_start_path)
+        plt.close()
+        print('sta result save to', png_pos_start_path)
 
-    png_pos_center_path = os.path.join(result_dir, 'box_pos_center.png')
-    g=sns.jointplot(x='center_x', y='center_y', data=df_box, kind='hex')
-    g.ax_joint.invert_yaxis()
-    plt.savefig(png_pos_center_path)
-    plt.close()
-    print('sta result save to', png_pos_center_path)
+    if 'box_pos_center' in sta_list:
+        png_pos_center_path = os.path.join(result_dir, 'box_pos_center.png')
+        g=sns.jointplot(x='center_x', y='center_y', data=df_box, kind='hex')
+        g.ax_joint.invert_yaxis()
+        plt.savefig(png_pos_center_path)
+        plt.close()
+        print('sta result save to', png_pos_center_path)
 
-    png_pos_end_path = os.path.join(result_dir, 'box_pos_end.png')
-    df_box['pos_ey'] = (df_box['center_y'] + df_box['height']*0.5).round(4)
-    df_box['pos_ex'] = (df_box['center_x'] + df_box['width']*0.5).round(4)
-    g=sns.jointplot(x='pos_ex', y='pos_ey', data=df_box, kind='hex')
-    g.ax_joint.invert_yaxis()
-    plt.savefig(png_pos_end_path)
-    plt.close()
-    print('sta result save to', png_pos_end_path)
+    if 'box_pos_end' in sta_list:
+        png_pos_end_path = os.path.join(result_dir, 'box_pos_end.png')
+        df_box['pos_ey'] = (df_box['center_y'] + df_box['height']*0.5).round(4)
+        df_box['pos_ex'] = (df_box['center_x'] + df_box['width']*0.5).round(4)
+        g=sns.jointplot(x='pos_ex', y='pos_ey', data=df_box, kind='hex')
+        g.ax_joint.invert_yaxis()
+        plt.savefig(png_pos_end_path)
+        plt.close()
+        print('sta result save to', png_pos_end_path)
 
-    png_num_path = os.path.join(result_dir, 'box_number.png')
-    plt.figure(figsize=(12, 8))
-    df_box['image'].value_counts().value_counts().sort_index().plot(kind='bar', title='box number per image')
-    plt.xticks(rotation=20)
-    plt.savefig(png_num_path)
-    plt.close()
-    print('sta result save to', png_num_path)
+    if 'box_number' in sta_list:
+        png_num_path = os.path.join(result_dir, 'box_number.png')
+        plt.figure(figsize=(12, 8))
+        df_box['image'].value_counts().value_counts().sort_index().plot(kind='bar', title='box number per image')
+        plt.xticks(rotation=20)
+        plt.savefig(png_num_path)
+        plt.close()
+        print('sta result save to', png_num_path)
     # endregion
 
 def poly2xywh(mask):
@@ -254,7 +277,7 @@ def get_df_yolo(gt_dir, classes, attribute_path=None, ref_txt=None, mdet=False, 
         return df_box, df_attribute
     else:
         dfs = []
-        for gt_name in tqdm(gt_list):
+        for gt_name in tqdm(gt_list, desc='label read'):
             gt_path = os.path.join(gt_dir, gt_name)
             df = pd.DataFrame(None, columns=names+['image'])
             with open(gt_path, 'r') as f:
@@ -276,7 +299,9 @@ def get_df_yolo(gt_dir, classes, attribute_path=None, ref_txt=None, mdet=False, 
                         xywh = poly2xywh(polygons)
                         df.loc[len(df)] = [category]+xywh + [image_name]
                 dfs.append(df)
+        print(f'get {len(dfs)} labels, merging...')
         dfs = pd.concat(dfs)
+        print(f'merging finish, get {len(dfs)} labels!')
         dfs['category'] = dfs['category'].map(category_dict)
         df_box = dfs[['category', 'center_x', 'center_y', 'width', 'height', 'image']].copy()
         if mdet:
@@ -286,6 +311,7 @@ def get_df_yolo(gt_dir, classes, attribute_path=None, ref_txt=None, mdet=False, 
         else:
             df_attribute = None
         return df_box, df_attribute
+
 def info_vis(info_path):
     df = pd.read_csv(info_path, header=0, index_col=0)
     class_counts = df['class_id'].value_counts().sort_index()
