@@ -63,10 +63,46 @@ def parse_all_attrs_in_rdf(jpg_path: str | Path) -> Dict[str, str]:
         out[m.group("key")] = m.group("val")
     return out
 
+import os
+from PIL import Image, ExifTags
+
+def debug_exif(img_path):
+    img = Image.open(img_path)
+    exif = img.getexif()
+    if not exif:
+        print(f"No EXIF found in {img_path}")
+        return
+
+    # 建立 Tag ID 到名称的映射
+    tag_map = {v: k for k, v in ExifTags.TAGS.items()}
+    
+    print(f"--- EXIF for {os.path.basename(img_path)} ---")
+    
+    # 读取型号
+    model = exif.get(272) # 272 is Model
+    print(f"Model: {model}")
+
+    # 读取焦距
+    focal = exif.get(37386) # 37386 is FocalLength
+    print(f"Focal Length: {focal} mm")
+    
+    # 35mm 等效 (参考用)
+    focal_35 = exif.get(41989)
+    print(f"35mm Equivalent: {focal_35} mm")
+
+def pyexif_to_dict(img_path: str | Path) -> Dict[str, str]:
+    import pyexif
+    img = pyexif.ExifEditor(img_path)
+    return img.getDictTags()
 
 if __name__ == "__main__":
     pass
     from pprint import pprint
-    image_path = r"E:\data\thesis\HTM\collected data\DJI_202512161540_008_filter\DJI_20251216155812_0537_V.JPG"
+    image_path = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\data\visible\DJI_20251216143332_0056_V.JPG"
     params = parse_dji_xmp(image_path)
     pprint(params)
+    print('----------------')
+    debug_exif(image_path)
+    print('----------------')
+    exif_dict = pyexif_to_dict(image_path)
+    pprint(exif_dict)

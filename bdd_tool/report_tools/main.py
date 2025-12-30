@@ -27,6 +27,24 @@ EXPORTER_MAP = {
     3: PDFExporterCompact,
 }
 
+def safe_float(value):
+    """
+    处理 '6.7 mm', '4.67 m', None, 0 等各种情况转 float
+    """
+    if value is None:
+        return 0.0
+    if isinstance(value, (int, float)):
+        return float(value)
+    
+    val_str = str(value).strip()
+    try:
+        return float(val_str)
+    except ValueError:
+        # 提取数字部分 (支持 "6.7 mm", "+93.9 m")
+        match = re.search(r"[-+]?\d*\.\d+|\d+", val_str)
+        if match:
+            return float(match.group())
+        return 0.0
 
 class ReportEngine:
     def __init__(self, loader, labels, metadata_getter=None):
@@ -43,76 +61,142 @@ class ReportEngine:
         self.crop_dir = None
 
         self.global_drone_info = {}
+
+
     def _get_standard_exif(self, img):
-        """获取标准 EXIF (如焦距)"""
+        """[Fallback组件] 使用 PIL 获取标准 EXIF，尝试读取 SubIFD 以获取焦距"""
         exif_data = {}
         try:
+            # 1. 基础 EXIF
             info = img.getexif()
             if info:
-                for tag, value in info.items():
-                    decoded = ExifTags.TAGS.get(tag, tag)
-                    exif_data[decoded] = value
+                # 272: Model
+                if 272 in info: 
+                    exif_data['Model'] = str(info[272]).strip()
+                # 37386: FocalLength (有时在主 IFD)
+                if 37386 in info:
+                    exif_data['FocalLength'] = float(info[37386])
+
+                # 2. 尝试读取 Exif SubIFD (0x8769 = 34665)
+                # 很多相机的焦距藏在这里
+                if 34665 in info:
+                    sub_ifd = info.get_ifd(34665)
+                    if 37386 in sub_ifd:
+                        exif_data['FocalLength'] = float(sub_ifd[37386])
         except Exception:
             pass
         return exif_data
 
-    def _get_metadata(self, img_path):
+    def _get_unified_metadata(self, img_path, img_pil):
         """
-        内部方法：获取元数据，如果没有提供 getter 或获取失败，返回默认 None
+        【核心修改】双保险元数据获取策略 + 格式统一化
+        目标：无论使用 PyExif 还是 Fallback，返回的字典结构保持一致。
         """
-        default_meta = {
-            'xyz': 'None', 
-            'orientation': 'None', 
-            'floor': 'None', 
-            'view': 'None'
-        }
-        
-        if self.metadata_getter:
-            try:
-                # 调用外部传入的函数获取真实信息
-                external_meta = self.metadata_getter(img_path)
-                if external_meta:
-                    default_meta.update(external_meta)
-            except Exception as e:
-                print(f"Warning: Failed to get metadata for {img_path}: {e}")
-        
-        return default_meta
+        meta = {}
+        method_used = "unknown"
 
-    def _get_camera_specs(self, xmp_data, filename):
-        """
-        辅助函数：根据 XMP 和文件名，从 config 中匹配相机参数
-        """
-        # 1. 获取机型 (e.g., 'M4T', 'M3T', 'Mavic 3 Enterprise')
-        # 你的日志显示字段是 'DroneModel'
-        model = xmp_data.get('DroneModel', 'Unknown')
-        
-        # 简单清洗型号字符串 (去掉 DJI 前缀等，防止匹配不上)
-        if 'Matrice 4T' in xmp_data.get('ProductName', ''): model = 'M4T'
-        if 'Mavic 3 Thermal' in xmp_data.get('ProductName', ''): model = 'M3T'
-        if 'Mavic 3 Enterprise' in xmp_data.get('ProductName', ''): model = 'M3E'
+        # -----------------------------------------------------------
+        # 策略 1: 尝试 PyExif (ExifTool) - 黄金标准
+        # -----------------------------------------------------------
+        try:
+            import pyexif
+            # 尝试使用 pyexif 读取 (前提是系统装了 exiftool)
+            exif_editor = pyexif.ExifEditor(str(img_path))
+            meta = exif_editor.getDictTags()
+            method_used = "pyexif"
+            
+        except (ImportError, FileNotFoundError, Exception):
+            # -------------------------------------------------------
+            # 策略 2: Fallback (PIL + Regex XMP) - 手动合并
+            # -------------------------------------------------------
+            method_used = "fallback"
+            
+            # A. 获取标准 EXIF (提供 Model, FocalLength 等光学参数)
+            # 使用之前的 _get_standard_exif 函数
+            std_exif = self._get_standard_exif(img_pil)
+            meta.update(std_exif)
+            
+            # B. 获取 DJI XMP (提供 AbsoluteAltitude, LRFTargetDistance 等飞行参数)
+            xmp_data = parse_dji_xmp(img_path)
+            meta.update(xmp_data)
 
-        # 2. 获取相机类型 (Wide vs Thermal)
-        # 优先判断文件名是否包含 _T，或者 XMP ImageSource 是否包含 Thermal
-        img_source = xmp_data.get('ImageSource', '')
+        # -----------------------------------------------------------
+        # 3. 统一化 / 标准化 (Standardization)
+        # -----------------------------------------------------------
+        # 无论数据来源是 pyexif 还是 fallback，确保关键键名一致
+        
+        # [规则1] 统一相机型号键名
+        # ExifTool/PIL 通常用 'Model'，DJI XMP 用 'DroneModel'
+        if 'Model' not in meta and 'DroneModel' in meta:
+            meta['Model'] = meta['DroneModel']
+
+        # [规则2] 统一焦距键名 (以防万一)
+        # 确保 'FocalLength' 存在，方便后续计算
+        # 如果 PIL 没读到 (None)，pyexif 也没读到，这里就保持现状，后续由 specs 兜底
+
+        # [规则3] 统一距离键名 (可选)
+        # 某些旧版固件可能叫 'SubjectDistance'，新版叫 'LRFTargetDistance'
+        # 我们的业务逻辑优先找 LRF，这里可以不做额外映射，保持原样即可
+
+        # [调试打印]
+        # print(f"DEBUG [{method_used}]: Model={meta.get('Model')}, Focal={meta.get('FocalLength')}")
+        
+        return meta
+
+    def _get_camera_specs_unified(self, meta_dict, filename):
+        """根据元数据字典获取 config 参数"""
+        # 1. 确定型号 (兼容 pyexif 的 'Model' 和 XMP 的 'DroneModel')
+        model = meta_dict.get('Model') or meta_dict.get('DroneModel')
+        
+        # 清洗型号字符串
+        if model:
+            model_str = str(model)
+            if 'Matrice 4' in model_str or 'M4' in model_str: model = 'M4T'
+            elif 'Mavic 3 Thermal' in model_str: model = 'M3T'
+            elif 'Mavic 3 Enterprise' in model_str: model = 'M3E'
+            elif 'Matrice 30' in model_str: model = 'M30T'
+        else:
+            model = 'Unknown'
+
+        # 2. 确定类型 (Wide vs Thermal)
+        img_source = str(meta_dict.get('ImageSource', ''))
         is_thermal = '_T' in filename or 'Thermal' in img_source or 'IR' in img_source
-        
         cam_type = 'Thermal' if is_thermal else 'Wide'
         
-        # 3. 拼接键名并查找
+        # 3. 查表
         config_key = f"{model}_{cam_type}"
+        specs = config.DRONE_PARAMS.get(config_key, config.DRONE_PARAMS['default'])
         
-        # 尝试精确匹配
-        specs = config.DRONE_PARAMS.get(config_key)
-        
-        if specs:
-            # print(f"DEBUG: Matched Camera Config: [{config_key}] -> {specs}")
-            return specs
-            
-        # 4. 如果没找到，尝试模糊匹配 (例如只有 M4T 没写 Thermal)
-        # 或者回退到 config 中定义的默认值
-        # print(f"WARNING: Unknown camera config [{config_key}], using default.")
-        return config.DRONE_PARAMS['default']
+        return specs
 
+    def _get_camera_specs_unified(self, meta_dict, filename):
+        """
+        统一接口：根据元数据字典确定相机参数
+        """
+        # 1. 确定型号
+        model = meta_dict.get('Model') or meta_dict.get('DroneModel')
+        
+        # 清洗型号名称
+        if model:
+            model_str = str(model)
+            if 'Matrice 4' in model_str or 'M4' in model_str: model = 'M4T'
+            elif 'Mavic 3 Thermal' in model_str: model = 'M3T'
+            elif 'Mavic 3 Enterprise' in model_str: model = 'M3E'
+            elif 'Matrice 30' in model_str: model = 'M30T'
+        else:
+            model = 'Unknown'
+
+        # 2. 确定类型 (Visible vs Thermal)
+        # 检查文件名或 ImageSource
+        img_source = str(meta_dict.get('ImageSource', ''))
+        is_thermal = '_T' in filename or 'Thermal' in img_source or 'IR' in img_source
+        cam_type = 'Thermal' if is_thermal else 'Wide'
+        
+        # 3. 查表
+        config_key = f"{model}_{cam_type}"
+        specs = config.DRONE_PARAMS.get(config_key, config.DRONE_PARAMS['default'])
+        
+        return specs, model
     def _process_single_image(self, img_path, detections):
         stem_name = Path(img_path).stem
         os.makedirs(self.vis_dir, exist_ok=True)
@@ -122,139 +206,69 @@ class ReportEngine:
         img = Image.open(img_path).convert('RGB')
         img_w, img_h = img.size
 
-        # --- 1. 获取 XMP 元数据 ---
-        from utils.exif_dji_xmp import parse_dji_xmp
-        xmp_data = parse_dji_xmp(img_path)
+        # --- 1. 【核心修改】统一获取所有元数据 ---
+        # 替代了之前的 _get_standard_exif 和 parse_dji_xmp
+        all_meta = self._get_unified_metadata(img_path, img)
+        
+        # 调试：看看焦距读出来是什么格式
+        # print(f"DEBUG: {stem_name} Focal: {all_meta.get('FocalLength')}")
 
-        # 收集全局无人机信息 (用于报告摘要)
-        if not self.global_drone_info and xmp_data:
+        # ==========================================
+        # 1. 获取元数据 (双保险策略)
+        # ==========================================
+        all_meta = self._get_unified_metadata(img_path, img)
+
+        # 收集全局信息
+        if not self.global_drone_info:
             self.global_drone_info = {
-                'Model': xmp_data.get('DroneModel', 'Unknown'),
-                'Camera': xmp_data.get('ImageSource', 'Unknown'),
-                'Firmware': xmp_data.get('Version', 'Unknown')
+                'Model': all_meta.get('Model', 'Unknown'),
+                'Camera': all_meta.get('ImageSource', 'Unknown'),
+                'Firmware': all_meta.get('Firmware', all_meta.get('Version', 'Unknown'))
             }
 
-        # --- 2. 【核心修改】智能获取相机参数 ---
-        camera_specs = self._get_camera_specs(xmp_data, stem_name)
-        sensor_width = camera_specs['sensor_width_mm']
-        default_focal = camera_specs['focal_length_mm']
+        # ==========================================
+        # 2. 计算物理参数 (使用统一后的 meta)
+        # ==========================================
+        # A. 获取传感器规格
+        specs, detected_model = self._get_camera_specs_unified(all_meta, stem_name)
+        sensor_width = specs['sensor_width_mm']
 
-        # --- 3. 获取/计算焦距 ---
-        # 优先读取 EXIF 里的真实焦距
-        exif_info = self._get_standard_exif(img)
-        focal_length = exif_info.get('FocalLength', None)
-        
-        # 如果 EXIF 读不到 (比如热成像)，使用 Config 里的参数
-        if focal_length is None or float(focal_length) == 0:
-            focal_length = default_focal
+        # B. 获取焦距 (EXIF 优先 -> Config 兜底)
+        focal_length = safe_float(all_meta.get('FocalLength'))
+        if focal_length == 0:
+            focal_length = specs['focal_length_mm']
 
-        # --- 4. 获取/计算距离 ---
-        # (保持之前的逻辑: LRF -> RelAlt -> Default)
+        # C. 获取距离 (LRF 优先 -> 相对高度 -> Config 兜底)
         distance_mm = 0
-        lrf_dist = xmp_data.get('LRFTargetDistance', '0')
-        try:
-            val = float(lrf_dist)
+        
+        # 尝试读取激光测距 (兼容 pyexif 的 '4.67 m' 和 XMP 的 '4.67')
+        lrf = all_meta.get('LRFTargetDistance')
+        if lrf:
+            val = safe_float(lrf)
             if val > 0: distance_mm = val * 1000
-        except ValueError: pass
-
-        if distance_mm == 0:
-            rel_alt = xmp_data.get('RelativeAltitude', '0')
-            try:
-                val = float(rel_alt)
-                if val != 0: distance_mm = abs(val) * 1000
-            except ValueError: pass
             
+        # 尝试相对高度
+        if distance_mm == 0:
+            rel_alt = all_meta.get('RelativeAltitude')
+            if rel_alt:
+                val = safe_float(rel_alt)
+                if val != 0: distance_mm = abs(val) * 1000
+        
+        # Config 默认值兜底
         if distance_mm == 0:
             distance_mm = getattr(config, 'DEFAULT_DISTANCE_M', 15.0) * 1000
 
-        # --- 5. 计算 GSD ---
+        # D. 计算 GSD
         gsd = calculate_gsd(
             distance_mm=distance_mm,
             focal_length_mm=focal_length,
-            sensor_width_mm=sensor_width,  # <--- 这里使用的是动态获取的参数
+            sensor_width_mm=sensor_width,
             image_width_pix=img_w
         )
 
-    # def _process_single_image(self, img_path, detections):
-    #     """【核心修改】在此处计算 W_pix, W_cm 等字段"""
-    #     stem_name = Path(img_path).stem
-    #     os.makedirs(self.vis_dir, exist_ok=True)
-    #     crop_subdir = os.path.join(self.crop_dir, stem_name)
-    #     os.makedirs(crop_subdir, exist_ok=True)
-
-    #     img = Image.open(img_path).convert('RGB')
-    #     img_w, img_h = img.size
-
-    #     # --- 1. 计算 GSD 和获取元数据 ---
-    #     # 获取标准 EXIF (焦距)
-    #     exif_info = self._get_standard_exif(img)
-    #     focal_length = exif_info.get('FocalLength', None)
-
-    #     # 【新增】如果读不到焦距，或者焦距为0，强制使用默认值
-    #     if focal_length is None or float(focal_length) == 0:
-    #         # print(f"DEBUG: No FocalLength for {stem_name}, using default.")
-    #         focal_length = getattr(config, 'DEFAULT_FOCAL_LENGTH_MM', 4.5)
-
-    #     # 获取 DJI XMP 信息 (用于 GSD 计算)
-    #     xmp_data = parse_dji_xmp(img_path)
-
-    #     # print(f"DEBUG: {stem_name} XMP: {xmp_data.get('LRFTargetDistance')}")
-
-    #     # --- 计算距离 (优化版逻辑) ---
-    #     distance_mm = 0
-        
-    #     # 1. 优先尝试读取激光测距 (LRFTargetDistance)
-    #     lrf_dist = xmp_data.get('LRFTargetDistance', '0')
-    #     try:
-    #         val = float(lrf_dist)
-    #         if val > 0:
-    #             distance_mm = val * 1000
-    #             # print(f"Using LRF Distance: {val}m")
-    #     except ValueError:
-    #         pass
-
-    #     # 2. 如果激光无效，尝试使用相对高度 (RelativeAltitude)
-    #     if distance_mm == 0:
-    #         rel_alt = xmp_data.get('RelativeAltitude', '0')
-    #         try:
-    #             val = float(rel_alt)
-    #             if val != 0:
-    #                 distance_mm = abs(val) * 1000 # 取绝对值防止负高度
-    #                 print(f"Using Relative Altitude: {val}m")
-    #         except ValueError:
-    #             pass
-
-    #     # 3. 如果还是 0 (说明是PNG或数据丢失)，才使用默认值兜底
-    #     if distance_mm == 0:
-    #         # 这里使用 config.py 里定义的默认距离
-    #         distance_mm = getattr(config, 'DEFAULT_DISTANCE_M', 15.0) * 1000 
-    #         print("Using Default Distance Estimate")
-
-    #     # 收集第一张图的无人机信息
-    #     if not self.global_drone_info and xmp_data:
-    #         self.global_drone_info = {
-    #             'Model': xmp_data.get('DroneModel', 'Unknown'),
-    #             'Camera': xmp_data.get('ImageSource', 'Unknown'),
-    #             'Firmware': xmp_data.get('Version', 'Unknown')
-    #         }
-
-    #     # 计算 GSD
-    #     dist_str = xmp_data.get('LRFTargetDistance', '0')
-    #     if float(dist_str) == 0:
-    #          dist_str = xmp_data.get('RelativeAltitude', '0')
-        
-    #     distance_mm = float(dist_str) * 1000 
-        
-    #     # 计算 GSD (mm/pixel)
-    #     gsd = calculate_gsd(
-    #         distance_mm=distance_mm,
-    #         focal_length_mm=focal_length,
-    #         sensor_width_mm=config.SENSOR_WIDTH_MM,
-    #         image_width_pix=img_w
-    #     )
-
-        # 获取位置元数据 (XYZ, Floor等)
-        img_meta = self._get_metadata(img_path)
+        # 获取额外的显示用元数据 (位置、楼层等)
+        # 依然可以使用自定义 getter 或者从 all_meta 提取
+        img_meta = self._get_metadata(img_path, all_meta)
 
         # --- 2. 可视化绘制 ---
         img_vis = img.copy()
@@ -361,7 +375,24 @@ class ReportEngine:
             records.append(record)
         
         return pd.DataFrame(records)
-
+    def _get_metadata(self, img_path, meta_dict=None):
+        """
+        获取楼层、XYZ等展示信息。
+        增加了 meta_dict 参数，如果有现成的元数据就直接用，不用再读文件。
+        """
+        default_meta = {'xyz': 'None', 'orientation': 'None', 'floor': 'None', 'view': 'None'}
+        
+        if self.metadata_getter:
+            try:
+                # 稍微修改 getter 的调用约定，或者让 getter 自己决定怎么读
+                # 为了兼容性，这里还是传 img_path，但如果你的 provider 支持接收 dict 更好
+                external_meta = self.metadata_getter(img_path) 
+                if external_meta:
+                    default_meta.update(external_meta)
+            except Exception as e:
+                print(f"Warning: Metadata getter error: {e}")
+        
+        return default_meta
     def run(self, output_path, model_name="Generic-Model", style_id=0):
         # 初始化目录
         base_dir = os.path.dirname(os.path.abspath(output_path))
@@ -479,6 +510,48 @@ def dji_metadata_provider(img_path):
         'floor': floor_str,
         'view': view_str
     }
+
+# main.py
+
+# ... (Imports 保持不变，但可以删除 utils.exif_dji_xmp 的引用) ...
+import re
+
+def pyexif_to_dict(img_path):
+    """
+    使用 pyexif (ExifTool) 读取所有元数据
+    """
+    try:
+        import pyexif
+        # 注意：确保系统路径中有 exiftool，或者 pyexif 配置正确
+        img = pyexif.ExifEditor(img_path)
+        return img.getDictTags()
+    except Exception as e:
+        print(f"Error reading EXIF with pyexif: {e}")
+        return {}
+
+def safe_float(value):
+    """
+    安全转换为浮点数，自动处理 '6.7 mm' 或 'None' 等情况
+    """
+    if value is None:
+        return 0.0
+    
+    # 如果已经是数字，直接返回
+    if isinstance(value, (int, float)):
+        return float(value)
+    
+    # 如果是字符串，尝试清洗
+    value_str = str(value).strip()
+    try:
+        # 尝试直接转换
+        return float(value_str)
+    except ValueError:
+        # 提取字符串中的第一个数字部分 (支持负号和小数点)
+        # 例如: "6.7 mm" -> 6.7, "+93.9 m" -> 93.9
+        match = re.search(r"[-+]?\d*\.\d+|\d+", value_str)
+        if match:
+            return float(match.group())
+        return 0.0
 
 if __name__ == '__main__':
     # 配置路径
