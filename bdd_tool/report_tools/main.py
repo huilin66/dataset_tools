@@ -21,7 +21,7 @@ def dji_metadata_provider(img_path):
     # 仅当你有额外的业务逻辑（如：根据经纬度反查楼宇名称）时才需在此编写并传给 Engine
     return None
 
-def run_inspection_task(img_dir, label_dir, class_path, output_pdf, style_id=3):
+def run_inspection_task(img_dir, label_dir, class_path, output_pdf, style_id=3, thread_count=None):
     """
     执行单次巡检报告生成任务
     """
@@ -38,10 +38,16 @@ def run_inspection_task(img_dir, label_dir, class_path, output_pdf, style_id=3):
     
     # 4. 运行引擎
     # 包含：元数据声明、图像解析、PDF导出、状态重置
+    if thread_count is None:
+        use_mt, workers = False, 1
+    else:
+        use_mt, workers = True, thread_count
+
     engine.run(
         output_path=output_pdf, 
-        model_name="DJI-M4T-INSPECTION", 
-        style_id=style_id
+        style_id=style_id,
+        use_multithreading=use_mt,
+        max_workers=workers
     )
 
 if __name__ == '__main__':
@@ -54,7 +60,8 @@ if __name__ == '__main__':
         label_dir=config.PRED_DIR, 
         class_path=config.CLASS_PATH, 
         output_pdf=config.OUTPUT_PDF_PATH,
-        style_id=3  # 使用紧凑横向样式
+        style_id=3,  # 使用紧凑横向样式
+        thread_count=4
     )
 
     # ==========================================
