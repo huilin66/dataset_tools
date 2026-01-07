@@ -165,6 +165,16 @@ def make_rotated_triangle_icon(color: str, bearing_deg: float) -> folium.DivIcon
     """
     return folium.DivIcon(html=html)
 
+def parse_fov_deg(exif: Dict[str, Any]) -> Optional[float]:
+    # 你的 EXIF 里有 'FOV': '73.7 deg'
+    return parse_float(exif.get("FOV"))
+
+def parse_lrf_target(exif: Dict[str, Any]) -> Tuple[Optional[float], Optional[float], Optional[float]]:
+    # 你的 EXIF 里 LRF 目标是 decimal（例如 22.3100105）
+    tlat = parse_float(exif.get("LRFTargetLat"))
+    tlon = parse_float(exif.get("LRFTargetLon"))
+    tdist = parse_float(exif.get("LRFTargetDistance"))  # meters
+    return tlat, tlon, tdist
 
 # -------------------------
 # Main
@@ -219,6 +229,9 @@ def build_views_map(
 
         yaw = (yaw + yaw_offset_deg) % 360.0
 
+        fov_deg = parse_fov_deg(exif)
+        tlat, tlon, tdist = parse_lrf_target(exif)
+
         points.append({
             "vid": f"V{i}",
             "folder": folder.name,
@@ -226,6 +239,10 @@ def build_views_map(
             "lat": lat,
             "lon": lon,
             "yaw": yaw,
+            "fov_deg": fov_deg,
+            "tlat": tlat,
+            "tlon": tlon,
+            "tdist": tdist,
         })
 
     if not points:
@@ -293,6 +310,23 @@ def build_views_map(
             icon=make_rotated_triangle_icon(color=color, bearing_deg=arrow_bearing),
         ).add_to(m)
 
+        # 在 LRF 目标点处画一条“横向覆盖范围”红线
+        tlat, tlon, tdist = p.get("tlat"), p.get("tlon"), p.get("tdist")
+        fov_deg = p.get("fov_deg")
+
+        if (tlat is not None) and (tlon is not None) and (tdist is not None) and (fov_deg is not None) and (tdist > 0) and (fov_deg > 0):
+            half_width = tdist * math.tan(math.radians(fov_deg / 2.0))  # meters
+
+            # 红线方向：与拍摄方向垂直（yaw ± 90）
+            left_lat, left_lon = forward_geodesic(tlat, tlon, (arrow_bearing - 90.0) % 360.0, half_width)
+            right_lat, right_lon = forward_geodesic(tlat, tlon, (arrow_bearing + 90.0) % 360.0, half_width)
+
+            folium.PolyLine(
+                [(left_lat, left_lon), (right_lat, right_lon)],
+                weight=4,
+                opacity=0.9,
+                color="gray",
+            ).add_to(m)
         # label
         folium.Marker(
             location=(lat, lon),
