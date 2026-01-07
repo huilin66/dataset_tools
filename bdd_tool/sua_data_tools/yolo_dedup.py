@@ -6,6 +6,33 @@ import numpy as np
 import shutil
 import platform
 import json
+import math
+import subprocess
+
+# ===================== 颜色工具 =====================
+# 定义一个高对比度的调色盘 (R, G, B)
+COLOR_PALETTE = [
+    (255, 50, 50),    # 0: Red
+    (50, 255, 50),    # 1: Green
+    (50, 50, 255),    # 2: Blue
+    (255, 255, 50),   # 3: Yellow
+    (50, 255, 255),   # 4: Cyan
+    (255, 50, 255),   # 5: Magenta
+    (255, 128, 0),    # 6: Orange
+    (128, 0, 255),    # 7: Purple
+    (0, 128, 128),    # 8: Teal
+    (128, 128, 0)     # 9: Olive
+]
+
+def get_class_color(cls_idx):
+    """根据类别索引返回颜色"""
+    if cls_idx < 0: return (255, 255, 255)
+    return COLOR_PALETTE[cls_idx % len(COLOR_PALETTE)]
+
+def get_contrasting_text_color(bg_color):
+    """根据背景色亮度决定文字是黑还是白"""
+    luminance = (0.299 * bg_color[0] + 0.587 * bg_color[1] + 0.114 * bg_color[2]) / 255
+    return (0, 0, 0) if luminance > 0.5 else (255, 255, 255)
 
 
 # ===================== 0. 辅助函数：加载类别名称 =====================
@@ -71,6 +98,77 @@ def compute_iou_2d(box1, box2):
     
     return inter_area / union_area if union_area > 0 else 0
 
+def pyexif_to_dict(img_path):
+    import pyexif
+    img = pyexif.ExifEditor(img_path)
+    return img.getDictTags()
+
+def parse_dji_float(val_str):
+    """
+    解析 DJI 格式的数字字符串，例如 '+60.816', '7.233 m', '24.0 mm'
+    """
+    if isinstance(val_str, (int, float)):
+        return float(val_str)
+    try:
+        # 去掉非数字字符（除了 . + -）
+        clean_str = "".join([c for c in str(val_str) if c in "0123456789.+-"])
+        return float(clean_str)
+    except:
+        return None
+
+def get_image_metadata(img_path):
+    """
+    调用 exiftool 获取元数据 (模拟你提到的 pyexif_to_dict)
+    如果你有自己的函数，请替换这里
+    """
+    # 这里为了演示，使用 subprocess 调用 exiftool 命令行
+    # 实际使用中，请替换为你项目中现有的 pyexif_to_dict 调用
+    try:
+        cmd = ['exiftool', '-j', '-G', img_path]
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        info = json.loads(result.stdout)[0]
+        
+        # 提取关键参数
+        # 注意：exiftool 的键名可能带前缀，如 'XMP:RelativeAltitude' 或直接 'RelativeAltitude'
+        # 这里做一个简单的查找映射
+        def find_val(keys):
+            for k in keys:
+                for full_k in info.keys():
+                    if k in full_k: # 模糊匹配
+                        return info[full_k]
+            return None
+
+        # 1. 高度 (Z轴核心)
+        # [修改点 1] 优先读取 AbsoluteAltitude
+        # 注意：DJI M4T 的 AbsoluteAltitude 通常非常准 (RTK)
+        abs_alt = parse_dji_float(find_val(['AbsoluteAltitude', 'GPSAltitude']))
+        rel_alt = parse_dji_float(find_val(['RelativeAltitude']))
+        
+        # 逻辑：如果能读到绝对海拔，就用绝对的；否则降级用相对的（作为兜底）
+        # 但记得在外面处理时，如果用的是相对高度，street_level 就应该设为 0
+        final_alt = abs_alt if abs_alt is not None else rel_alt
+        
+        # 2. 激光测距 (距离核心)
+        lrf = parse_dji_float(find_val(['LRFTargetDistance']))
+        
+        # 3. 云台俯仰 (角度补偿)
+        pitch = parse_dji_float(find_val(['GimbalPitchDegree', 'FlightPitchDegree']))
+        
+        # 4. 焦距 (自动获取，不再硬编码)
+        # 优先使用等效35mm焦距，或者使用实际焦距配合传感器尺寸计算
+        focal_35 = parse_dji_float(find_val(['FocalLengthIn35mmFormat', 'FocalLength35efl']))
+        
+        return {
+            "alt": final_alt if final_alt is not None else 0.0,
+            "is_absolute": (abs_alt is not None),
+            "lrf": lrf if lrf is not None else 10.0, # 默认值防止崩溃
+            "pitch": pitch if pitch is not None else 0.0,
+            "focal_35mm": focal_35 if focal_35 is not None else 24.0
+        }
+    except Exception as e:
+        print(f"⚠️ 读取 EXIF 失败 {img_path}: {e}")
+        return {"alt": 0, "lrf": 10, "pitch": 0, "focal_35mm": 24}
+
 def export_projection_details_json(all_dets, output_path):
     print(f"📊 正在导出投影详情 JSON: {output_path} ...")
     
@@ -118,7 +216,296 @@ def export_projection_details_json(all_dets, output_path):
     
     print("✅ 投影详情导出完成。")
 
+def calculate_robust_wall_distance(img_files, trim_ratio=0.05, bin_size=0.5):
+    """
+    更加鲁棒的墙面距离计算函数
+    :param img_files: 图片路径列表
+    :param trim_ratio: 首尾截断比例 (0.1 表示去掉前10%和后10%)
+    :param bin_size: 直方图分桶大小 (单位: 米)，建议 0.5m 或 1.0m
+    """
+    print("📏 正在分析采集路线 (高阶去噪版)...")
+    
+    # 1. 确保按拍摄顺序排列 (假设文件名包含时间或序号)
+    sorted_files = sorted(img_files)
+    total_imgs = len(sorted_files)
+    
+    if total_imgs == 0:
+        return 10.0
+
+    # 2. 读取所有 LRF 数据
+    valid_lrf = []
+    
+    # 为了演示，这里假设已经有了 get_image_metadata 函数
+    # 在实际循环中读取
+    raw_data = []
+    for img_path in tqdm(sorted_files, desc="Reading Metadata"):
+        meta = get_image_metadata(img_path)
+        dist = meta['lrf']
+        # 过滤明显的错误数据 (比如 < 1m 或 > 100m)
+        if 1.0 < dist < 100.0:
+            raw_data.append(dist)
+        else:
+            raw_data.append(None) # 保持索引对应，方便截断
+
+    # 3. 首尾截断 (Head/Tail Trimming)
+    # 计算需要截掉的数量
+    trim_cnt = int(total_imgs * trim_ratio)
+    
+    # 截取中间段
+    if total_imgs > 2 * trim_cnt:
+        trimmed_data = raw_data[trim_cnt : total_imgs - trim_cnt]
+        print(f"✂️ 已剔除首尾各 {trim_cnt} 张图片，保留中间 {len(trimmed_data)} 张")
+    else:
+        trimmed_data = raw_data
+        print("⚠️ 图片过少，跳过首尾截断")
+
+    # 去除 None 值
+    clean_lrf = [x for x in trimmed_data if x is not None]
+    
+    if not clean_lrf:
+        print("❌ 有效 LRF 数据不足，使用默认值 10m")
+        return 10.0
+
+    # 4. 基于直方图寻找“众数区间” (Mode Binning)
+    # 这是处理浮点数众数的最佳方法
+    
+    # 创建分桶区间：从最小值到最大值，步长为 bin_size
+    min_val = min(clean_lrf)
+    max_val = max(clean_lrf)
+    bins = np.arange(math.floor(min_val), math.ceil(max_val) + bin_size, bin_size)
+    
+    # 统计直方图
+    hist, bin_edges = np.histogram(clean_lrf, bins=bins)
+    
+    # 找到数量最多的那个桶 (Peak Index)
+    peak_idx = np.argmax(hist)
+    
+    # 获取该桶的范围
+    peak_start = bin_edges[peak_idx]
+    peak_end = bin_edges[peak_idx+1]
+    
+    print(f"📊 发现主墙面区间: {peak_start:.2f}m ~ {peak_end:.2f}m (包含 {hist[peak_idx]} 张图片)")
+    
+    # 5. 在“主墙面区间”内计算精确中位数
+    # 这一步是为了防止桶太大导致精度不够，或者桶太小导致切分错误
+    # 我们只选取落在主区间内的数据来算最终结果
+    final_candidates = [x for x in clean_lrf if peak_start <= x < peak_end]
+    
+    if not final_candidates:
+        # 理论上不会发生，除非 histogram 逻辑出错，兜底用整体中位数
+        final_dist = np.median(clean_lrf)
+    else:
+        final_dist = np.median(final_candidates)
+
+    print(f"✅ 最终选定墙面基准距离: {final_dist:.4f}m (基于众数区间优化)")
+    return final_dist
+
+def calculate_global_wall_distance(img_files):
+    """
+    统计所有图片的 LRF 距离，计算中位数，作为“墙面基准距离”
+    """
+    print("📏 正在分析采集路线的墙面距离统计特征...")
+    lrf_values = []
+    
+    # 随机抽样 20 张或者全部读取来计算，为了速度可以抽样
+    # 这里为了准确，全部读取
+    for img_path in tqdm(img_files):
+        meta = get_image_metadata(img_path)
+        if meta['lrf'] > 1.0: # 过滤掉无效值（如0或极小值）
+            lrf_values.append(meta['lrf'])
+            
+    if not lrf_values:
+        return 10.0 # 默认兜底
+        
+    median_dist = np.median(lrf_values)
+    mean_dist = np.mean(lrf_values)
+    std_dist = np.std(lrf_values)
+    
+    print(f"📊 距离统计: 中位数={median_dist:.2f}m, 均值={mean_dist:.2f}m, 标准差={std_dist:.2f}m")
+    print(f"✅ 将使用中位数 {median_dist:.2f}m 作为固定墙面距离 (去除窗户/噪点影响)")
+    return median_dist
+
+def project_adaptive(px, py, W, H, meta, wall_distance_m):
+    """
+    自适应投影函数
+    :param meta: 当前图片的元数据 (alt, pitch, focal_35mm)
+    :param wall_distance_m: 全局固定的墙面距离
+    """
+    # 1. 计算像素焦距 (基于 35mm 等效焦距)
+    # 35mm 全画幅传感器宽度为 36mm
+    # fx_pix = (F_35mm / 36mm) * ImageWidth_pix
+    fx = (meta['focal_35mm'] / 36.0) * W
+    fy = fx # 假设像素是正方形
+    
+    # 2. 归一化像素坐标 (以图像中心为原点)
+    u = px - W / 2
+    v = H / 2 - py # 图像向上为y正方向
+    
+    # 3. 角度计算 (引入云台 Pitch 修正)
+    # alpha_y 是像素点相对于光轴的垂直夹角
+    alpha_y = math.atan(v / fy) 
+    
+    # 实际视线与水平面的夹角 = 云台Pitch + 像素夹角
+    # 注意：DJI GimbalPitch 向上为正还是向下为正？通常水平是0，向下是负。
+    # 根据你的数据 '+0.00'，假设向上为正。
+    # 修正：通常俯视拍摄，Pitch是负的。如果 Pitch 是 +0.0，说明是水平拍摄。
+    theta_total = math.radians(meta['pitch']) + alpha_y
+    
+    # 4. 计算物理坐标
+    # Z (高度) = 无人机高度 + 垂直增量
+    # 垂直增量 = 距离 * tan(总角度)
+    z = meta['alt'] + wall_distance_m * math.tan(theta_total)
+    
+    # X (水平) = 距离 * tan(水平夹角) / cos(垂直夹角修正)
+    # 简单近似：x = u / fx * distance
+    x = (u / fx) * wall_distance_m
+    
+    # H (物体高度) = 像素高 / fy * 距离
+    # 严格来说也受 pitch 影响，但物体很小时可忽略
+    h_obj = (py / H) * 0 # 这是一个占位，实际应该用 box_h
+    
+    return x, z
+
 # ===================== 2. 核心处理流程 =====================
+def yolo_project2facade_adaptive(img_dir, yolo_txt_dir, target_classes=None):
+    all_dets = []
+    gid = 0
+    
+    # 1. 获取所有图片列表
+    img_files = glob.glob(os.path.join(img_dir, "*.JPG")) + glob.glob(os.path.join(img_dir, "*.jpg"))
+    
+    if not img_files:
+        print("❌ 未找到图片")
+        return []
+
+    # 2. 【关键步骤】预计算全局墙面距离
+    global_wall_dist = calculate_robust_wall_distance(img_files)
+
+    print("📥 读取 YOLO + 自适应投影 (Metadata Driven)...")
+
+    for img_path in tqdm(img_files):
+        name = os.path.splitext(os.path.basename(img_path))[0]
+        txt_path = os.path.join(yolo_txt_dir, name + ".txt")
+        
+        if not os.path.exists(txt_path):
+            continue
+
+        # 读取图片尺寸
+        with Image.open(img_path) as img:
+            W, H = img.size
+            
+        # 【关键步骤】读取当前图片的元数据
+        meta = get_image_metadata(img_path)
+        
+        with open(txt_path) as f:
+            for line in f:
+                vals = list(map(float, line.strip().split()))
+                if len(vals) < 5: continue
+                
+                cls = int(vals[0])
+                if target_classes and cls not in target_classes: continue
+                
+                cx, cy, w, h = vals[1:5]
+                conf = vals[5] if len(vals) > 5 else 1.0
+                
+                # 转换回像素坐标
+                px = cx * W
+                py = cy * H
+                bw = w * W
+                bh = h * H
+                
+                # 【关键步骤】使用自适应投影
+                # 传入 box 的像素高度 bh 用于计算物体实际高度
+                # 重新复用 project_adaptive 逻辑计算高度比例
+                # H_real / H_pixel = Dist / f
+                fx = (meta['focal_35mm'] / 36.0) * W
+                real_h = (bh / fx) * global_wall_dist
+                
+                world_x, world_z = project_adaptive(px, py, W, H, meta, global_wall_dist)
+
+                all_dets.append({
+                    "gid": gid,
+                    "img": name,
+                    "cls": cls,
+                    "conf": conf,
+                    "cxcywh": (cx, cy, w, h),
+                    "pxpywh": (px, py, bw, bh),
+                    "x": world_x,
+                    "z": world_z,
+                    "h": real_h,
+                    "img_w": W,  # [新增] 图片宽度
+                    "img_h": H,  # [新增] 图片高度
+                    # 保存一些元数据方便 debug
+                    "meta_alt": meta['alt'],
+                    "meta_lrf": meta['lrf'] 
+                })
+                gid += 1
+                
+    return all_dets
+
+
+def merge_boxes_by_id(dets_by_img):
+    print("🔄 正在生成合并版数据 (Calculating Union Boxes)...")
+    merged_dets_by_img = {}
+
+    for img_name, dets in dets_by_img.items():
+        # 1. 按 ID 分组
+        id_groups = {}
+        for d in dets:
+            id_groups.setdefault(d['id'], []).append(d)
+        
+        merged_list = []
+        for uid, group in id_groups.items():
+            # 如果该 ID 只有一个框，直接保留
+            if len(group) == 1:
+                merged_list.append(group[0])
+                continue
+            
+            # === 如果有多个框，执行合并逻辑 ===
+            
+            # 1. 提取所有框的像素边界
+            x1s = [d['pxpywh'][0] - d['pxpywh'][2]/2 for d in group]
+            y1s = [d['pxpywh'][1] - d['pxpywh'][3]/2 for d in group]
+            x2s = [d['pxpywh'][0] + d['pxpywh'][2]/2 for d in group]
+            y2s = [d['pxpywh'][1] + d['pxpywh'][3]/2 for d in group]
+            
+            # 2. 计算并集 (Union) 的大框坐标
+            union_x1 = min(x1s)
+            union_y1 = min(y1s)
+            union_x2 = max(x2s)
+            union_y2 = max(y2s)
+            
+            # 3. 算出新的像素中心和宽高
+            new_bw = union_x2 - union_x1
+            new_bh = union_y2 - union_y1
+            new_px = union_x1 + new_bw / 2
+            new_py = union_y1 + new_bh / 2
+            
+            # 4. 转换回 YOLO 归一化坐标 (cx, cy, w, h)
+            # 必须使用该图片记录的 img_w, img_h
+            W = group[0]['img_w']
+            H = group[0]['img_h']
+            
+            new_cx = new_px / W
+            new_cy = new_py / H
+            new_nw = new_bw / W # normalized width
+            new_nh = new_bh / H # normalized height
+            
+            # 5. 构造新的检测对象 (复制第一个作为模板)
+            new_det = group[0].copy()
+            new_det['cxcywh'] = (new_cx, new_cy, new_nw, new_nh) # 更新 YOLO 坐标
+            new_det['pxpywh'] = (new_px, new_py, new_bw, new_bh) # 更新像素坐标
+            new_det['conf'] = max([d['conf'] for d in group])     # 更新置信度 (取最大)
+            
+            # 注意：投影坐标(x, z) 此时取中心点的投影可能不太准，
+            # 但既然合并了，说明是一个物体，保留原来的 x,z 或者重新投影都可以。
+            # 这里简单保留模板的 x,z 仅供参考。
+            
+            merged_list.append(new_det)
+            
+        merged_dets_by_img[img_name] = merged_list
+        
+    return merged_dets_by_img
 
 def yolo_project2facade(img_dir, yolo_txt_dir, proj_params, target_classes=None):
     """
@@ -256,6 +643,60 @@ def yolo_dedup_write(by_img, dedup_label_dir):
                 # 写入格式: class cx cy w h conf id
                 f.write(f"{d['cls']} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f} {d['conf']:.4f} {d['id']}\n")
 
+def dedup_vis_colored(dets_by_img, img_dir, save_dir, class_names=None, font_size=20):
+    print(f"🖼️ 正在生成可视化 (保存至 {save_dir})...")
+    os.makedirs(save_dir, exist_ok=True)
+    
+    # 加载字体
+    try:
+        font = ImageFont.truetype("arial.ttf", size=font_size)
+    except:
+        font = ImageFont.load_default()
+
+    for img_name, dets in tqdm(dets_by_img.items()):
+        img_path = os.path.join(img_dir, img_name + ".jpg") # 兼容 .JPG
+        if not os.path.exists(img_path):
+             img_path = os.path.join(img_dir, img_name + ".JPG")
+        if not os.path.exists(img_path): continue
+
+        img = Image.open(img_path).convert("RGB")
+        draw = ImageDraw.Draw(img)
+
+        for d in dets:
+            # 1. 获取颜色
+            cls_idx = int(d['cls'])
+            color = COLOR_PALETTE[cls_idx % len(COLOR_PALETTE)]
+            
+            # 2. 画框
+            px, py, bw, bh = d["pxpywh"]
+            x1, y1 = px - bw/2, py - bh/2
+            x2, y2 = px + bw/2, py + bh/2
+            draw.rectangle([x1, y1, x2, y2], outline=color, width=3)
+
+            # 3. 准备标签文字
+            if class_names and 0 <= cls_idx < len(class_names):
+                cls_str = class_names[cls_idx]
+            else:
+                cls_str = str(cls_idx)
+            
+            label = f"{cls_str}|ID:{d['id']}"
+            
+            # 4. 画文字背景 (自适应大小)
+            text_bbox = font.getbbox(label) 
+            text_w = text_bbox[2] - text_bbox[0]
+            text_h = text_bbox[3] - text_bbox[1]
+            
+            # 背景色跟随框的颜色，文字根据亮度自动黑白
+            draw.rectangle([x1, y1 - text_h - 6, x1 + text_w + 6, y1], fill=color)
+            
+            # 简单判断亮度决定文字颜色
+            luminance = (0.299*color[0] + 0.587*color[1] + 0.114*color[2])
+            txt_color = (0,0,0) if luminance > 128 else (255,255,255)
+            
+            draw.text((x1 + 3, y1 - text_h - 6), label, fill=txt_color, font=font)
+
+        img.save(os.path.join(save_dir, img_name + ".jpg"))
+
 def dedup_vis(by_img, img_dir, vis_all_dir, vis_by_id_dir, class_names=None, font_size=20):
     """
     [新增功能] 
@@ -385,6 +826,114 @@ def export_debug_json(all_dets, output_path, class_names=None):
     
     print(f"✅ 调试报告已保存至: {output_path}")
 
+
+def analyze_and_vis_conflicts(dets_by_img, img_dir, output_dir, class_names=None, vis_font_size=20):
+    print("🕵️ 正在分析同图 ID 冲突并生成合并预览...")
+    
+    # 路径准备
+    conflict_vis_dir = os.path.join(output_dir, "vis_conflicts_audit")
+    os.makedirs(conflict_vis_dir, exist_ok=True)
+    report_path = os.path.join(output_dir, "intra_image_conflicts_report.txt")
+    
+    # 字体加载
+    try:
+        font = ImageFont.truetype("arial.ttf", size=vis_font_size) # Windows
+    except:
+        font = ImageFont.load_default()
+
+    conflict_count = 0
+    
+    with open(report_path, "w", encoding="utf-8") as f_rpt:
+        f_rpt.write("Image_Name, ID, Class, Count, Merge_Suggestion\n")
+        
+        for img_name, dets in tqdm(dets_by_img.items()):
+            # 1. 在当前图片内，按 ID 分组
+            id_groups = {}
+            for d in dets:
+                id_groups.setdefault(d['id'], []).append(d)
+            
+            # 2. 检查是否有 ID 的数量 > 1
+            has_conflict = False
+            img_conflicts = [] # 记录当前图的冲突组
+            
+            for uid, group in id_groups.items():
+                if len(group) > 1:
+                    has_conflict = True
+                    conflict_count += 1
+                    
+                    # 获取类别名
+                    cls_idx = group[0]['cls']
+                    cls_str = class_names[cls_idx] if class_names and cls_idx < len(class_names) else str(cls_idx)
+                    
+                    # 写入报告
+                    # 计算这一组在图片上的最大跨度，帮助判断是否应该合并
+                    xs = [d['pxpywh'][0] for d in group]
+                    span_px = max(xs) - min(xs)
+                    suggestion = f"Span {int(span_px)}px"
+                    f_rpt.write(f"{img_name}, {uid}, {cls_str}, {len(group)}, {suggestion}\n")
+                    
+                    img_conflicts.append(group)
+
+            # 3. 如果有冲突，生成专门的“审计图”
+            if has_conflict:
+                img_path = os.path.join(img_dir, img_name + ".jpg") # 假设是 jpg，需注意扩展名
+                if not os.path.exists(img_path):
+                     # 尝试 .JPG
+                    img_path = os.path.join(img_dir, img_name + ".JPG")
+                
+                if not os.path.exists(img_path): continue
+                
+                with Image.open(img_path).convert("RGB") as img:
+                    draw = ImageDraw.Draw(img)
+                    
+                    # A. 先画所有的常规框 (按类别着色)
+                    for d in dets:
+                        cls_color = get_class_color(d['cls'])
+                        px, py, bw, bh = d['pxpywh']
+                        x1, y1 = px - bw/2, py - bh/2
+                        x2, y2 = px + bw/2, py + bh/2
+                        
+                        # 画实线小框
+                        draw.rectangle([x1, y1, x2, y2], outline=cls_color, width=3)
+                        
+                        # 标签
+                        cls_idx = d['cls']
+                        cls_str = class_names[cls_idx] if class_names and cls_idx < len(class_names) else str(cls_idx)
+                        label = f"{cls_str}|{d['id']}"
+                        
+                        # 标签背景
+                        text_bbox = font.getbbox(label)
+                        tw, th = text_bbox[2]-text_bbox[0], text_bbox[3]-text_bbox[1]
+                        draw.rectangle([x1, y1 - th - 4, x1 + tw + 4, y1], fill=cls_color)
+                        txt_color = get_contrasting_text_color(cls_color)
+                        draw.text((x1 + 2, y1 - th - 4), label, fill=txt_color, font=font)
+
+                    # B. 再画“合并预览框” (Union Box) - 只针对有冲突的组
+                    for group in img_conflicts:
+                        # 计算 Union Box 坐标
+                        all_x1 = [d['pxpywh'][0] - d['pxpywh'][2]/2 for d in group]
+                        all_y1 = [d['pxpywh'][1] - d['pxpywh'][3]/2 for d in group]
+                        all_x2 = [d['pxpywh'][0] + d['pxpywh'][2]/2 for d in group]
+                        all_y2 = [d['pxpywh'][1] + d['pxpywh'][3]/2 for d in group]
+                        
+                        ux1, uy1 = min(all_x1), min(all_y1)
+                        ux2, uy2 = max(all_x2), max(all_y2)
+                        
+                        # 画一个醒目的白色大框包围它们
+                        # 模拟虚线效果不好做，直接用粗白线 + 内部无填充
+                        draw.rectangle([ux1-5, uy1-5, ux2+5, uy2+5], outline="white", width=4)
+                        
+                        # 在大框顶部写上提示
+                        merge_label = f"MERGE PREVIEW: ID {group[0]['id']} (x{len(group)})"
+                        draw.text((ux1, uy1 - 30), merge_label, fill="white", font=font, stroke_width=2, stroke_fill="black")
+
+                    # 保存图片到 vis_conflicts_audit 文件夹
+                    img.save(os.path.join(conflict_vis_dir, img_name + "_audit.jpg"))
+
+    print(f"✅ 冲突分析完成！发现 {conflict_count} 处潜在合并。")
+    print(f"📄 报告已保存: {report_path}")
+    print(f"🖼️ 可视化已保存: {conflict_vis_dir}")
+
 def yolo_dedup_pipeline(img_dir, yolo_txt_dir, output_dir, proj_params, 
                         iou_thresh, height_thresh_m, x_thresh_m=2.0,
                         target_classes=None, class_names_path=None, vis_font_size=24):
@@ -393,31 +942,51 @@ def yolo_dedup_pipeline(img_dir, yolo_txt_dir, output_dir, proj_params,
     dedup_label_dir = os.path.join(output_dir, "labels_dedup")
     vis_all_dir = os.path.join(output_dir, "vis_all")
     vis_by_id_dir = os.path.join(output_dir, "vis_by_id")
-    group_info_path = os.path.join(output_dir, "labels_group_info.json")
     proj_info_path = os.path.join(output_dir, "project_info.json")
+
+    dedup_label_dir_fuse = os.path.join(output_dir, "labels_dedup_fuse")
+    vis_all_dir_fuse = os.path.join(output_dir, "vis_all_fuse")
+    vis_by_id_dir_fuse = os.path.join(output_dir, "vis_by_id_fuse")
+    group_info_path = os.path.join(output_dir, "labels_group_info.json")
     
     os.makedirs(dedup_label_dir, exist_ok=True)
     os.makedirs(vis_all_dir, exist_ok=True)
     os.makedirs(vis_by_id_dir, exist_ok=True)
+    os.makedirs(dedup_label_dir_fuse, exist_ok=True)
+    os.makedirs(vis_all_dir_fuse, exist_ok=True)
+    os.makedirs(vis_by_id_dir_fuse, exist_ok=True)
 
     # 0. 加载类别名称
     class_names = load_class_names(class_names_path)
 
     # 1. 读取并筛选
-    all_dets = yolo_project2facade(img_dir, yolo_txt_dir, proj_params, target_classes)
+    all_dets = yolo_project2facade_adaptive(img_dir, yolo_txt_dir, target_classes)
     
     # 2. 去重
     all_dets_with_id = yolo_dedup(all_dets, iou_thresh, height_thresh_m)
     
     # 3. 按图片分组 (关键修复)
     dets_by_img = group_dets_by_image(all_dets_with_id)
-    
+    dets_by_img_fuse = merge_boxes_by_id(dets_by_img)
+
+    analyze_and_vis_conflicts(
+            dets_by_img, 
+            img_dir, 
+            output_dir, 
+            class_names=class_names, # 记得传入 class_names
+            vis_font_size=vis_font_size
+        )
+
     # 4. 写入
     yolo_dedup_write(dets_by_img, dedup_label_dir)
-    
+    yolo_dedup_write(dets_by_img_fuse, dedup_label_dir_fuse)
+
     # 5. 可视化
     dedup_vis(dets_by_img, img_dir, vis_all_dir, vis_by_id_dir, 
               class_names=class_names, font_size=vis_font_size)
+    dedup_vis(dets_by_img_fuse, img_dir, vis_all_dir_fuse, vis_by_id_dir_fuse, 
+              class_names=class_names, font_size=vis_font_size)
+    
     # 6. 生成调试用 JSON 报告
     export_debug_json(all_dets_with_id, group_info_path, class_names)
 
@@ -435,7 +1004,7 @@ if __name__ == "__main__":
     # 输入 YOLO 标签文件夹
     yolo_dir = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\split_data\thermal_views_infer\V30\labels"
     # 输出根目录
-    output_dir = r"e:\repository\dataset_tools\bdd_tool\sua_data_tools\yolo_dedup_out"
+    output_dir = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\split_data\thermal_views_infer_dedup\V30"
     
     # [新增] classes.txt 路径 (可选，如果没有则填 None)
     # 格式：每行一个类别名，第0行对应ID 0
