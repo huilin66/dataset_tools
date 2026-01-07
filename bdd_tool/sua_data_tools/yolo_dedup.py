@@ -8,6 +8,7 @@ import platform
 import json
 import math
 import subprocess
+import time
 
 # ===================== 颜色工具 =====================
 # 定义一个高对比度的调色盘 (R, G, B)
@@ -168,6 +169,141 @@ def get_image_metadata(img_path):
     except Exception as e:
         print(f"⚠️ 读取 EXIF 失败 {img_path}: {e}")
         return {"alt": 0, "lrf": 10, "pitch": 0, "focal_35mm": 24}
+
+class FloorManager:
+    def __init__(self, floor_params):
+        self.params = floor_params
+        self.floor_map = {} # {'1/F': (start_z, end_z), ...}
+        self.is_valid = False
+        self._parse_and_build()
+        self.print_floor_chart()
+
+    def _parse_and_build(self):
+        p = self.params
+        
+        # 1. 单位换算 (检测 normal floor height 是否大于 100)
+        # 如果大于 100，说明是毫米，scale = 0.001；否则是米，scale = 1.0
+        scale = 0.001 if p['normal floor height'] > 100 else 1.0
+        
+        base_h = p['base_height'] * scale
+        final_h = p['final height'] * scale
+        norm_h = p['normal floor height'] * scale
+        
+        # 转换列表和字典中的高度
+        podium_hs = [h * scale for h in p['podium heights']]
+        top_hs = [h * scale for h in p['top heights']]
+        special_hs = {str(k): v * scale for k, v in p['special heights'].items()}
+        
+        # 2. 构建楼层序列 (Name, Height)
+        floor_sequence = []
+        
+        # A. Podium (裙楼/底层)
+        if len(p['podium names']) != len(podium_hs):
+            print(f"❌ 楼层参数错误: Podium 名字数量 ({len(p['podium names'])}) 与 高度数量 ({len(podium_hs)}) 不一致")
+            return
+            
+        for name, h in zip(p['podium names'], podium_hs):
+            floor_sequence.append((str(name), h))
+            
+        # B. Normal (标准层 + 特殊层)
+        # range 是左闭右闭，所以 end + 1
+        start_idx, end_idx = p['normal height number list']
+        expected_norm_count = p['normal height numbers']
+        
+        # 校验数量
+        real_norm_count = end_idx - start_idx + 1
+        if real_norm_count != expected_norm_count:
+             print(f"⚠️ 警告: Normal floor 数量定义不一致 (Number: {expected_norm_count} vs List range: {real_norm_count})，以 List 为准")
+
+        for i in range(start_idx, end_idx + 1):
+            name = str(i)
+            # 检查是否是特殊层
+            h = special_hs.get(name, norm_h)
+            floor_sequence.append((name, h))
+            
+        # C. Top (顶层)
+        if len(p['top names']) != len(top_hs):
+            print(f"❌ 楼层参数错误: Top 名字数量 ({len(p['top names'])}) 与 高度数量 ({len(top_hs)}) 不一致")
+            return
+
+        for name, h in zip(p['top names'], top_hs):
+            floor_sequence.append((str(name), h))
+
+        # 3. 生成高度分布字典 & 校验总高度
+        current_z = base_h
+        
+        for name, h in floor_sequence:
+            # 格式化 Key: "楼层编号/F"
+            key = f"{name}/F"
+            self.floor_map[key] = (current_z, current_z + h)
+            current_z += h
+            
+        # 4. 校验高度闭环
+        # 理论总高度 = final - base
+        # 累加总高度 = current_z - base_h
+        self.final_calc_height = current_z
+        diff = abs(current_z - final_h)
+        
+        print(f"🏢 楼层构建完成: 起始 {base_h:.2f}m -> 计算结束 {current_z:.2f}m (定义结束 {final_h:.2f}m)")
+        
+        if diff > 0.1: # 允许 10cm 误差
+            print(f"⚠️ 警告: 建筑高度校验失败! 偏差 {diff:.4f}m")
+            print("   请检查: base_height, final height 或 各层高度之和是否匹配")
+        else:
+            print("✅ 建筑高度校验通过")
+            self.is_valid = True
+
+    def get_floor(self, z_value):
+        """根据绝对海拔 Z 返回楼层名"""
+        # 允许一定的容差，处理刚好踩线的情况
+        epsilon = 0.01 
+        
+        for name, (start, end) in self.floor_map.items():
+            if start - epsilon <= z_value < end + epsilon:
+                return name
+        
+        # 如果找不到
+        sorted_floors = sorted(self.floor_map.values(), key=lambda x: x[0])
+        if not sorted_floors: return "Unknown"
+        
+        min_h = sorted_floors[0][0]
+        max_h = sorted_floors[-1][1]
+        
+        if z_value < min_h:
+            return "Below Base"
+        elif z_value >= max_h:
+            return "Above Top"
+        
+        return "Unknown"
+    # ==================== [新增] 可视化打印方法 ====================
+    def print_floor_chart(self):
+        """在控制台打印楼层高度标尺"""
+        if not self.floor_map:
+            return
+
+        print("\n🏢 Building Elevation Chart (Top-Down)")
+        print("=" * 40)
+        
+        # 1. 打印最顶部的线 (Final Height)
+        print(f"{'[TOP]':<10} ̅ ̅ ̅ ̅ ̅ ̅ ̅ ̅  {self.final_calc_height:7.2f}m")
+
+        # 2. 获取所有楼层并按高度倒序排列
+        # floor_map value is (start, end), we sort by start descending
+        sorted_floors = sorted(self.floor_map.items(), key=lambda item: item[1][0], reverse=True)
+
+        for name, (start_z, end_z) in sorted_floors:
+            # 打印每一层的起始高度 (Floor Level)
+            # 格式：名字占10格，下划线，高度
+            print(f"{name:<10} ______  {start_z:7.2f}m")
+            
+        # 3. 打印基底 (Base Height)
+        # 通常最底层的 Start Z 就是 Base，但为了明确，再打一行 Base
+        # 如果最底层名字不是 BASE，这行很有用
+        print(f"{'[BASE]':<10} ______  {self.params['base_height'] * (0.001 if self.params['base_height']>100 else 1.0):7.2f}m")
+        print("=" * 40 + "\n")
+    def get_floor_info(self):
+        """返回生成的字典供 JSON 导出"""
+        return self.floor_map
 
 def export_projection_details_json(all_dets, output_path):
     print(f"📊 正在导出投影详情 JSON: {output_path} ...")
@@ -367,10 +503,17 @@ def project_adaptive(px, py, W, H, meta, wall_distance_m):
     return x, z
 
 # ===================== 2. 核心处理流程 =====================
-def yolo_project2facade_adaptive(img_dir, yolo_txt_dir, target_classes=None):
+def yolo_project2facade_adaptive(img_dir, yolo_txt_dir, target_classes=None, floor_params=None):
     all_dets = []
     gid = 0
-    
+
+    # 1. 初始化楼层管理器
+    print("🏗️ 正在初始化楼层数据...")
+    floor_mgr = FloorManager(floor_params)
+    if not floor_mgr.is_valid:
+        print("⚠️ 楼层参数校验未通过，楼层计算可能不准确")
+
+
     # 1. 获取所有图片列表
     img_files = glob.glob(os.path.join(img_dir, "*.JPG")) + glob.glob(os.path.join(img_dir, "*.jpg"))
     
@@ -409,20 +552,18 @@ def yolo_project2facade_adaptive(img_dir, yolo_txt_dir, target_classes=None):
                 conf = vals[5] if len(vals) > 5 else 1.0
                 
                 # 转换回像素坐标
-                px = cx * W
-                py = cy * H
-                bw = w * W
-                bh = h * H
+                px, py, bw, bh = cx*W, cy*H, w*W, h*H
                 
-                # 【关键步骤】使用自适应投影
-                # 传入 box 的像素高度 bh 用于计算物体实际高度
-                # 重新复用 project_adaptive 逻辑计算高度比例
-                # H_real / H_pixel = Dist / f
+                # 1. 投影计算 (得到绝对海拔 Z)
+                world_x, world_z_abs = project_adaptive(px, py, W, H, meta, global_wall_dist)
+                
+                # 2. [新增] 楼层计算
+                # 直接传入绝对海拔 Z
+                floor_name = floor_mgr.get_floor(world_z_abs)
+                
+                # 计算物体实际高度
                 fx = (meta['focal_35mm'] / 36.0) * W
                 real_h = (bh / fx) * global_wall_dist
-                
-                world_x, world_z = project_adaptive(px, py, W, H, meta, global_wall_dist)
-
                 all_dets.append({
                     "gid": gid,
                     "img": name,
@@ -431,10 +572,11 @@ def yolo_project2facade_adaptive(img_dir, yolo_txt_dir, target_classes=None):
                     "cxcywh": (cx, cy, w, h),
                     "pxpywh": (px, py, bw, bh),
                     "x": world_x,
-                    "z": world_z,
+                    "z": world_z_abs,
                     "h": real_h,
                     "img_w": W,  # [新增] 图片宽度
                     "img_h": H,  # [新增] 图片高度
+                    "floor": floor_name,
                     # 保存一些元数据方便 debug
                     "meta_alt": meta['alt'],
                     "meta_lrf": meta['lrf'] 
@@ -934,10 +1076,11 @@ def analyze_and_vis_conflicts(dets_by_img, img_dir, output_dir, class_names=None
     print(f"📄 报告已保存: {report_path}")
     print(f"🖼️ 可视化已保存: {conflict_vis_dir}")
 
-def yolo_dedup_pipeline(img_dir, yolo_txt_dir, output_dir, proj_params, 
+def yolo_dedup_pipeline(img_dir, yolo_txt_dir, output_dir, floor_param,
                         iou_thresh, height_thresh_m, x_thresh_m=2.0,
                         target_classes=None, class_names_path=None, vis_font_size=24):
-    
+    t1 = time.time()
+
     # 路径准备
     dedup_label_dir = os.path.join(output_dir, "labels_dedup")
     vis_all_dir = os.path.join(output_dir, "vis_all")
@@ -960,10 +1103,10 @@ def yolo_dedup_pipeline(img_dir, yolo_txt_dir, output_dir, proj_params,
     class_names = load_class_names(class_names_path)
 
     # 1. 读取并筛选
-    all_dets = yolo_project2facade_adaptive(img_dir, yolo_txt_dir, target_classes)
+    all_dets = yolo_project2facade_adaptive(img_dir, yolo_txt_dir, target_classes, floor_param)
     
     # 2. 去重
-    all_dets_with_id = yolo_dedup(all_dets, iou_thresh, height_thresh_m)
+    all_dets_with_id = yolo_dedup(all_dets, iou_thresh, height_thresh_m, x_thresh_m)
     
     # 3. 按图片分组 (关键修复)
     dets_by_img = group_dets_by_image(all_dets_with_id)
@@ -993,7 +1136,9 @@ def yolo_dedup_pipeline(img_dir, yolo_txt_dir, output_dir, proj_params,
     # 7. 导出投影详情 JSON
     export_projection_details_json(all_dets_with_id, proj_info_path)
 
-    print("🎉 完成：YOLO 投影去重 + ID 审计流水线")
+    t2 = time.time()
+
+    print(f"🎉 完成：YOLO 投影去重 + ID 审计流水线, 耗时 {t2-t1:.2f}s")
 
 
 
@@ -1011,13 +1156,6 @@ if __name__ == "__main__":
     classes_txt_path = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\dataset\thermal_selected_4_p12\class.txt" 
 
     # ===================== 参数 =====================
-    proj_params = {
-        "focal_length_mm": 24.0,
-        "sensor_height_mm": 24.0,
-        "camera_height_m": 1.6,
-        "facade_distance_m": 10.0,
-    }
-    
     iou_thresh = 0.5
     height_thresh_m = 0.3
     x_thresh_m = 1.5
@@ -1031,15 +1169,33 @@ if __name__ == "__main__":
     # [新增] 可视化字体大小
     vis_font_size = 30
 
+    floor_param = {
+        'base_height':22500,
+        'final height':123800,
+        'normal floor height':3150,
+        'podium heights': [6000, 5000, 4500, 5500],
+        'top heights': [6650],
+        'podium names': ['LG', 'G', '1', '2'],
+        'top names': ['ROOF'],
+        'normal height numbers': 23,
+        'normal height number list': [3, 25],
+        'special heights': {
+            '4': 3450,
+            '11': 3450,
+            '18': 3450,
+            '23': 3450,
+        }
+    }
+
     yolo_dedup_pipeline(
         img_dir=image_dir, 
         yolo_txt_dir=yolo_dir, 
         output_dir=output_dir,
-        proj_params=proj_params, 
         iou_thresh=iou_thresh, 
         height_thresh_m=height_thresh_m,
         target_classes=filter_classes,
         class_names_path=classes_txt_path,
         vis_font_size=vis_font_size,
         x_thresh_m=x_thresh_m,
+        floor_param=floor_param,
     )
