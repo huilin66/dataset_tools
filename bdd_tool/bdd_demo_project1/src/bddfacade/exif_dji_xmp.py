@@ -97,12 +97,17 @@ def pyexif_to_dict(img_path: str | Path) -> Dict[str, str]:
 
 if __name__ == "__main__":
     pass
+    # params = parse_dji_xmp(image_path)
+    # pprint(params)
+    # print('----------------')
+    # debug_exif(image_path)
+    # print('----------------')
+    print('----------------RGB EXIF----------------')
     from pprint import pprint
-    image_path = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\data\visible\DJI_20251216143332_0056_V.JPG"
-    params = parse_dji_xmp(image_path)
-    pprint(params)
-    print('----------------')
-    debug_exif(image_path)
-    print('----------------')
+    image_path = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\data\visible\DJI_20251216155617_0520_V.JPG"
+    exif_dict = pyexif_to_dict(image_path)
+    pprint(exif_dict)
+    print('----------------Thermal EXIF----------------')
+    image_path = r'\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\data\thermal\DJI_20251216155618_0520_T.JPG'
     exif_dict = pyexif_to_dict(image_path)
     pprint(exif_dict)
