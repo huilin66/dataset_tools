@@ -6,12 +6,17 @@ import os
 ROOT_DIR = r'\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\dataset\thermal_selected_4_p12'
 
 # 具体子目录
-IMG_DIR = os.path.join(ROOT_DIR, 'val', 'images')
-PRED_DIR = os.path.join(ROOT_DIR, 'result_analysis', 'val_infer', 'labels')
+# IMG_DIR = os.path.join(ROOT_DIR, 'val', 'images')
+# PRED_DIR = os.path.join(ROOT_DIR, 'result_analysis', 'val_infer', 'labels')
 CLASS_PATH = os.path.join(ROOT_DIR, 'classes.txt')
 
+IMG_DIR = r'\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\split_data\thermal_views\V30'
+PRED_DIR = r'\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\split_data\thermal_views_infer_dedup\V30\labels_dedup_fuse'
+
 # 输出文件路径
-OUTPUT_PDF_PATH = os.path.join(ROOT_DIR, 'result_analysis', 'val_infer', 'report_modular.pdf')
+# OUTPUT_PDF_PATH = os.path.join(ROOT_DIR, 'result_analysis', 'val_infer', 'report_modular.pdf')
+OUTPUT_PDF_PATH = r'\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\split_data\thermal_views_infer_dedup\V30\report_modular.pdf'
+
 
 # --- 2. 字体配置 (解决中文或样式问题) ---
 # Windows 默认路径，Linux下需要修改

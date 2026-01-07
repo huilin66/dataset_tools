@@ -54,7 +54,7 @@ def run_dedup_reporting(view_id="V30"):
     )
     
     # 生成报告
-    engine.run(output_path=output_pdf, view_name=view_id)
+    engine.run(output_path=output_pdf, view_name=view_id, style_id=3)
 
 if __name__ == '__main__':
     # 示例：为 V30 生成报告
