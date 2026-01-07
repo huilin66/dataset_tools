@@ -320,7 +320,8 @@ def export_projection_details_json(all_dets, output_path):
             "cls": int(d["cls"]),      # 类别索引
             "id": d.get("id", -1),     # 最终分配的去重ID
             "conf": float(f"{d['conf']:.4f}"),
-            
+            "floor": d["floor"],
+
             # === 原始数据 ===
             "raw_yolo": {
                 "cx": float(f"{d['cxcywh'][0]:.6f}"),
@@ -948,6 +949,8 @@ def export_debug_json(all_dets, output_path, class_names=None):
                 "proj_x": float(f"{d['x']:.4f}"),  # 水平位置
                 "proj_z": float(f"{d['z']:.4f}"),  # 垂直高度
                 "proj_h": float(f"{d['h']:.4f}"),  # 物体实际高度
+                "floor": d['floor'],
+
             })
             
         json_output[f"ID_{uid:03d}"] = {

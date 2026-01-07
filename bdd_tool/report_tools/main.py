@@ -21,9 +21,9 @@ def dji_metadata_provider(img_path):
     # 仅当你有额外的业务逻辑（如：根据经纬度反查楼宇名称）时才需在此编写并传给 Engine
     return None
 
-def run_inspection_task(img_dir, label_dir, class_path, output_pdf, style_id=3, thread_count=None):
+def run_inspection_task_all(img_dir, label_dir, class_path, output_pdf, style_id=3, thread_count=None):
     """
-    执行单次巡检报告生成任务
+    执行巡检报告生成任务
     """
     # 1. 加载类别列表
     classes = load_class_list(class_path)
@@ -50,12 +50,12 @@ def run_inspection_task(img_dir, label_dir, class_path, output_pdf, style_id=3, 
         max_workers=workers
     )
 
+def run_inspection_task_views(img_dir, label_dir, class_path, output_pdf, style_id=3, thread_count=None):
+    pass
+
 if __name__ == '__main__':
-    # ==========================================
-    # 任务 1: 热成像数据组 (示例)
-    # ==========================================
     print(">>> Starting Task: Thermal Inspection")
-    run_inspection_task(
+    run_inspection_task_all(
         img_dir=config.IMG_DIR, 
         label_dir=config.PRED_DIR, 
         class_path=config.CLASS_PATH, 
@@ -63,15 +63,3 @@ if __name__ == '__main__':
         style_id=3,  # 使用紧凑横向样式
         thread_count=4
     )
-
-    # ==========================================
-    # 任务 2: 可见光数据组 (如果需要连续运行)
-    # ==========================================
-    # print("\n>>> Starting Task: Visible Light Inspection")
-    # run_inspection_task(
-    #     img_dir=r'path/to/visible/images',
-    #     label_dir=r'path/to/visible/labels',
-    #     class_path=config.CLASS_PATH,
-    #     output_pdf=r'path/to/output/visible_report.pdf',
-    #     style_id=3
-    # )
