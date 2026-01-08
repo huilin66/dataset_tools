@@ -304,6 +304,10 @@ class FloorManager:
     def get_floor_info(self):
         """返回生成的字典供 JSON 导出"""
         return self.floor_map
+    def write_floor_map(self, output_path):
+        """将楼层映射写入 JSON 文件"""
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(self.floor_map, f, indent=4, ensure_ascii=False)
 
 def export_projection_details_json(all_dets, output_path):
     print(f"📊 正在导出投影详情 JSON: {output_path} ...")
@@ -511,6 +515,8 @@ def yolo_project2facade_adaptive(img_dir, yolo_txt_dir, target_classes=None, flo
     # 1. 初始化楼层管理器
     print("🏗️ 正在初始化楼层数据...")
     floor_mgr = FloorManager(floor_params)
+    floor_mgr.write_floor_map("floor_map.json")
+    
     if not floor_mgr.is_valid:
         print("⚠️ 楼层参数校验未通过，楼层计算可能不准确")
 
@@ -1147,16 +1153,11 @@ def yolo_dedup_pipeline(img_dir, yolo_txt_dir, output_dir, floor_param,
 
 if __name__ == "__main__":
     # ===================== 路径配置 =====================
-    # 输入图片文件夹
-    image_dir = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\split_data\thermal_views\V30"
-    # 输入 YOLO 标签文件夹
-    yolo_dir = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\split_data\thermal_views_infer\V30\labels"
-    # 输出根目录
-    output_dir = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\split_data\thermal_views_infer_dedup\V30"
-    
-    # [新增] classes.txt 路径 (可选，如果没有则填 None)
-    # 格式：每行一个类别名，第0行对应ID 0
+    image_root = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\split_data\thermal_views"
+    yolo_root =  r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\split_data\thermal_views_infer"
+    output_root = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\split_data\thermal_views_infer_dedup"
     classes_txt_path = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\dataset\thermal_selected_4_p12\class.txt" 
+    views_list = os.listdir(image_root)
 
     # ===================== 参数 =====================
     iou_thresh = 0.5
@@ -1190,15 +1191,22 @@ if __name__ == "__main__":
         }
     }
 
-    yolo_dedup_pipeline(
-        img_dir=image_dir, 
-        yolo_txt_dir=yolo_dir, 
-        output_dir=output_dir,
-        iou_thresh=iou_thresh, 
-        height_thresh_m=height_thresh_m,
-        target_classes=filter_classes,
-        class_names_path=classes_txt_path,
-        vis_font_size=vis_font_size,
-        x_thresh_m=x_thresh_m,
-        floor_param=floor_param,
-    )
+
+    for view_name in views_list:
+
+        image_dir = os.path.join(image_root, view_name)
+        yolo_dir = os.path.join(yolo_root, view_name, "labels")
+        output_dir = os.path.join(output_root, view_name)
+
+        yolo_dedup_pipeline(
+            img_dir=image_dir, 
+            yolo_txt_dir=yolo_dir, 
+            output_dir=output_dir,
+            iou_thresh=iou_thresh, 
+            height_thresh_m=height_thresh_m,
+            target_classes=filter_classes,
+            class_names_path=classes_txt_path,
+            vis_font_size=vis_font_size,
+            x_thresh_m=x_thresh_m,
+            floor_param=floor_param,
+        )

@@ -5,4 +5,5 @@ EXPORTER_MAP = {
     1: PDFExporterDetailed,
     2: PDFExporterMeasurement,
     3: PDFExporterCompact,
+    4: PDFExporterWithContext,
 }

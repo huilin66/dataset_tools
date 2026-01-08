@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from reportlab.platypus import Image as RLImage
+from reportlab.platypus import Image as RLImage 
 from reportlab.platypus import Table, Spacer, Paragraph, TableStyle, PageBreak
 from reportlab.lib.units import inch
 from reportlab.lib.styles import ParagraphStyle
@@ -8,28 +8,26 @@ from reportlab.lib import colors
 from collections import defaultdict, Counter
 from reportlab.lib.pagesizes import letter, landscape
 from .base_exporter import BasePDFExporter
-
+# from configs import DISPLAY_LEVELS, LEVEL_MAP
+DISPLAY_LEVELS = ['Minor', 'Moderate', 'Major'] 
+LEVEL_MAP = {'Slight': 'Minor', 'Moderate': 'Moderate', 'Serious': 'Major'}
 __all__ = [
     'PDFExporterBasic',
     'PDFExporterDetailed',
     'PDFExporterMeasurement',
     'PDFExporterCompact',
+    'PDFExporterWithContext',
 ]
 
 class PDFExporterBasic(BasePDFExporter):
-    """
-    样式 0: 基础报告
-    兼容: 自动优先使用 'ID' 字段
-    """
+    """ 样式 0: 基础报告 """
     def generate_row_content(self, df_record):
         data_rows = []
         row_heights = []
-
         def add(row, h):
             data_rows.append(row)
             row_heights.append(h if h else 20)
 
-        # 1. 标题行
         first_row = df_record.iloc[0]
         vis_path = first_row['VisPath']
         fname = Path(first_row['Path']).name
@@ -48,32 +46,23 @@ class PDFExporterBasic(BasePDFExporter):
         add([vis_img, ''], img_h)
         add(['Defect Count', str(len(df_record))], 25)
 
-        # 2. 缺陷行
         for idx, row in df_record.iterrows():
             crop_path = row['CropPath']
             crop_img = RLImage(crop_path, width=2*inch, height=2*inch) if os.path.exists(crop_path) else "Missing"
-            
-            # [兼容性修改] 优先使用 ID，否则使用索引
             defect_id = str(row.get('ID', f'Defect {idx+1}'))
-            
             add([f'ID: {defect_id}', crop_img], 2*inch + 10)
             add(['Category', row['Category']], 20)
             add(['Level', row['Level']], 20)
             add(['Action', row['Action']], 20)
             add(['Score', f"{row['Score']:.2f}"], 20)
-        
         return data_rows, row_heights
 
 
 class PDFExporterDetailed(BasePDFExporter):
-    """
-    样式 1: 详细报告
-    兼容: 支持 Floor, View, XYZ, Orientation, ID
-    """
+    """ 样式 1: 详细报告 """
     def generate_row_content(self, df_record):
         data_rows = []
         row_heights = []
-
         def add(row, h):
             data_rows.append(row)
             row_heights.append(h if h else 20)
@@ -94,43 +83,30 @@ class PDFExporterDetailed(BasePDFExporter):
 
         add(["FileName", fname], 25)
         add([vis_img, ''], img_h)
-        
-        # [兼容性修改] 增强的位置信息
         loc_info = f"Floor: {first_row.get('floor', 'N/A')} | View: {first_row.get('view', 'N/A')}"
         add(['Location Info', loc_info], 25)
 
         for idx, row in df_record.iterrows():
             crop_path = row['CropPath']
             crop_img = RLImage(crop_path, width=2*inch, height=2*inch) if os.path.exists(crop_path) else "Missing"
-            
-            # [兼容性修改] ID
             defect_id = str(row.get('ID', f'Defect {idx+1}'))
-            
             add([f'ID: {defect_id}', crop_img], 2*inch + 10)
             add(['Category', row['Category']], 20)
-            
-            # [兼容性修改] 物理坐标
             xyz = row.get('xyz', 'N/A')
             ori = row.get('orientation', 'N/A')
-            add(['XYZ Coords', str(xyz)], 20)
+            add(['XYZ/GPS', str(xyz)], 20)
             add(['Orientation', str(ori)], 20)
-            
             add(['Level', row['Level']], 20)
             add(['Action', row['Action']], 20)
             add(['Score', f"{row['Score']:.2f}"], 20)
-        
         return data_rows, row_heights
 
 
 class PDFExporterMeasurement(BasePDFExporter):
-    """
-    样式 2: 测量报告
-    兼容: ID, W_cm, H_cm
-    """
+    """ 样式 2: 测量报告 """
     def generate_row_content(self, df_record):
         data_rows = []
         row_heights = []
-
         def add(row, h):
             data_rows.append(row)
             row_heights.append(h if h else 20)
@@ -158,14 +134,11 @@ class PDFExporterMeasurement(BasePDFExporter):
         for idx, row in df_record.iterrows():
             crop_path = row['CropPath']
             crop_img = RLImage(crop_path, width=2*inch, height=2*inch) if os.path.exists(crop_path) else "Missing"
-            
             defect_id = str(row.get('ID', f'Defect {idx+1}'))
             add([f'ID: {defect_id}', crop_img], 2*inch + 10)
-            
             add(['Category', row['Category']], 20)
             add(['Level', row['Level']], 20)
             
-            # [兼容性修改] 优先使用 Engine 计算好的 W_cm/H_cm
             w_cm_val = row.get('W_cm', 'N/A')
             h_cm_val = row.get('H_cm', 'N/A')
             area_cm_val = row.get('Area_cm2', 'N/A')
@@ -177,66 +150,350 @@ class PDFExporterMeasurement(BasePDFExporter):
             add(['Width', w_str], 20)
             add(['Height', h_str], 20)
             add(['Area', area_str], 20)
-            
             add(['Action', row['Action']], 20)
-
         return data_rows, row_heights
 
+
+import re # 确保导入了 re
+
+# --- 【新增】智能楼层排序工具 ---
+def natural_floor_sort_key(floor_str):
+    """
+    排序逻辑: B2 -> G -> 1 -> 2 -> 10 -> ROOF
+    """
+    s = str(floor_str).upper().strip().replace('/F', '')
+    # 特殊层映射 (值越小越靠下)
+    special_map = {
+        'B3': -3, 'B2': -2, 'B1': -1, 
+        'LG': -0.5, 'G': 0, 'GF': 0, 'GM': 0.5, 'M': 0.5, 
+        'ROOF': 9999, 'TOP': 10000, 'ABOVE TOP': 10001
+    }
+    
+    if s in special_map: return special_map[s]
+    
+    # 提取数字 (支持 "1", "1A")
+    match = re.match(r'^(-?\d+)', s)
+    if match: return float(match.group(1))
+    
+    return 99999 # Unknown 放最后
 
 class PDFExporterCompact(BasePDFExporter):
     """
     样式 3 (Excel 风格横向版):
     兼容: 
-    1. 自动识别 ID, Floor, XYZ 列
-    2. 智能模式: 如果传入的是多张图片的聚合数据(View Mode)，则生成聚合清单。
+    1. 自动从文件路径提取 View (修复原始代码丢失元数据的问题)。
+    2. 显示 GPS/Alt 和 Direction。
     """
     def __init__(self):
         super().__init__()
         self.pagesize = landscape(letter)
 
+    def _get_view_from_record(self, df):
+        """辅助函数：尝试从 DataFrame 中获取 View 信息，如果缺失则从路径推断"""
+        if df.empty: return "Unknown"
+        # 1. 尝试直接读取列
+        if 'view' in df.columns:
+            val = df.iloc[0]['view']
+            if val and str(val) != 'nan': return str(val)
+        
+        # 2. 回退：从路径推断 (假设路径结构为 .../V01/IMG.jpg)
+        try:
+            path_obj = Path(df.iloc[0]['Path'])
+            parent_name = path_obj.parent.name
+            # 简单的启发式：如果是 V 开头且后面是数字
+            if parent_name.startswith('V') and parent_name[1:].isdigit():
+                return parent_name
+        except:
+            pass
+        return "Unknown"
+
+
     def _add_summary_pages(self, elements, report_data):
-        # ... (保持原有的 Summary 逻辑，这部分是通用的) ...
-        # 为了节省篇幅，这里复用您之前提供的代码逻辑
+        """
+        汇总页生成 (v5版 - 修复 View/Floor 统计单一的问题):
+        逻辑变更：不再假设一个 DF 只有一个 View，而是逐行读取 View/Floor 进行统计。
+        """
+        import re 
+
         input_info = report_data['input']
         output_info = report_data['output']
-        
+        records_list = report_data['records']
+
+        # --- 1. 标题与基础信息 ---
         elements.append(Paragraph("<b>Project Summary Report</b>", self.styles["font_title"]))
         
-        # [兼容性] 如果有 Elevation 信息，显示它
         elevation = output_info.get('elevation', '')
         if elevation:
-            elements.append(Paragraph(f"Elevation: {elevation}", self.styles["font_section"]))
+            elements.append(Paragraph(f"Elevation Orientation: {elevation}", self.styles["font_section"]))
         
         elements.append(Spacer(1, 20))
-        # (后续统计表格代码保持不变，直接复制之前的即可)
-        # ... (Summary tables code omitted for brevity, use previous implementation) ...
-        super()._add_summary_pages(elements, report_data)
 
+        data_input = [
+            ["Total Images:", str(input_info['number']), "Model:", output_info['model']],
+            ["Detected Defects:", str(output_info['defects']), "Data Range:", f"{input_info['shape'][0]}~{input_info['shape'][1]}"],
+        ]
+        t_input = Table(data_input, hAlign='LEFT', colWidths=[1.5*inch, 1.5*inch, 1.5*inch, 2.5*inch])
+        t_input.setStyle(self.style_blank)
+        elements.append(t_input)
+        elements.append(Spacer(1, 20))
+
+        # --- 2. 数据聚合 (Data Aggregation) ---
+        
+        # 定义 4 个统计容器 (Key -> Severity -> Count)
+        stats_cat_lev = defaultdict(lambda: defaultdict(int))   # 类别
+        stats_view_lev = defaultdict(lambda: defaultdict(int))  # 视角 (View)
+        stats_ori_lev = defaultdict(lambda: defaultdict(int))   # 方向 (Direction)
+        stats_floor_lev = defaultdict(lambda: defaultdict(int)) # 楼层 (Floor)
+        
+        defined_cats = report_data.get('defined_categories', [])
+        defined_floors = report_data.get('defined_floors', [])
+        
+        all_categories = set(defined_cats)
+        all_floors = set(defined_floors)
+        all_views = set()
+        all_orientations = set()
+
+        # 遍历每一个 DataFrame (哪怕只有一个巨大的 DF 也没关系)
+        for df in records_list:
+            if df.empty: continue
+            
+            # 🔥 核心修复：移除了 df.iloc[0] 读取 View/Floor 的逻辑
+            # 改为在 iterrows 内部逐行读取
+            
+            for _, row in df.iterrows():
+                # 1. 提取基础信息
+                cat = row['Category']
+                raw_level = row['Level']
+                level = LEVEL_MAP.get(raw_level, raw_level)
+                
+                # 2. 🔥 逐行提取 View (确保 v30, v32... 都能被读到)
+                v = str(row.get('view', 'Unknown')).strip()
+                if v == 'nan' or not v: v = "Unknown"
+                
+                # 3. 🔥 逐行提取 Floor
+                fl = str(row.get('floor', 'Unknown')).strip()
+                if fl == 'nan' or not fl: fl = "Unknown"
+
+                # 4. 🔥 逐行提取 Orientation
+                o = str(row.get('orientation', 'Unknown')).strip()
+                if o == 'nan' or not o: o = "Unknown"
+
+                # 收集所有出现的 Key 以便后续排序
+                all_categories.add(cat)
+                all_views.add(v)
+                all_floors.add(fl)
+                if o != "Unknown":
+                    all_orientations.add(o)
+
+                # 5. 填充统计数据 (使用当前行的 v, fl, o)
+                stats_cat_lev[level][cat] += 1
+                stats_view_lev[level][v] += 1     # 现在这里是当前行的 View，不再是第一行的 View
+                stats_floor_lev[level][fl] += 1   # 同理
+                
+                if o != "Unknown":
+                    stats_ori_lev[level][o] += 1
+
+        # --- 3. 排序逻辑 (Sorting) ---
+
+        # 自然排序辅助函数
+        def natural_keys(text):
+            return [int(c) if c.isdigit() else c for c in re.split(r'(\d+)', str(text))]
+
+        # A. 类别排序
+        if defined_cats:
+            remaining = sorted(list(all_categories - set(defined_cats)))
+            sorted_cats = defined_cats + remaining
+        else:
+            sorted_cats = sorted(list(all_categories))
+            
+        # B. View 排序
+        sorted_views = sorted(list(all_views), key=natural_keys)
+        
+        # C. Direction 排序
+        dir_order = {'N':1, 'NE':2, 'E':3, 'SE':4, 'S':5, 'SW':6, 'W':7, 'NW':8}
+        sorted_oris = sorted(list(all_orientations), key=lambda x: dir_order.get(x, 99))
+
+        # D. 楼层排序 (智能排序)
+        floor_order = {floor: index for index, floor in enumerate(defined_floors)}
+        # 修正逻辑：如果在 defined_floors 里找不到，尝试自然排序，而不是直接无穷大(防止乱序)
+        def floor_sort_key(f):
+            if f in floor_order: return floor_order[f]
+            # 简单的楼层数字提取尝试
+            try:
+                import re
+                match = re.search(r'(-?\d+)', str(f))
+                if match: return -float(match.group(1)) # 默认从高到低? 或者保持正序
+            except: pass
+            return 9999
+            
+        sorted_floors = sorted(list(all_floors), key=lambda floor: floor_order.get(floor, float('inf')))
+
+        # --- 4. 表格生成函数 ---
+        def add_level_table(title, row_keys, stats_dict, col1_name):
+            if not row_keys: return
+            
+            elements.append(Paragraph(title, self.styles["font_section"]))
+            header = [col1_name] + DISPLAY_LEVELS + ["Total"]
+            data = [header]
+            
+            for key in row_keys:
+                row = [key]
+                total = 0
+                for lvl in DISPLAY_LEVELS:
+                    val = stats_dict[lvl][key]
+                    row.append(str(val) if val > 0 else "0")
+                    total += val
+                row.append(str(total))
+                data.append(row)
+            
+            col_w = [2.0*inch] + [1.0*inch]*len(DISPLAY_LEVELS) + [0.8*inch]
+            t = Table(data, hAlign='LEFT', colWidths=col_w, rowHeights=25)
+            t.setStyle(self._get_summary_table_style())
+            elements.append(t)
+            elements.append(Spacer(1, 25))
+
+        # === 5. 输出所有表格 ===
+        add_level_table("1. Summary by Defect Type:", sorted_cats, stats_cat_lev, "Defect Type")
+        add_level_table("2. Summary by View:", sorted_views, stats_view_lev, "View ID")
+        if sorted_oris:
+            add_level_table("3. Summary by Direction (Orientation):", sorted_oris, stats_ori_lev, "Direction")
+        add_level_table("4. Summary by Floor:", sorted_floors, stats_floor_lev, "Floor")
+
+        elements.append(PageBreak())
+
+    # def _add_summary_pages(self, elements, report_data):
+    #     input_info = report_data['input']
+    #     output_info = report_data['output']
+    #     records_list = report_data['records']
+
+    #     # 标题
+    #     elements.append(Paragraph("<b>Project Summary Report</b>", self.styles["font_title"]))
+        
+    #     # Elevation 信息 (Dedup 模式下会有这个字段)
+    #     elevation = output_info.get('elevation', '')
+    #     if elevation:
+    #         elements.append(Paragraph(f"Elevation Orientation: {elevation}", self.styles["font_section"]))
+        
+    #     elements.append(Spacer(1, 20))
+
+    #     # 基础信息
+    #     data_input = [
+    #         ["Total Images:", str(input_info['number']), "Model:", output_info['model']],
+    #         ["Detected Defects:", str(output_info['defects']), "Data Range:", f"{input_info['shape'][0]}~{input_info['shape'][1]}"],
+    #     ]
+    #     t_input = Table(data_input, hAlign='LEFT', colWidths=[1.5*inch, 1.5*inch, 1.5*inch, 2.5*inch])
+    #     t_input.setStyle(self.style_blank)
+    #     elements.append(t_input)
+    #     elements.append(Spacer(1, 20))
+
+    #     # --- 数据聚合 (包含修复后的 View 提取逻辑) ---
+    #     stats_cat_lev = defaultdict(lambda: defaultdict(int))   # [Defect Type][Severity]
+    #     stats_dir_lev = defaultdict(lambda: defaultdict(int))   # [Direction][Severity]
+    #     stats_floor_lev = defaultdict(lambda: defaultdict(int)) # [Floor][Severity]
+        
+    #     # A. 获取预定义类别
+    #     defined_cats = report_data.get('defined_categories', [])
+    #     all_categories = set(defined_cats)
+        
+    #     # B. 【新增】获取预定义楼层 (来自 floor_map.json)
+    #     defined_floors = report_data.get('defined_floors', [])
+    #     all_floors = set(defined_floors)  # 初始化所有楼层，确保 0 数据也能显示
+
+    #     all_directions = set()
+
+    #     for df in records_list:
+    #         if df.empty: continue
+            
+    #         # 获取 Direction (View + Orientation)
+    #         v = df.iloc[0].get('view', 'Unknown').strip()
+    #         o = df.iloc[0].get('orientation', '').strip()
+    #         direction_label = f"{v}\n{o}" if o else v
+    #         all_directions.add(direction_label)
+
+    #         for _, row in df.iterrows():
+    #             cat = row['Category']
+    #             raw_level = row['Level']
+    #             level = LEVEL_MAP.get(raw_level, raw_level)
+                
+    #             # 获取 Floor (直接使用数据中自带的字段，不重新计算)
+    #             fl = str(row.get('floor', 'Unknown'))
+                
+    #             # 如果数据里出现了 floor_map 以外的楼层，也加进去
+    #             all_floors.add(fl)
+    #             all_categories.add(cat)
+
+    #             # 累加计数
+    #             stats_cat_lev[level][cat] += 1
+    #             stats_dir_lev[level][direction_label] += 1
+    #             stats_floor_lev[level][fl] += 1
+
+    #     # === 3. 排序 ===
+    #     # 类别排序
+    #     if defined_cats:
+    #         remaining = sorted(list(all_categories - set(defined_cats)))
+    #         sorted_cats = defined_cats + remaining
+    #     else:
+    #         sorted_cats = sorted(list(all_categories))
+            
+    #     # 方向排序
+    #     sorted_dirs = sorted(list(all_directions))
+        
+    #     floor_order = {floor: index for index, floor in enumerate(defined_floors)}
+    #     # 楼层排序 (使用智能排序，reverse=True 表示从顶层 ROOF 到底层 LG)
+    #     sorted_floors = sorted(list(all_floors), key=lambda floor: floor_order.get(floor, float('inf')))
+
+    #     # === 4. 通用表格生成函数 ===
+    #     def add_stat_table(title, row_keys, stats_dict, col1_name):
+    #         elements.append(Paragraph(title, self.styles["font_section"]))
+    #         header = [col1_name] + DISPLAY_LEVELS + ["Total"]
+    #         data = [header]
+            
+    #         for key in row_keys:
+    #             row = [key]
+    #             total = 0
+    #             for lvl in DISPLAY_LEVELS:
+    #                 val = stats_dict[lvl][key]
+    #                 row.append(str(val) if val > 0 else "0") # 0 也会显示
+    #                 total += val
+    #             row.append(str(total))
+    #             data.append(row)
+            
+    #         # 渲染
+    #         col_w = [2.0*inch] + [1.0*inch]*len(DISPLAY_LEVELS) + [0.8*inch]
+    #         t = Table(data, hAlign='LEFT', colWidths=col_w, rowHeights=25)
+    #         t.setStyle(self._get_summary_table_style())
+    #         elements.append(t)
+    #         elements.append(Spacer(1, 25))
+
+    #     # === 5. 输出三个表格 ===
+    #     # A. Defect Type
+    #     add_stat_table("Summary by Defect Type & Severity:", sorted_cats, stats_cat_lev, "Defect Type")
+
+    #     # B. Direction (新增)
+    #     add_stat_table("Summary by Direction & Severity:", sorted_dirs, stats_dir_lev, "Direction")
+
+    #     # C. Floor (新增 - 基于 floor_map.json 的完整名单)
+    #     add_stat_table("Summary by Floor & Severity:", sorted_floors, stats_floor_lev, "Floor")
+
+    #     elements.append(PageBreak())
+
+    def _get_summary_table_style(self):
+        return TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+            ('FONTNAME', (0, 0), (-1, 0), self.FONT_BOLD),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ])
+    # 找到 PDFExporterCompact 类，替换其中的 generate_flowables 方法
     def generate_flowables(self, df_record):
         elems = []
-        if df_record.empty: return elems
         
-        # [智能模式判断]
-        # 检查是否包含多张不同的图片路径。如果是，说明是聚合 View 数据
-        is_aggregated_view = df_record['VisPath'].nunique() > 1
+        first_row = df_record.iloc[0]
+        fname = Path(first_row['Path']).name
         
-        # 如果是聚合模式，按 ID 排序；否则默认顺序（通常是按 Yolo 输出顺序）
-        if 'ID' in df_record.columns:
-            # 确保 ID 是 int 以便正确排序，如果是 str 混合则忽略错误
-            try:
-                df_record = df_record.sort_values(by=['ID'])
-            except:
-                pass
-        
-        # 1. 标题逻辑
-        if is_aggregated_view:
-            # 聚合模式：只显示通用标题
-            title_text = f"Detailed Defect List (Sorted by ID)"
-        else:
-            # 单图模式：显示文件名
-            fname = Path(df_record.iloc[0]['Path']).name
-            title_text = f"File: {fname}"
-
+        # 1. 标题 (灰色背景条)
         title_style = ParagraphStyle(
             'CompactTitle', 
             parent=self.styles['Heading2'], 
@@ -244,119 +501,313 @@ class PDFExporterCompact(BasePDFExporter):
             borderPadding=5,
             spaceAfter=5
         )
-        elems.append(Paragraph(title_text, title_style))
+        elems.append(Paragraph(f"File: {fname}", title_style))
 
-        # 2. 表头定义 (兼容 ID 和 Location)
-        headers = ["ID", "Loc(Z,X)", "Floor", "Size (H*W)", "Severity", "Type", "Action", "Image/File"]
-        table_data = [headers]
-        row_heights = [30]
+        # 2. 全景大图 (保持原有逻辑，带宽高限制)
+        vis_path = first_row['VisPath']
+        if os.path.exists(vis_path):
+            vis_img = RLImage(vis_path)
+            limit_w, limit_h = 8.5 * inch, 5.0 * inch
+            img_w, img_h = vis_img.imageWidth, vis_img.imageHeight
+            aspect = img_h / img_w if img_w > 0 else 1.0
+            draw_w = limit_w
+            draw_h = draw_w * aspect
+            if draw_h > limit_h:
+                draw_h = limit_h
+                draw_w = draw_h / aspect
+            vis_img.drawWidth = draw_w
+            vis_img.drawHeight = draw_h
+            elems.append(vis_img)
+            elems.append(Spacer(1, 10))
 
-        # 单元格样式
+        # ==========================================
+        # 3. 分组生成表格 (Group by Defect Type)
+        # ==========================================
+        
+        # 获取所有出现的类别并排序
+        if 'Category' in df_record.columns:
+            unique_cats = sorted(df_record['Category'].unique())
+        else:
+            unique_cats = ["Unknown"]
+
+        # 定义样式
         cell_style = ParagraphStyle('CellStyle', parent=self.styles['Normal'], fontSize=8, leading=10, alignment=1)
-
-        last_id = -1
+        # 分组标题样式 (深蓝色，稍微大一点)
+        group_title_style = ParagraphStyle(
+            'GroupTitle', 
+            parent=self.styles['Heading3'], 
+            fontSize=12, 
+            spaceBefore=12, 
+            spaceAfter=6, 
+            textColor=colors.darkblue
+        )
         
-        for idx, row in df_record.iterrows():
-            # [兼容性] 数据提取
-            defect_id = str(row.get('ID', f"DF{idx+1}"))
-            floor_val = str(row.get('floor', '-'))
-            # 优先用 xyz 字段，如果没有则尝试拼凑
-            xyz_val = str(row.get('xyz', '-'))
-            
-            # 尺寸
-            w_val = row.get('W_cm', 'N/A')
-            h_val = row.get('H_cm', 'N/A')
-            if w_val != 'N/A':
-                dim_str = f"H:{h_val} * W:{w_val}\n(cm)"
-            else:
-                dim_str = f"H:{row.get('H_pix','-')} * W:{row.get('W_pix','-')}\n(pix)"
-            
-            dim_para = Paragraph(dim_str, cell_style)
+        # 定义列头和列宽 (所有分组共用)
+        headers = ["No.", "Defect ID", "Location", "Floor", "Dimension\n(L x W = Area)", "Severity", "Comment", "Action", "Image"]
+        col_widths = [0.4*inch, 0.7*inch, 1.4*inch, 0.6*inch, 1.5*inch, 0.8*inch, 1.0*inch, 0.8*inch, 1.5*inch]
 
-            # 图片列处理
-            crop_path = row['CropPath']
-            img_cell = ""
-            row_h = 50
+        # --- 循环遍历每个类别 ---
+        for cat in unique_cats:
+            # 1. 筛选当前类别的数据
+            sub_df = df_record[df_record['Category'] == cat]
+            if sub_df.empty: continue
             
-            # 如果有 Crop 图，优先展示 Crop
-            if os.path.exists(crop_path):
-                img = RLImage(crop_path)
-                target_w = 1.1 * inch 
-                max_h = 1.4 * inch    
-                aspect = img.imageHeight / img.imageWidth if img.imageWidth > 0 else 1.0
-                calc_h = target_w * aspect
+            # 2. 排序 (组内按 ID 排序)
+            if 'ID' in sub_df.columns:
+                try:
+                    sub_df = sub_df.sort_values(by=['ID'])
+                except: 
+                    pass # 如果 ID 是字符串混杂，可能会排序失败，保持原样
+            
+            # 3. 添加 分组标题 (例如: "Defect Type: Spalling (Count: 5)")
+            elems.append(Paragraph(f"Defect Type: {cat} (Count: {len(sub_df)})", group_title_style))
+            
+            # 4. 构建当前类别的表格数据
+            table_data = [headers]
+            row_heights = [30]
+            
+            # 遍历该组的每一行
+            # local_idx 用于显示组内的序号 1, 2, 3...
+            for local_idx, (_, row) in enumerate(sub_df.iterrows()):
                 
-                if calc_h > max_h:
-                    img.drawHeight = max_h
-                    img.drawWidth = max_h / aspect
+                # --- 尺寸处理 ---
+                w_val, h_val = row.get('W_cm', 'N/A'), row.get('H_cm', 'N/A')
+                if w_val != 'N/A' and h_val != 'N/A':
+                    try:
+                        w_f, h_f = float(w_val), float(h_val)
+                        area_f = float(row.get('Area_cm2', 0))
+                        dim_str = f"H:{h_f:.2f} * W:{w_f:.2f}\n= {area_f:.2f} cm²"
+                    except:
+                        dim_str = f"H:{h_val} * W:{w_val}\n(cm)"
                 else:
-                    img.drawWidth = target_w
-                    img.drawHeight = calc_h
-                img_cell = img
-                row_h = max(50, img.drawHeight + 6)
+                    dim_str = f"H:{row.get('H_pix','-')} * W:{row.get('W_pix','-')}\n(pix)"
+                dim_para = Paragraph(dim_str, cell_style)
+
+                # --- 图片处理 ---
+                crop_path = row['CropPath']
+                img_cell = ""
+                row_h = 40
+                if os.path.exists(crop_path):
+                    img = RLImage(crop_path)
+                    target_w, max_h = 1.3 * inch, 1.8 * inch
+                    aspect = img.imageHeight / img.imageWidth if img.imageWidth > 0 else 1.0
+                    calc_h = target_w * aspect
+                    if calc_h > max_h:
+                        img.drawHeight = max_h
+                        img.drawWidth = max_h / aspect
+                    else:
+                        img.drawWidth = target_w
+                        img.drawHeight = calc_h
+                    img_cell = img
+                    row_h = max(50, img.drawHeight + 6)
+
+                # --- 等级处理 ---
+                lvl = row['Level']
+                display_lvl = 'Minor' if lvl == 'Slight' else ('Major' if lvl == 'Serious' else lvl)
+                
+                # --- ID 显示 ---
+                # 如果有真实ID就显示真实ID，否则显示 DF+序号
+                real_id = row.get('ID')
+                display_id = f"{real_id}" if real_id is not None else f"DF{local_idx+1}"
+
+                table_row = [
+                    str(local_idx + 1), # 组内序号
+                    display_id,         # Defect ID
+                    f"{row.get('view', '')}\n{row.get('orientation', '')}",
+                    str(row.get('floor', '-')),
+                    dim_para,
+                    display_lvl,
+                    "", 
+                    row['Action'],
+                    img_cell
+                ]
+                table_data.append(table_row)
+                row_heights.append(row_h)
+
+            # 5. 生成表格并添加到元素列表
+            t = Table(table_data, colWidths=col_widths, rowHeights=row_heights, repeatRows=1)
             
-            # 如果是聚合模式，图片列下方最好显示文件名，防止混淆
-            if is_aggregated_view:
-                fname_short = os.path.basename(row['VisPath'])
-                # 把图片和文件名放一起？ReportLab Table 不太好放两个 Flowable
-                # 策略：如果聚合模式，把文件名放在 Image 列的文本中，或者单独一列？
-                # 为了兼容性，我们把文件名放在 "Image/File" 列，如果有图则图在文件名上方(难实现)
-                # 简单做法：文件名用 Paragraph
-                fname_para = Paragraph(fname_short, cell_style)
-                # 这里我们只放图，文件名可能得牺牲，或者放在 Location 里？
-                # 决定：Image 列只放图。文件名如果重要，应该在 Detailed 模式看。
-                # 或者：把文件名作为 ID 的一部分显示？
-                pass
-
-            lvl = row['Level']
-            display_lvl = 'Minor' if lvl == 'Slight' else ('Major' if lvl == 'Serious' else lvl)
-
-            table_row = [
-                defect_id,
-                xyz_val,
-                floor_val,
-                dim_para,
-                display_lvl,
-                row['Category'],
-                row['Action'],
-                img_cell
+            style_list = [
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+                ('FONTNAME', (0, 0), (-1, 0), self.FONT_BOLD),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('LEFTPADDING', (0, 0), (-1, -1), 3),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 3),
             ]
-            table_data.append(table_row)
-            row_heights.append(row_h)
-
-            # ID 分隔线
-            current_id_int = int(defect_id) if defect_id.isdigit() else defect_id
-            if last_id != -1 and current_id_int != last_id:
-                # 修正索引
-                r_idx = len(table_data) - 2
-                # style_list.append(('LINEBELOW', (0, r_idx), (-1, r_idx), 1.5, colors.black))
-            last_id = current_id_int
-
-        # 定义列宽
-        col_widths = [
-            0.6*inch, # ID
-            1.2*inch, # Loc
-            0.6*inch, # Floor
-            1.1*inch, # Size
-            0.8*inch, # Severity
-            1.0*inch, # Type
-            0.8*inch, # Action
-            1.5*inch  # Image
-        ]
-
-        t = Table(table_data, colWidths=col_widths, rowHeights=row_heights, repeatRows=1)
-        
-        style_list = [
-            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-            ('FONTNAME', (0, 0), (-1, 0), self.FONT_BOLD),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ]
-        t.setStyle(TableStyle(style_list))
-        
-        elems.append(t)
-        elems.append(Spacer(1, 15))
+            t.setStyle(TableStyle(style_list))
+            
+            elems.append(t)
+            # 每个表格后加一点空白
+            elems.append(Spacer(1, 15))
 
         return elems
+        
+class PDFExporterWithContext(PDFExporterCompact):
+    """
+    样式 4: 图文对照报告 (Contextual Report)
+    逻辑: 
+    1. 按源文件(图片)分组。
+    2. 顶部显示该图片带框的检测结果大图(VisPath)。
+    3. 下方紧接该图片内所有缺陷的详细列表表格。
+    """
+    def generate_flowables(self, df_record):
+        elems = []
+        if df_record.empty: return elems
+
+        # 1. 按照可视化的全景图路径进行分组
+        # 这样确保同一张大图的缺陷会聚在一起
+        # 注意：如果 VisPath 缺失，回退到 Path
+        group_col = 'VisPath' if 'VisPath' in df_record.columns else 'Path'
+        
+        # 获取所有唯一的图片路径（保持原始顺序）
+        unique_images = df_record[group_col].unique()
+
+        for img_path in unique_images:
+            # 筛选出当前这张图的所有缺陷数据
+            sub_df = df_record[df_record[group_col] == img_path]
+            if sub_df.empty: continue
+            
+            # --- A. 标题部分 ---
+            first_row = sub_df.iloc[0]
+            fname = Path(first_row['Path']).name
+            
+            # 标题样式
+            title_style = ParagraphStyle(
+                'ContextTitle', 
+                parent=self.styles['Heading2'], 
+                backColor=colors.lightgrey, 
+                borderPadding=5,
+                spaceAfter=10,
+                textColor=colors.black
+            )
+            elems.append(Paragraph(f"File: {fname}", title_style))
+
+            # --- B. 插入全景大图 (Context Image) ---
+            vis_path = first_row['VisPath']
+            if os.path.exists(vis_path):
+                vis_img = RLImage(vis_path)
+                
+                # 设置大图的最大尺寸 (Landscape 页面宽度较大)
+                # 留出页边距，假设可用宽度约 9.5 inch
+                max_w, max_h = 9.5 * inch, 5.5 * inch
+                
+                img_w, img_h = vis_img.imageWidth, vis_img.imageHeight
+                aspect = img_h / img_w if img_w > 0 else 1.0
+                
+                draw_w = max_w
+                draw_h = draw_w * aspect
+                
+                # 如果高度超标，则按高度限制缩放
+                if draw_h > max_h:
+                    draw_h = max_h
+                    draw_w = draw_h / aspect
+                
+                vis_img.drawWidth = draw_w
+                vis_img.drawHeight = draw_h
+                
+                # 图片居中 (使用 Table 包裹或者直接 append)
+                elems.append(vis_img)
+                elems.append(Spacer(1, 15)) # 图片和表格之间的间距
+            else:
+                elems.append(Paragraph("(Visual context image missing)", self.styles["Normal"]))
+                elems.append(Spacer(1, 15))
+
+            # --- C. 构建缺陷表格 ---
+            # 定义表头
+            headers = ["No.", "ID", "Location", "Floor", "Size\n(L x W)", "Severity", "Type", "Action", "Crop Image"]
+            # 定义列宽 (总宽约 10 inch)
+            col_widths = [0.4*inch, 0.8*inch, 1.2*inch, 0.6*inch, 1.4*inch, 0.8*inch, 1.2*inch, 1.0*inch, 1.6*inch]
+            
+            table_data = [headers]
+            row_heights = [30] # 表头高度
+
+            # 组内按 ID 排序
+            if 'ID' in sub_df.columns:
+                try: sub_df = sub_df.sort_values(by=['ID'])
+                except: pass
+
+            for local_idx, (_, row) in enumerate(sub_df.iterrows()):
+                # 1. 尺寸文本
+                w_val, h_val = row.get('W_cm', 'N/A'), row.get('H_cm', 'N/A')
+                if w_val != 'N/A' and h_val != 'N/A':
+                    try:
+                        dim_str = f"H:{float(h_val):.1f} * W:{float(w_val):.1f}\n(cm)"
+                    except:
+                        dim_str = f"H:{h_val} * W:{w_val}"
+                else:
+                    dim_str = f"H:{row.get('H_pix','-')} * W:{row.get('W_pix','-')}\n(pix)"
+                
+                dim_para = Paragraph(dim_str, self.styles['Normal'])
+
+                # 2. 局部截图 (Crop Image)
+                crop_path = row['CropPath']
+                img_cell = ""
+                this_row_h = 45 # 默认行高
+                
+                if os.path.exists(crop_path):
+                    c_img = RLImage(crop_path)
+                    c_max_w, c_max_h = 1.4 * inch, 1.4 * inch
+                    c_aspect = c_img.imageHeight / c_img.imageWidth if c_img.imageWidth > 0 else 1.0
+                    
+                    c_draw_h = c_max_w * c_aspect
+                    if c_draw_h > c_max_h:
+                        c_img.drawHeight = c_max_h
+                        c_img.drawWidth = c_max_h / c_aspect
+                    else:
+                        c_img.drawWidth = c_max_w
+                        c_img.drawHeight = c_draw_h
+                    
+                    img_cell = c_img
+                    this_row_h = max(45, c_img.drawHeight + 6)
+
+                # 3. 等级显示优化
+                lvl = row['Level']
+                display_lvl = 'Minor' if lvl == 'Slight' else ('Major' if lvl == 'Serious' else lvl)
+                
+                # 4. Location (View + Orientation)
+                view_info = str(row.get('view', '')).strip()
+                ori_info = str(row.get('orientation', '')).strip()
+                loc_str = f"{view_info}\n{ori_info}" if ori_info else view_info
+
+                # ID 处理
+                display_id = str(row.get('ID', f"{local_idx+1}"))
+
+                row_data = [
+                    str(local_idx + 1),
+                    display_id,
+                    loc_str,
+                    str(row.get('floor', '-')),
+                    dim_para,
+                    display_lvl,
+                    row['Category'],
+                    row['Action'],
+                    img_cell
+                ]
+                
+                table_data.append(row_data)
+                row_heights.append(this_row_h)
+
+            # --- D. 生成表格样式并添加到 elems ---
+            t = Table(table_data, colWidths=col_widths, rowHeights=row_heights, repeatRows=1)
+            
+            style_list = [
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey), # 表头背景
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),     # 网格线
+                ('FONTNAME', (0, 0), (-1, 0), self.FONT_BOLD),     # 表头字体
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),             # 居中
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),            # 垂直居中
+                ('FONTSIZE', (0, 0), (-1, -1), 9),                 # 字体大小
+                ('LEFTPADDING', (0, 0), (-1, -1), 2),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+            ]
+            t.setStyle(TableStyle(style_list))
+            elems.append(t)
+            
+            # --- E. 每张大图结束后分页 ---
+            elems.append(PageBreak())
+
+        return elems
+    

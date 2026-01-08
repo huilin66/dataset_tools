@@ -33,28 +33,24 @@ def run_dedup_reporting(view_id="V30"):
     print(f">>> Starting Dedup Report for {view_id}")
     print(f"    Images: {img_dir}")
     print(f"    Labels: {label_dir}")
-
-    # === 2. 加载数据 ===
-    # 加载类别
-    with open(class_path, 'r') as f:
-        classes = [line.strip() for line in f.readlines()]
     
     # 初始化 DedupLoader
     # 它会读取 labels_dedup_fuse 中的 7 列数据
-    loader = DedupLoader(img_dir=img_dir, txt_dir=label_dir, class_list=classes)
+    loader = DedupLoader(img_dir=img_dir, txt_dir=label_dir, class_path=class_path, target_cls_ids=[0, 2])
     
     # === 3. 运行引擎 ===
     # 初始化 DedupEngine
     engine = DedupReportEngine(
         loader=loader, 
-        labels=classes, 
+        labels=[],
         project_info_path=project_info, 
         group_info_path=group_info,
-        views_csv_path=views_path
+        views_csv_path=views_path,
+        floor_map_path=r"E:\repository\dataset_tools\floor_map.json",
     )
     
     # 生成报告
-    engine.run(output_path=output_pdf, view_name=view_id, style_id=3)
+    engine.run(output_path=output_pdf, view_name=view_id, style_id=4)
 
 if __name__ == '__main__':
     # 示例：为 V30 生成报告

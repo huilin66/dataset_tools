@@ -95,3 +95,6 @@ DRONE_PARAMS = {
         'focal_length_mm': 12.0  # 物理焦距 (根据 DFOV 45度反推约为 11.9~12mm)
     },
 }
+
+DISPLAY_LEVELS = ['Minor', 'Moderate', 'Major'] 
+LEVEL_MAP = {'Slight': 'Minor', 'Moderate': 'Moderate', 'Serious': 'Major'}

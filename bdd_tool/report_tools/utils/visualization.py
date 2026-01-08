@@ -15,7 +15,8 @@ def draw_box(img_pil, bboxes, labels, colors):
     for box in bboxes:
         cls_id = int(box[0])
         score = float(box[1])
-        x1, y1, x2, y2 = box[2:]
+        x1, y1, x2, y2 = box[2:6]
+        uid = box[6]
         
         x1, y1 = max(0, x1), max(0, y1)
         x2, y2 = min(img_pil.width, x2), min(img_pil.height, y2)
@@ -31,7 +32,7 @@ def draw_box(img_pil, bboxes, labels, colors):
         line_width = max(2, int(img_pil.width/300))
         draw.rectangle([x1, y1, x2, y2], outline=fill_color, width=line_width)
         
-        text_content = f"{label_text} {score:.2f}"
+        text_content = f"id:{uid} - {label_text} {score:.2f}"
         left, top, right, bottom = draw.textbbox((x1, y1), text_content, font=font)
         draw.rectangle((left, top, right, bottom), fill=fill_color)
         draw.text((x1, y1), text_content, fill="white", font=font)
@@ -44,7 +45,7 @@ def crop_box(img_pil, bboxes):
     """
     crops = []
     for box in bboxes:
-        x1, y1, x2, y2 = box[2:]
+        x1, y1, x2, y2 = box[2:6]
         x1, y1 = max(0, int(x1)), max(0, int(y1))
         x2, y2 = min(img_pil.width, int(x2)), min(img_pil.height, int(y2))
         

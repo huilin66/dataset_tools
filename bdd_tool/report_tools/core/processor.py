@@ -58,7 +58,7 @@ class ImageProcessor:
             crops[i].save(crop_p)
 
             res = {
-                'Category': self.labels[cls_id].title() if cls_id < len(self.labels) else f"Class_{cls_id}",
+                'Category': self.labels[cls_id] if cls_id < len(self.labels) else f"Class_{cls_id}",
                 'Level': level,
                 'Score': float(bbox[1]),
                 'Action': action_judge(level),
