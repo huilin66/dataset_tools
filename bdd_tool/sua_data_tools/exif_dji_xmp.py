@@ -102,12 +102,13 @@ if __name__ == "__main__":
     # print('----------------')
     # debug_exif(image_path)
     # print('----------------')
-    print('----------------RGB EXIF----------------')
+    # print('----------------RGB EXIF----------------')
     from pprint import pprint
-    image_path = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\data\visible\DJI_20251216155617_0520_V.JPG"
-    exif_dict = pyexif_to_dict(image_path)
-    pprint(exif_dict)
-    # print('----------------Thermal EXIF----------------')
-    # image_path = r'\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\data\thermal\DJI_20251216155618_0520_T.JPG'
+    # image_path = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\data\visible\DJI_20251216155617_0520_V.JPG"
     # exif_dict = pyexif_to_dict(image_path)
     # pprint(exif_dict)
+    print('----------------Thermal EXIF----------------')
+    # image_path = r'\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\data\thermal\DJI_20251216155618_0520_T.JPG'
+    image_path = r'\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\data_split\thermal_views\V31\DJI_20251216155109_0347_T.JPG'
+    exif_dict = pyexif_to_dict(image_path)
+    pprint(exif_dict)

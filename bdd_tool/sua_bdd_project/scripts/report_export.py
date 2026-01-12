@@ -1,0 +1,60 @@
+import os
+import config
+import pandas as pd
+from sua_bdd_tool.reporting.engine import BatchDedupEngine
+from sua_bdd_tool.utils import load_class_names, load_json
+
+def main():
+    class_names = load_class_names(config.CLASS_TXT)
+    target_classes_is = [class_names.index(cls) for cls in config.TARGET_CLASSES_NAME]
+    engine = BatchDedupEngine(
+        loader=None, 
+        labels=[], 
+        project_info_path="", # 暂时为空，循环中会动态加载
+        group_info_path="",   # 暂时为空
+        views_csv_path=config.VIEWS_MAP_CSV,
+        floor_map_path=config.HEIGHT_MAP_JSON,
+    )
+    os.makedirs(config.REPORT_DIR, exist_ok=True)
+
+    views_list = os.listdir(config.VIEWS_T_PATH)
+    all_dfs = []
+    print(f">>> Start to process {len(views_list)} views")
+    for view_name in views_list:
+        image_dir = os.path.join(config.VIEWS_T_PATH, view_name)
+        yolo_dedup_dir = os.path.join(config.VIEWS_T_YOLO_DEDUP_DIR, view_name)
+        
+        label_dir = os.path.join(yolo_dedup_dir, config.YOLO_DEDUP_FUSE_NAME)
+        proj_info = os.path.join(yolo_dedup_dir, config.YOLO_DEDUP_PROJ_INFO_NAME)
+
+        if not os.path.exists(label_dir):
+            print(f"Skipping {view_name}: labels_dedup_fuse not found.")
+            continue
+
+        df = engine.process_view_data(
+            view_id=view_name,
+            img_dir=image_dir,
+            label_dir=label_dir,
+            project_info_path=proj_info,
+            class_path=config.CLASS_TXT,
+            target_cls_ids=target_classes_is,
+        )
+        
+        if not df.empty:
+            all_dfs.append(df)
+
+    if all_dfs:
+        print(">>> Merging data from all views...")
+        final_df = pd.concat(all_dfs, ignore_index=True)
+        print(f'get {len(final_df)} rows of data after merging {len(all_dfs)}')
+
+        engine.export_aggregated_report(
+            all_df=final_df, 
+            output_path=config.REPORT_OVERALL_PATH,
+            style_id=config.REPORT_STYLE_ID,
+        )
+    else:
+        print("No data collected from any view.")
+
+if __name__ == "__main__":
+    main()

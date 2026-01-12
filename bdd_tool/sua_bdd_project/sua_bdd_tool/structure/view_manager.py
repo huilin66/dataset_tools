@@ -1,129 +1,39 @@
-import os
-import re
-import math
 import csv
-import time
-import shutil
+import math
+import os
 from pathlib import Path
-from typing import Optional, Tuple, Dict, Any, List
-from tqdm import tqdm
+import shutil
+import time
 
 import folium
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from tqdm import tqdm
 from webdriver_manager.chrome import ChromeDriverManager
 
-# =========================
-# 基础配置与 Helper
-# =========================
-
-def get_exif(img_path: str) -> dict:
-    # 请替换为你真实的 pyexif 调用
-    # 这里仅做演示
-    import pyexif
-    img = pyexif.ExifEditor(img_path)
-    return img.getDictTags()
-
-def parse_float(val) -> Optional[float]:
-    if val is None: return None
-    if isinstance(val, (int, float)): return float(val)
-    s = str(val).strip().replace("deg", "").strip()
-    try:
-        return float(s)
-    except:
-        m = re.search(r"[-+]?\d+(\.\d+)?", s)
-        return float(m.group(0)) if m else None
-
-def dms_to_dd(dms_str: str) -> Optional[float]:
-    if dms_str is None: return None
-    s = str(dms_str).strip()
-    try:
-        return float(s)
-    except:
-        pass
-    m = re.search(r"(\d+(?:\.\d+)?)\s*deg\s*(\d+(?:\.\d+)?)'\s*(\d+(?:\.\d+)?)\"?\s*([NSEW])", s, re.IGNORECASE)
-    if not m: return None
-    deg, minute, sec, hemi = float(m.group(1)), float(m.group(2)), float(m.group(3)), m.group(4).upper()
-    dd = deg + minute/60.0 + sec/3600.0
-    return -dd if hemi in ("S", "W") else dd
-
-def parse_gps_from_exif(exif: Dict[str, Any]) -> Tuple[Optional[float], Optional[float]]:
-    lat, lon = dms_to_dd(exif.get("GPSLatitude")), dms_to_dd(exif.get("GPSLongitude"))
-    if (lat is None or lon is None) and exif.get("GPSPosition"):
-        parts = [p.strip() for p in str(exif.get("GPSPosition")).split(",")]
-        if len(parts) >= 2:
-            lat = lat or dms_to_dd(parts[0])
-            lon = lon or dms_to_dd(parts[1])
-    return lat, lon
-
-# ... (pick_first_image, pick_last_image, pick_middle_image 保持不变) ...
-def pick_first_image(folder: Path) -> Optional[Path]:
-    exts = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".JPG", ".JPEG", ".PNG", ".TIF", ".TIFF"}
-    imgs = [p for p in folder.iterdir() if p.is_file() and p.suffix in exts]
-    imgs.sort(key=lambda p: p.name)
-    return imgs[0] if imgs else None
-
-def pick_last_image(folder: Path) -> Optional[Path]:
-    exts = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".JPG", ".JPEG", ".PNG", ".TIF", ".TIFF"}
-    imgs = [p for p in folder.iterdir() if p.is_file() and p.suffix in exts]
-    imgs.sort(key=lambda p: p.name)
-    return imgs[-1] if imgs else None
+from sua_bdd_tool.utils.file_opt import (
+    pick_first_image,
+    pick_last_image,
+    pick_middle_image,
+)
+from sua_bdd_tool.utils import load_json
+from sua_bdd_tool.utils.projection import forward_geodesic
+from sua_bdd_tool.utils.visualization import get_dynamic_bearing_color
 
 
-def pick_middle_image(folder: Path) -> Optional[Path]:
-    exts = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".JPG", ".JPEG", ".PNG", ".TIF", ".TIFF"}
-    imgs = [p for p in folder.iterdir() if p.is_file() and p.suffix in exts]
-    imgs.sort(key=lambda p: p.name)
-    return imgs[len(imgs) // 2] if imgs else None
-# =========================
-# 几何与颜色逻辑 (8色/渐变)
-# =========================
-def forward_geodesic(lat_deg, lon_deg, bearing_deg, distance_m) -> Tuple[float, float]:
-    R = 6378137.0
-    lat1, lon1, brng = map(math.radians, [lat_deg, lon_deg, bearing_deg])
-    d = distance_m / R
-    lat2 = math.asin(math.sin(lat1)*math.cos(d) + math.cos(lat1)*math.sin(d)*math.cos(brng))
-    lon2 = lon1 + math.atan2(math.sin(brng)*math.sin(d)*math.cos(lat1), math.cos(d)-math.sin(lat1)*math.sin(lat2))
-    return (math.degrees(lat2), math.degrees(lon2))
-
-def hex_to_rgb(hex_color: str):
-    return tuple(int(hex_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
-
-def rgb_to_hex(rgb):
-    return '#{:02x}{:02x}{:02x}'.format(*map(int, rgb))
-
-def blend_colors(c1_hex, c2_hex, ratio):
-    c1, c2 = hex_to_rgb(c1_hex), hex_to_rgb(c2_hex)
-    return rgb_to_hex([c1[i]*(1-ratio) + c2[i]*ratio for i in range(3)])
-
-def get_dynamic_bearing_color(bearing_deg: float) -> str:
-    COLORS = {0: "#FFD700", 90: "#FF0000", 180: "#008000", 270: "#0000FF", 360: "#FFD700"}
-    b = bearing_deg % 360.0
-    quadrant = int(b // 90)
-    start_a, end_a = quadrant * 90, (quadrant + 1) * 90
-    return blend_colors(COLORS[start_a], COLORS[end_a], (b - start_a) / 90.0)
-
-def get_cardinal_direction(yaw_deg: float) -> str:
-    dirs = ["North", "North-East", "East", "South-East", "South", "South-West", "West", "North-West"]
-    return dirs[int((yaw_deg + 22.5) % 360 / 45)]
-
-def make_rotated_triangle_icon(color: str, bearing_deg: float) -> folium.DivIcon:
+def make_rotated_triangle_icon(color, bearing_deg):
     html = f"""<div style="width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:16px solid {color};transform:rotate({bearing_deg:.2f}deg);transform-origin:50% 60%;"></div>"""
     return folium.DivIcon(html=html)
 
-def parse_fov_lrf(exif):
-    return parse_float(exif.get("FOV")), parse_float(exif.get("LRFTargetLat")), parse_float(exif.get("LRFTargetLon")), parse_float(exif.get("LRFTargetDistance"))
-
-# =========================
-# 截图核心逻辑 (新增)
-# =========================
-def batch_screenshot_views(points: List[Dict], output_dir: str, arrow_len_m: float, gap_m: float):
+def batch_screenshot_views(points, output_dir, arrow_len_m, gap_m, view_shot_all, view_shot_each):
     """
     修正版：
     总览图 (Overview) 的缩放范围只聚焦于无人机位置，忽略可能过长的 LRF 红线，
     确保箭头在总览图中清晰可见。
     """
+    if not view_shot_all and not view_shot_each:
+        return
     print(f"\n[INFO] 开始截图任务 (总览图 + {len(points)} 张特写)...")
     
     shots_dir = Path(output_dir)
@@ -218,35 +128,41 @@ def batch_screenshot_views(points: List[Dict], output_dir: str, arrow_len_m: flo
             m_all.fit_bounds(all_bounds, padding=(10, 10))
 
         m_all.save(str(temp_html))
-        driver.get(f"file:///{temp_html.absolute()}")
-        time.sleep(2.0) 
-        driver.save_screenshot(str(shots_dir / "_Overview_All_Arrows.png"))
-        print(f"  [OK] Overview Saved: _Overview_All_Arrows.png")
 
 
-        # ==========================================
-        # Part 2: 生成并截取“单点特写” (Individual)
-        # ==========================================
-        for i, p in enumerate(points):
-            m_single = folium.Map(location=[p["lat"], p["lon"]], zoom_start=22, tiles=None)
-            add_osm_tile(m_single) 
-
-            # 特写图需要包含红线范围，所以这里使用 draw_arrow_on_map 返回的完整 bounds
-            bounds_points = draw_arrow_on_map(m_single, p, include_fov=True)
-            
-            # 使用您满意的 padding
-            m_single.fit_bounds(bounds_points, padding=(100, 100)) 
-            
-            m_single.save(str(temp_html))
+        if view_shot_all:
+            print("  [0/N] Generating Overview Map Screenshot...")
             driver.get(f"file:///{temp_html.absolute()}")
-            
-            time.sleep(1.0)
-            
-            out_name = f"{p['vid']}_{p['folder']}_{p['cardinal_dir']}.png"
-            driver.save_screenshot(str(shots_dir / out_name))
-            
-            print(f"  [{i+1}/{len(points)}] Saved: {out_name}")
+            time.sleep(2.0) 
+            driver.save_screenshot(str(shots_dir.parent / "views_map_overview.png"))
+            print(f"  [OK] Overview Saved: views_map_overview.png")
 
+        if view_shot_each:
+            # ==========================================
+            # Part 2: 生成并截取“单点特写” (Individual)
+            # ==========================================
+            for i, p in enumerate(points):
+                m_single = folium.Map(location=[p["lat"], p["lon"]], zoom_start=22, tiles=None)
+                add_osm_tile(m_single) 
+
+                # 特写图需要包含红线范围，所以这里使用 draw_arrow_on_map 返回的完整 bounds
+                bounds_points = draw_arrow_on_map(m_single, p, include_fov=True)
+                
+                # 使用您满意的 padding
+                m_single.fit_bounds(bounds_points, padding=(100, 100)) 
+                
+                m_single.save(str(temp_html))
+                driver.get(f"file:///{temp_html.absolute()}")
+                
+                time.sleep(1.0)
+                
+                out_name = f"{p['vid']}_{p['folder']}_{p['cardinal_dir']}.png"
+                driver.save_screenshot(str(shots_dir / out_name))
+                
+                print(f"  [{i+1}/{len(points)}] Saved: {out_name}")
+            print(f'All Screenshots Done in {shots_dir}')
+        else:
+            shutil.rmtree(shots_dir)
     except Exception as e:
         print(f"[ERROR] 截图中断: {e}")
         import traceback
@@ -256,27 +172,28 @@ def batch_screenshot_views(points: List[Dict], output_dir: str, arrow_len_m: flo
         if temp_html.exists():
             os.remove(temp_html)
     
-    print(f"[OK] 所有截图任务完成: {shots_dir}")
+    print(f"[OK] 所有截图任务完成!")
 
-# =========================
-# Main Logic
-# =========================
+
 def process_views_data(
-    root_dir: str,
-    output_folder: str = "output_results",
-    pick_method: str = "middle",
-    arrow_len_m: float = 3.0,
-    gap_m: float = 1.2,
-    yaw_offset_deg: float = 0.0,
+    root_dir,
+    output_folder,
+    exif_path,
+    pick_method="middle",
+    arrow_len_m=3.0,
+    gap_m=1.2,
+    view_shot_all=True,
+    view_shot_each=False,
 ):
     root = Path(root_dir)
     out_path = Path(output_folder)
     out_path.mkdir(exist_ok=True)
 
     html_file = out_path / "views_map.html"
-    csv_file = out_path / "views_direction.csv"
-    screenshots_dir = out_path / "screenshots"
+    csv_file = out_path / "views_map.csv"
+    screenshots_dir = out_path / "views_map_screenshots"
 
+    exif_db = load_json(exif_path)
 
     folders = sorted([p for p in root.iterdir() if p.is_dir()], key=lambda p: p.name)
     points = []
@@ -294,19 +211,21 @@ def process_views_data(
     for i, folder in enumerate(tqdm(folders), 1):
         img = pick_func(folder) # 这里默认用第一张
         if not img: continue
-        
-        exif = get_exif(str(img))
-        lat, lon = parse_gps_from_exif(exif)
-        if not lat: continue
-        
-        yaw = (parse_float(exif.get("GimbalYawDegree") or exif.get("FlightYawDegree") or 0) + yaw_offset_deg) % 360
-        fov, tlat, tlon, tdist = parse_fov_lrf(exif)
-        
+        img_name = Path(img).name
+        img_exif = exif_db.get(img_name)
+
         points.append({
-            "vid": f"V{i}", "folder": folder.name, "img": img.name,
-            "lat": lat, "lon": lon, "yaw": yaw,
-            "cardinal_dir": get_cardinal_direction(yaw),
-            "fov_deg": fov, "tlat": tlat, "tlon": tlon, "tdist": tdist
+            "vid": f"V{i}", 
+            "folder": img_exif["rel_dir"], 
+            "img": img_exif["filename"],
+            "lat": img_exif["lat"], 
+            "lon": img_exif["lon"], 
+            "yaw": img_exif["yaw"],
+            "cardinal_dir": img_exif["direction"],
+            "fov_deg": img_exif["fov"], 
+            "tlat": img_exif["tlat"], 
+            "tlon": img_exif["tlon"], 
+            "tdist": img_exif["tdist"],
         })
 
     # 1. 导出 CSV
@@ -341,20 +260,4 @@ def process_views_data(
 
     # 3. [新增] 批量截图
     # 将会为每个箭头生成一个特写图
-    batch_screenshot_views(points, str(screenshots_dir), arrow_len_m, gap_m)
-
-
-
-if __name__ == "__main__":
-    ROOT_DIR = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\data\visible_views"
-    output_html = r'\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\docs\visible_views_map.html'
-    output_csv = r'\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\docs\visible_views_map.csv'
-    screenshots_dir = r'\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\docs\visible_views_map.csv'
-    output_dir = r'\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\docs'
-    process_views_data(
-        ROOT_DIR,
-        output_dir,
-        arrow_len_m=3.0,
-        gap_m=1.2,
-        yaw_offset_deg=0.0,
-    )
+    batch_screenshot_views(points, str(screenshots_dir), arrow_len_m, gap_m, view_shot_all, view_shot_each)

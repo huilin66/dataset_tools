@@ -26,6 +26,7 @@ def run_dedup_reporting(view_id="V30"):
     
     # 输出：PDF 路径
     output_pdf = os.path.join(dedup_root, f"Report_{view_id}_Dedup.pdf")
+    floor_map_path = r'\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\docs\build_heights.json'
     
     # 类别文件
     class_path = config.CLASS_PATH
@@ -46,7 +47,7 @@ def run_dedup_reporting(view_id="V30"):
         project_info_path=project_info, 
         group_info_path=group_info,
         views_csv_path=views_path,
-        floor_map_path=r"E:\repository\dataset_tools\floor_map.json",
+        floor_map_path=floor_map_path,
     )
     
     # 生成报告

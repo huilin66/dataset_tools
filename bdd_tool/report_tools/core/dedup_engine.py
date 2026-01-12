@@ -1,9 +1,11 @@
 import os
 import json
+import time
 import pandas as pd
 from PIL import Image
 from tqdm import tqdm
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # 复用基础类
 from core.engine import ReportEngine
@@ -142,7 +144,7 @@ class DedupProcessor(ImageProcessor):
 
 class DedupReportEngine(ReportEngine):
     """
-    Dedup 专用引擎
+    Dedup 专用引擎 (支持多线程)
     """
     def __init__(self, loader, labels, project_info_path, group_info_path, views_csv_path=None, target_class_names=None, floor_map_path=None):
         super().__init__(loader, labels)
@@ -157,9 +159,9 @@ class DedupReportEngine(ReportEngine):
         self.proj_meta = self._load_json(project_info_path)
         self.views_map = self._load_views_map(views_csv_path)
 
-        # === 【新增】只读取 floor_map 的 keys 作为定义的楼层列表 ===
-        floor_config = self._load_json(floor_map_path) if floor_map_path else {}
+        floor_config = self._load_json(floor_map_path)['floor_map'] if floor_map_path else {}
         self.defined_floors = list(floor_config.keys()) if floor_config else []
+
     def _load_json(self, path):
         if not os.path.exists(path): return {}
         with open(path, 'r', encoding='utf-8') as f: return json.load(f)
@@ -176,12 +178,10 @@ class DedupReportEngine(ReportEngine):
         return {}
 
     def _enrich_data(self, df, view_name):
-        """注入物理信息 (Floor, Real H)"""
+        """注入物理信息 (Floor, Real H) - 逻辑保持不变"""
         if df.empty: return df
         
         floors, ids, orientations = [], [], []
-        
-        # 获取朝向
         ele_str = self.views_map.get(view_name.strip(), self.views_map.get(view_name, "Unknown"))
 
         for idx, row in df.iterrows():
@@ -189,14 +189,10 @@ class DedupReportEngine(ReportEngine):
             img_name = row['_stem_name']
             
             fl = "N/A"
-            
-            # 从 project_info.json 匹配 Dedup 结果
             if img_name in self.proj_meta:
                 for item in self.proj_meta[img_name]:
                     if item.get('id') == track_id:
                         fl = item.get('floor', 'N/A')
-                        
-                        # 使用真实高度覆盖 GSD 高度
                         proj = item.get('projection_world', {})
                         h_real_m = proj.get('h (obj_height_m)', proj.get('h', 0))
                         if h_real_m > 0:
@@ -217,7 +213,11 @@ class DedupReportEngine(ReportEngine):
         df['orientation'] = orientations
         return df
 
-    def run(self, output_path, view_name="V01", model_name="BDD-MODEL", style_id=3):
+    def run(self, output_path, view_name="V01", model_name="BDD-MODEL", style_id=3, use_multithreading=True, max_workers=4):
+        """
+        :param use_multithreading: 是否启用多线程加速 [新增]
+        :param max_workers: 线程个数 [新增]
+        """
         # 1. 目录初始化
         self.base_dir = os.path.dirname(os.path.abspath(output_path))
         self.vis_dir = os.path.join(self.base_dir, 'report_vis_fuse') 
@@ -228,33 +228,57 @@ class DedupReportEngine(ReportEngine):
         raw_data = self.loader.load()
         if not raw_data: return
 
-        # 2. 处理图像
+        # 2. 处理图像 (多线程改造部分)
         processor = DedupProcessor(self.labels, config.COLOR_PALETTE, self.vis_dir, self.crop_dir)
-        all_dfs = []
+        
+        # 预分配列表以保持顺序 (raw_results 存储 processor.process 的原始返回)
+        raw_results = [None] * len(raw_data)
         
         print(f"Processing View: {view_name}...")
-        for item in tqdm(raw_data, desc="Processing Images"):
-            df = processor.process(item)
-            if not df.empty:
-                df = self._enrich_data(df, view_name)
-                all_dfs.append(df)
+
+        if use_multithreading:
+            # --- 多线程模式 ---
+            print(f"[{time.strftime('%H:%M:%S')}] Starting multi-threaded processing ({max_workers} workers)...")
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # 提交任务：只执行 heavy lifting 的 processor.process
+                future_to_index = {executor.submit(processor.process, item): i for i, item in enumerate(raw_data)}
+                
+                for future in tqdm(as_completed(future_to_index), total=len(raw_data), desc="Processing Images"):
+                    idx = future_to_index[future]
+                    try:
+                        raw_results[idx] = future.result()
+                    except Exception as e:
+                        print(f"❌ Error processing image index {idx}: {e}")
+        else:
+            # --- 单线程模式 ---
+            print(f"[{time.strftime('%H:%M:%S')}] Starting single-threaded processing...")
+            for i, item in enumerate(tqdm(raw_data, desc="Processing Images")):
+                raw_results[i] = processor.process(item)
+
+        # 3. 后处理：过滤空结果并注入元数据 (Enrich Data)
+        # 注意：_enrich_data 很快且涉及类成员读取，在主线程串行执行更安全且不影响性能
+        all_dfs = []
+        for df in raw_results:
+            if df is not None and not df.empty:
+                # 这一步将 GPS、楼层等信息注入 DataFrame
+                enriched_df = self._enrich_data(df, view_name)
+                all_dfs.append(enriched_df)
 
         if not all_dfs:
             print("No defects found.")
             return
 
-        # 3. 组织数据
-        # Style 3 (Dedup): 聚合为一个大表
+        # 4. 组织数据 (保持不变)
         final_records = []
         if style_id == 3:
             print("Organizing data for Compact Report (Merged View)...")
             merged_df = pd.concat(all_dfs, ignore_index=True)
             merged_df = merged_df.sort_values(by=['ID', 'floor'])
-            final_records = [merged_df] # 只有一个大表
+            final_records = [merged_df] 
         else:
             final_records = all_dfs
 
-        # 4. 统计信息
+        # 5. 统计信息 (保持不变)
         full_df = pd.concat(all_dfs, ignore_index=True)
         unique_ids = full_df['ID'].nunique() if not full_df.empty else 0
         
@@ -276,7 +300,7 @@ class DedupReportEngine(ReportEngine):
             'defined_floors': self.defined_floors
         }
 
-        # 5. 导出
+        # 6. 导出
         ExporterClass = EXPORTER_MAP.get(style_id)
         if not ExporterClass: return
             
@@ -284,5 +308,3 @@ class DedupReportEngine(ReportEngine):
         exporter.export(report_data, output_path)
         
         print(f"Report Generated: {output_path}")
-    
-
