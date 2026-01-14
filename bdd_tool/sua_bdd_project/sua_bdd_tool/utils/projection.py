@@ -8,8 +8,6 @@ def get_exif(img_path) :
     img = pyexif.ExifEditor(img_path)
     return img.getDictTags()
 
-
-
 def parse_float(val):
     if val is None: return None
     if isinstance(val, (int, float)): return float(val)
@@ -20,6 +18,19 @@ def parse_float(val):
         m = re.search(r"[-+]?\d+(\.\d+)?", s)
         return float(m.group(0)) if m else None
 
+def parse_int(val):
+    val_float = parse_float(val)
+    return int(val_float) if val_float is not None else None
+
+def convert_coordinate(lat, lon):
+    if lat is not None and lon is not None:
+        lat_dir = "N" if lat >= 0 else "S"
+        lon_dir = "E" if lon >= 0 else "W"
+        lat_abs = abs(lat)
+        lon_abs = abs(lon)
+        return f"{lat_abs:.6f}{lat_dir}, {lon_abs:.6f}{lon_dir}"
+    else:
+        return "N/A"
 
 def calculate_gsd(distance_mm, focal_length_mm, sensor_width_mm, image_width_pix):
     """
@@ -34,6 +45,10 @@ def calculate_gsd(distance_mm, focal_length_mm, sensor_width_mm, image_width_pix
         return gsd # unit: mm/pixel
     except ZeroDivisionError:
         return None
+
+def calculate_facade_gsd(distance_m, focal_length, pixel_size_um=None, cos_theta = 1.0):
+    gsd_result = (distance_m * (pixel_size_um / 1000)) / (focal_length * cos_theta)
+    return gsd_result
 
 def pixel_to_physical(pix_value, gsd):
     """

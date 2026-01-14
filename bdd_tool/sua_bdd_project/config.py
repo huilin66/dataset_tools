@@ -24,6 +24,7 @@ VIEWS_RGB_YOLO_PATH = os.path.join(SPLIT_DATA_PATH, "visible_views_infer")
 VIEWS_RGB_YOLO_DEDUP_DIR = os.path.join(SPLIT_DATA_PATH, "visible_views_infer_dedup")
 
 VIEWS_RGB_ALIGN_PATH = os.path.join(SPLIT_DATA_PATH, "visible_views_align")
+VIEWS_RGB_ALIGN_VIS_PATH = os.path.join(SPLIT_DATA_PATH, "visible_views_align_vis")
 VIEWS_RGB_ALIGN_COMPARE_PATH = os.path.join(SPLIT_DATA_PATH, "visible_views_align_compare")
 
 DATA_T_PATH = os.path.join(SPLIT_DATA_PATH, "thermal")
@@ -47,9 +48,9 @@ YOLO_DEDUP_PROJ_VIS_NAME = 'project_vis.png'
 REPORT_DIR = os.path.join(DOCUMENT_PATH, "reports")
 REPORT_OVERALL_PATH = os.path.join(REPORT_DIR, "report_overall.pdf")
 REPORT_VIEW_PATH = os.path.join(REPORT_DIR, "report_view.pdf")
-VIEW_REPORT = True
-REPORT_OVERALL_STYLE_ID=3
-REPORT_VIEW_STYLE_ID=4
+VIEW_REPORT = False
+REPORT_OVERALL_STYLE_ID=32
+REPORT_VIEW_STYLE_ID=3
 
 
 ANNO_DATA_PATH = os.path.join(ROOT_DIR, "data_anno")
@@ -118,7 +119,7 @@ LEVELS_THRESHOLD = {
     }
 
 
-DRONE_PARAMS = {
+CAMERA_PARAMS = {
     # === 默认兜底配置 ===
     'default': {
         'sensor_width_mm': 9.6, 
@@ -127,13 +128,34 @@ DRONE_PARAMS = {
 
     # M4T: 专为巡检/安防设计，主摄为 1/1.3 CMOS
     'M4T_Wide': {
-        'sensor_width_mm': 9.6,  # 1/1.3 inch (注意：之前估算的 6.4mm 是错误的)
-        'focal_length_mm': 6.7   # 基于等效24mm换算 (9.6 * 24 / 36 ≈ 6.4, 实际上通常在 6.7mm 左右)
+        "lens_type": "Wide",
+        "sensor_width_mm": 9.69,
+        "sensor_height_mm": 7.27,
+        "pixel_size_um": 1.197,
+        "real_focal_length_mm": 6.73
     },
-    
-    # M4T 热成像: 640x512, 12um, 等效焦距 53mm
+
+    'M4T_3X': {
+        "lens_type": "Medium Tele (3X)",
+        "sensor_width_mm": 9.69,
+        "sensor_height_mm": 7.27,
+        "pixel_size_um": 1.197,
+        "real_focal_length_mm": 19.35
+    },
+
+    'M4T_7X': {
+        "lens_type": "Tele (7X)",
+        "sensor_width_mm": 8.29,
+        "sensor_height_mm": 6.23,
+        "pixel_size_um": 1.008,
+        "real_focal_length_mm": 40.0
+    },
+
     'M4T_Thermal': {
-        'sensor_width_mm': 7.68, # 640 pixels * 12 um
-        'focal_length_mm': 12.0  # 物理焦距 (根据 DFOV 45度反推约为 11.9~12mm)
+        "lens_type": "Thermal",
+        "sensor_width_mm": 7.68,
+        "sensor_height_mm": 6.14,
+        "pixel_size_um": 12.0,
+        "real_focal_length_mm": 12.0
     },
 }

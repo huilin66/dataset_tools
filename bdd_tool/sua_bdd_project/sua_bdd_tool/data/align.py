@@ -163,7 +163,42 @@ class DroneImageAligner:
             result_img = canvas
             cv2.putText(result_img, "Edge: Green=RGB, Red=Thermal", (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
 
-        elif mode == 'context':
+        elif mode == 'context_box':
+            # 上下文模式：显示原始大图，并在其上框出红外的位置, 原始 RGB + box
+            
+            # 1. 在原始RGB上画框
+            vis_with_box = vis_img.copy()
+            pt1 = (self.crop_x1, self.crop_y1)
+            pt2 = (self.crop_x2, self.crop_y2)
+            cv2.rectangle(vis_with_box, pt1, pt2, (0, 0, 255), 15) # 粗红框
+
+            result_img = vis_with_box
+
+        elif mode == 'context_overlay':
+            # 上下文模式：显示原始大图，并在其上框出红外的位置, 原始 RGB + 半透明红外覆盖
+            
+            # 2. 制作覆盖图
+            vis_overlay = vis_img.copy()
+            pt1 = (self.crop_x1, self.crop_y1)
+            pt2 = (self.crop_x2, self.crop_y2)
+
+            # 将红外图像resize回裁剪区域的大小
+            roi_h, roi_w = self.crop_y2 - self.crop_y1, self.crop_x2 - self.crop_x1
+            therm_resized = cv2.resize(therm_view, (roi_w, roi_h))
+            
+            # 叠加
+            roi_section = vis_overlay[self.crop_y1:self.crop_y2, self.crop_x1:self.crop_x2]
+            blended_roi = cv2.addWeighted(roi_section, 0.5, therm_resized, 0.5, 0)
+            vis_overlay[self.crop_y1:self.crop_y2, self.crop_x1:self.crop_x2] = blended_roi
+            cv2.rectangle(vis_overlay, pt1, pt2, (0, 255, 0), 10) # 绿框
+
+            # 缩小以便显示 (因为原始图太大，比如 4000px 宽)
+            disp_scale = 0.25
+            img2_s = cv2.resize(vis_overlay, (0,0), fx=disp_scale, fy=disp_scale)
+            
+            result_img = vis_overlay
+
+        elif mode == 'context_compare':
             # 上下文模式：显示原始大图，并在其上框出红外的位置
             # 左侧：原始 RGB
             # 右侧：原始 RGB + 半透明红外覆盖
@@ -192,13 +227,12 @@ class DroneImageAligner:
             img2_s = cv2.resize(vis_overlay, (0,0), fx=disp_scale, fy=disp_scale)
             
             result_img = np.hstack((img1_s, img2_s))
-
         else:
             print("未知模式")
             return
 
         # 显示或保存
-        if save_path:
+        if save_path is not None:
             cv2.imwrite(str(save_path), result_img)
             # print(f"结果已保存至: {save_path}")
         else:
@@ -236,7 +270,7 @@ def build_global_lookup(json_path):
     return lookup
 
 # --- 3. 修正后的单任务处理函数 ---
-def process_single_pair(aligner_instance, rgb_full_path, t_full_path, save_full_path, align_compare_path=None):
+def process_single_pair(aligner_instance, rgb_full_path, t_full_path, save_full_path, align_compare_path=None, align_vis_path=None):
     """
     现在接收预初始化好的 aligner 实例
     """
@@ -250,17 +284,19 @@ def process_single_pair(aligner_instance, rgb_full_path, t_full_path, save_full_
             # 这是一个比较重的操作，需要加锁或者在 aligner 内部小心处理
             # 为了线程安全，这里我们手动读取并调用静态处理逻辑，而不使用 aligner.vis_img 成员变量
             # 简易实现：只做简单的叠加保存，不复用 visualize 里的复杂逻辑以避免状态冲突
-            aligner_instance.visualize(t_img, align_vis, rgb_img, mode='context', save_path=align_compare_path)
+            aligner_instance.visualize(t_img, align_vis, rgb_img, mode='context_box', save_path=align_vis_path)
+            aligner_instance.visualize(t_img, align_vis, rgb_img, mode='context_compare', save_path=align_compare_path)
             
         return True, "OK"
     except Exception as e:
         return False, f"Error: {str(e)}"
 
 # --- 4. 主流程 ---
-def batch_align(json_path, rgb_root, t_root, output_root, align_compare_root=None, num_workers=4):
+def batch_align(json_path, rgb_root, t_root, output_root, align_compare_root=None, align_vis_root=None, num_workers=4):
     rgb_root, t_root = Path(rgb_root), Path(t_root)
     output_root = Path(output_root)
     if align_compare_root: align_compare_root = Path(align_compare_root)
+    if align_vis_root: align_vis_root = Path(align_vis_root)
 
     # Step 1: 索引
     global_lookup = build_global_lookup(json_path)
@@ -313,6 +349,7 @@ def batch_align(json_path, rgb_root, t_root, output_root, align_compare_root=Non
     for i, view_dir in enumerate(rgb_views):
         os.makedirs(output_root/view_dir.name, exist_ok=True)
         if align_compare_root: os.makedirs(align_compare_root/view_dir.name, exist_ok=True)
+        if align_vis_root: os.makedirs(align_vis_root/view_dir.name, exist_ok=True)
 
         rgb_files = list(view_dir.glob("*.[jJ][pP][gG]"))
         if not rgb_files: continue
@@ -329,6 +366,7 @@ def batch_align(json_path, rgb_root, t_root, output_root, align_compare_root=Non
             t_file_path = t_root / view_dir.name / t_filename
             save_path = output_root / view_dir.name / rgb_file.name
             cmp_path = align_compare_root / view_dir.name / rgb_file.name if align_compare_root else None
+            vis_path = align_vis_root / view_dir.name / rgb_file.name if align_vis_root else None
             
             # 仅检查 T 是否存在，不需要在这里读取
             if not t_file_path.exists():
@@ -336,7 +374,7 @@ def batch_align(json_path, rgb_root, t_root, output_root, align_compare_root=Non
                 continue
 
             # 传入 global_aligner 实例
-            tasks.append((global_aligner, rgb_file, t_file_path, save_path, cmp_path))
+            tasks.append((global_aligner, rgb_file, t_file_path, save_path, cmp_path, vis_path))
 
         # 执行任务
         view_success = 0
@@ -345,12 +383,12 @@ def batch_align(json_path, rgb_root, t_root, output_root, align_compare_root=Non
             with ThreadPoolExecutor(max_workers=num_workers) as executor:
                 # 注意：这里 process_single_pair 的第一个参数变成了 global_aligner
                 futures = {executor.submit(process_single_pair, *args): args[1].name for args in tasks}
-                for future in tqdm(as_completed(futures), total=len(tasks), desc="  Aligning", leave=False):
+                for future in tqdm(as_completed(futures), total=len(tasks), desc="Aligning", leave=False):
                     res, msg = future.result()
                     if res: view_success += 1
                     else: print(f"Fail: {msg}")
         else:
-            for args in tqdm(tasks, desc="  Aligning", leave=False):
+            for args in tqdm(tasks, desc="Aligning", leave=False):
                 res, msg = process_single_pair(*args)
                 if res: view_success += 1
         

@@ -346,29 +346,6 @@ class PDFExporterMeasurement(BasePDFExporter):
         return data_rows, row_heights
 
 
-
-
-# --- 【新增】智能楼层排序工具 ---
-def natural_floor_sort_key(floor_str):
-    """
-    排序逻辑: B2 -> G -> 1 -> 2 -> 10 -> ROOF
-    """
-    s = str(floor_str).upper().strip().replace('/F', '')
-    # 特殊层映射 (值越小越靠下)
-    special_map = {
-        'B3': -3, 'B2': -2, 'B1': -1, 
-        'LG': -0.5, 'G': 0, 'GF': 0, 'GM': 0.5, 'M': 0.5, 
-        'ROOF': 9999, 'TOP': 10000, 'ABOVE TOP': 10001
-    }
-    
-    if s in special_map: return special_map[s]
-    
-    # 提取数字 (支持 "1", "1A")
-    match = re.match(r'^(-?\d+)', s)
-    if match: return float(match.group(1))
-    
-    return 99999 # Unknown 放最后
-
 class PDFExporterCompact(BasePDFExporter):
     """
     样式 3 (Excel 风格横向版):
@@ -720,8 +697,9 @@ class PDFExporterCompact(BasePDFExporter):
             # 每个表格后加一点空白
             elems.append(Spacer(1, 15))
 
-        return elems
-        
+        return elems 
+
+
 class PDFExporterWithContext(PDFExporterCompact):
     """
     样式 4: 图文对照报告 (Contextual Report)
@@ -887,4 +865,206 @@ class PDFExporterWithContext(PDFExporterCompact):
             elems.append(PageBreak())
 
         return elems
-    
+
+
+class PDFExporterWithContextAuxImage(PDFExporterWithContext):
+    """
+    样式 42: 图文对照报告 (Contextual Report) - 双光版
+    逻辑: 
+    1. 按源文件(图片)分组。
+    2. 顶部并排显示: 左侧可见光大图(VisPath), 右侧辅助/红外大图(VisAuxPath)。
+    3. 下方表格增加 Crop Aux Image 列。
+    """
+    def generate_flowables(self, df_record):
+        elems = []
+        if df_record.empty: return elems
+
+        # 1. 按照可视化的全景图路径进行分组
+        group_col = 'VisPath' if 'VisPath' in df_record.columns else 'Path'
+        
+        # 获取所有唯一的图片路径（保持原始顺序）
+        unique_images = df_record[group_col].unique()
+
+        for img_path in unique_images:
+            # 筛选出当前这张图的所有缺陷数据
+            sub_df = df_record[df_record[group_col] == img_path]
+            if sub_df.empty: continue
+            
+            # --- A. 标题部分 ---
+            first_row = sub_df.iloc[0]
+            fname = Path(first_row['Path']).name
+            
+            # 标题样式
+            title_style = ParagraphStyle(
+                'ContextTitle', 
+                parent=self.styles['Heading2'], 
+                backColor=colors.lightgrey, 
+                borderPadding=5,
+                spaceAfter=10,
+                textColor=colors.black
+            )
+            elems.append(Paragraph(f"File: {fname}", title_style))
+
+            # --- B. 插入全景大图 (Context Images: Left Vis, Right Aux) ---
+            vis_path = first_row.get('VisPath', '')
+            vis_aux_path = first_row.get('VisAuxPath', '')
+            
+            # 准备顶部图片的容器
+            top_imgs = []
+            
+            # 定义单个大图的最大尺寸 (页面宽度一分为二，减去一点间隙)
+            # 假设总可用宽 9.5 inch -> 每张图最大宽约 4.6 inch
+            max_top_w, max_top_h = 4.6 * inch, 4.0 * inch
+
+            # 内部函数：处理图片缩放
+            def process_top_image(path):
+                if path and os.path.exists(path):
+                    img = RLImage(path)
+                    img_w, img_h = img.imageWidth, img.imageHeight
+                    aspect = img_h / img_w if img_w > 0 else 1.0
+                    
+                    draw_w = max_top_w
+                    draw_h = draw_w * aspect
+                    
+                    if draw_h > max_top_h:
+                        draw_h = max_top_h
+                        draw_w = draw_h / aspect
+                    
+                    img.drawWidth = draw_w
+                    img.drawHeight = draw_h
+                    return img
+                else:
+                    return Paragraph("(Missing)", self.styles["Normal"])
+
+            # 处理左图 (Vis) 和 右图 (Aux)
+            img_vis_obj = process_top_image(vis_path)
+            img_aux_obj = process_top_image(vis_aux_path)
+
+            # 使用 Table 将两张图并排布局
+            top_table_data = [[img_vis_obj, img_aux_obj]]
+            top_table = Table(top_table_data, colWidths=[4.75*inch, 4.75*inch])
+            top_table.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ]))
+            
+            elems.append(top_table)
+            elems.append(Spacer(1, 15)) # 图片和表格之间的间距
+
+            # --- C. 构建缺陷表格 ---
+            # 定义表头 (新增 Crop Aux Image)
+            headers = ["No.", "ID", "Location", "Floor", "Size\n(L x W)", "Severity", "Type", "Action", "Crop Image", "Crop Aux\nImage"]
+            
+            # 定义列宽 (调整宽度以容纳新列，总宽保持在 10 inch 左右)
+            # 原宽度总和约 9.0，现在新增一列图片，适当压缩文字列
+            col_widths = [
+                0.4*inch, # No.
+                0.7*inch, # ID (缩小)
+                1.1*inch, # Location (微缩)
+                0.5*inch, # Floor (微缩)
+                1.3*inch, # Size (微缩)
+                0.7*inch, # Severity (微缩)
+                1.1*inch, # Type (微缩)
+                0.9*inch, # Action (微缩)
+                1.4*inch, # Crop Image (缩一点)
+                1.4*inch  # Crop Aux Image (新增)
+            ]
+            
+            table_data = [headers]
+            row_heights = [30] # 表头高度
+
+            # 组内按 ID 排序
+            if 'ID' in sub_df.columns:
+                try: sub_df = sub_df.sort_values(by=['ID'])
+                except: pass
+
+            for local_idx, (_, row) in enumerate(sub_df.iterrows()):
+                # 1. 尺寸文本
+                w_val, h_val = row.get('W_cm', 'N/A'), row.get('H_cm', 'N/A')
+                if w_val != 'N/A' and h_val != 'N/A':
+                    try:
+                        dim_str = f"H:{float(h_val):.1f} * W:{float(w_val):.1f}\n(cm)"
+                    except:
+                        dim_str = f"H:{h_val} * W:{w_val}"
+                else:
+                    dim_str = f"H:{row.get('H_pix','-')} * W:{row.get('W_pix','-')}\n(pix)"
+                
+                dim_para = Paragraph(dim_str, self.styles['Normal'])
+
+                # 内部函数：处理小截图缩放
+                def process_crop_image(c_path):
+                    if c_path and os.path.exists(c_path):
+                        c_img = RLImage(c_path)
+                        c_max_w, c_max_h = 1.3 * inch, 1.3 * inch # 稍微限制尺寸以适应单元格
+                        c_aspect = c_img.imageHeight / c_img.imageWidth if c_img.imageWidth > 0 else 1.0
+                        
+                        c_draw_h = c_max_w * c_aspect
+                        if c_draw_h > c_max_h:
+                            c_img.drawHeight = c_max_h
+                            c_img.drawWidth = c_max_h / c_aspect
+                        else:
+                            c_img.drawWidth = c_max_w
+                            c_img.drawHeight = c_draw_h
+                        return c_img, max(45, c_img.drawHeight + 6)
+                    return "", 45
+
+                # 2. 局部截图 (Crop Image & Crop Aux Image)
+                crop_path = row.get('CropPath', '')
+                crop_aux_path = row.get('CropAuxPath', '')
+
+                img_cell, h1 = process_crop_image(crop_path)
+                aux_img_cell, h2 = process_crop_image(crop_aux_path)
+                
+                # 当前行高取最大值
+                this_row_h = max(h1, h2)
+
+                # 3. 等级显示优化
+                lvl = row['Level']
+                display_lvl = 'Minor' if lvl == 'Slight' else ('Major' if lvl == 'Serious' else lvl)
+                
+                # 4. Location (View + Orientation)
+                view_info = str(row.get('view', '')).strip()
+                ori_info = str(row.get('orientation', '')).strip()
+                loc_str = f"{view_info}\n{ori_info}" if ori_info else view_info
+
+                # ID 处理
+                display_id = str(row.get('ID', f"{local_idx+1}"))
+
+                row_data = [
+                    str(local_idx + 1),
+                    display_id,
+                    loc_str,
+                    str(row.get('floor', '-')),
+                    dim_para,
+                    display_lvl,
+                    row['Category'],
+                    row['Action'],
+                    img_cell,      # 原 Vis Crop
+                    aux_img_cell   # 新增 Aux Crop
+                ]
+                
+                table_data.append(row_data)
+                row_heights.append(this_row_h)
+
+            # --- D. 生成表格样式并添加到 elems ---
+            t = Table(table_data, colWidths=col_widths, rowHeights=row_heights, repeatRows=1)
+            
+            style_list = [
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey), # 表头背景
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),     # 网格线
+                ('FONTNAME', (0, 0), (-1, 0), self.FONT_BOLD),     # 表头字体
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),             # 居中
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),            # 垂直居中
+                ('FONTSIZE', (0, 0), (-1, -1), 8),                 # 字体调小一点以防换行过多
+                ('LEFTPADDING', (0, 0), (-1, -1), 2),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+            ]
+            t.setStyle(TableStyle(style_list))
+            elems.append(t)
+            
+            # --- E. 每张大图结束后分页 ---
+            elems.append(PageBreak())
+
+        return elems

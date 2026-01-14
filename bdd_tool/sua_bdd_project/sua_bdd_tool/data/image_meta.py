@@ -1,5 +1,3 @@
-
-from calendar import c
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 import json
@@ -12,9 +10,10 @@ import config
 from sua_bdd_tool.utils.projection import (
     get_cardinal_direction,
     get_exif,
+    parse_dji_xmp,
     parse_float,
     parse_gps_from_exif,
-    parse_dji_xmp,
+    parse_int,
 )
 
 @dataclass
@@ -25,9 +24,14 @@ class ImageMeta:
     filename: str
     rel_dir: str
     root_dir: str
+
+    image_height: Optional[int] = None
+    image_width: Optional[int] = None
+    image_channel: Optional[int] = None
     
     lat: Optional[float] = None
     lon: Optional[float] = None
+    alt: Optional[float] = None
     abs_alt: Optional[float] = None
     rel_alt: Optional[float] = None
 
@@ -43,6 +47,7 @@ class ImageMeta:
     lrf_dist: Optional[float] = None
 
     fov: Optional[float] = None
+    focal: Optional[float] = None
     focal_35: Optional[float] = None
     zoom_ratio: Optional[float] = None
     camera_type: Optional[str] = None
@@ -120,9 +125,14 @@ def process_single_image(file_path, root_dir):
     exif = get_exif(file_path)
     rel_dir = str(file_path.relative_to(root_dir).parent)
 
+    image_height = parse_int(exif.get('ExifImageHeight'))
+    image_width = parse_int(exif.get('ExifImageWidth'))
+    image_channel = parse_int(exif.get('ColorComponents'))
+
     lat, lon = parse_gps_from_exif(exif)
     abs_alt = parse_float(exif.get('AbsoluteAltitude') or exif.get('GPSAltitude'))
     rel_alt = parse_float(exif.get('RelativeAltitude'))
+    alt = abs_alt if abs_alt is not None else rel_alt
 
     yaw = (parse_float(exif.get("GimbalYawDegree") or exif.get("FlightYawDegree") or 0)) % 360
     pitch = parse_float(exif.get("GimbalPitchDegree") or exif.get("FlightPitchDegree") or 0)
@@ -136,6 +146,7 @@ def process_single_image(file_path, root_dir):
     lrf_dist = parse_float(exif.get("LRFTargetDistance")) if lfr_status == 'Normal' else None
 
     fov = parse_float(exif.get("FOV"))
+    focal = parse_float(exif.get("FocalLength"))
     focal_35 = parse_float(exif.get('FocalLengthIn35mmFormat') or exif.get('FocalLength35efl'))
     zoom_ratio = parse_float(exif.get('DigitalZoomRatio'))
     if zoom_ratio != 1:
@@ -149,8 +160,12 @@ def process_single_image(file_path, root_dir):
         filename=file_path.name,
         rel_dir=rel_dir,
         root_dir=str(root_dir),
+        image_height=image_height,
+        image_width=image_width,
+        image_channel=image_channel,
         lat=lat,
         lon=lon,
+        alt=alt,
         abs_alt=abs_alt,
         rel_alt=rel_alt,
         yaw=yaw,
@@ -162,6 +177,7 @@ def process_single_image(file_path, root_dir):
         lrf_lon=lrf_lon,
         lrf_dist=lrf_dist,
         fov=fov,
+        focal=focal,
         focal_35=focal_35,
         zoom_ratio=zoom_ratio,
         camera_type=camera_type,

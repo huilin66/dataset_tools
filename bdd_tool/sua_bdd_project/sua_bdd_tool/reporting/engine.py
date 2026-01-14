@@ -12,21 +12,24 @@ from tqdm import tqdm
 
 import config
 from sua_bdd_tool.data.image_meta import MetadataManager
-from sua_bdd_tool.data.loaders import DedupLoader
+from sua_bdd_tool.data.loaders import DedupLoader, DedupLoader_AuxImage
 from sua_bdd_tool.utils.analysis import action_judge, img_sta, level_judge
-from sua_bdd_tool.utils.projection import calculate_gsd, pixel_to_physical, safe_float
+from sua_bdd_tool.utils.projection import calculate_facade_gsd, pixel_to_physical, safe_float, convert_coordinate
 from sua_bdd_tool.utils.visualization import crop_box, draw_box
 
 from . import EXPORTER_MAP
 
 class ImageProcessor:
-    def __init__(self, labels, colors, vis_dir, crop_dir, metadata_provider=None):
+    def __init__(self, labels, colors, vis_dir, crop_dir, vis_aux_dir=None, crop_aux_dir=None, metadata_provider=None, exif_db=None):
         self.meta_mgr = MetadataManager()
         self.labels = labels
         self.colors = colors
         self.vis_dir = vis_dir
+        self.vis_aux_dir = vis_aux_dir
         self.crop_dir = crop_dir
+        self.crop_aux_dir = crop_aux_dir
         self.metadata_provider = metadata_provider
+        self.exif_db = exif_db
 
     def process(self, item):
         img_path = item['image_path']
@@ -48,7 +51,7 @@ class ImageProcessor:
             import config
             dist_mm = getattr(config, 'DEFAULT_DISTANCE_M', 15.0) * 1000
         
-        gsd = calculate_gsd(dist_mm, focal, specs['sensor_width_mm'], img_w)
+        gsd = calculate_facade_gsd(dist_mm, focal, specs['sensor_width_mm'], img_w)
 
         # 可视化
         vis_path = os.path.join(self.vis_dir, f"{stem_name}.png")
@@ -209,41 +212,6 @@ class ReportEngine:
         print("--- Run Completed ---")
 
 
-
-def parse_dms_to_dd(dms_str):
-    """
-    解析 DMS 格式字符串 (e.g. '22 deg 18' 35.81" N') 为十进制度数
-    """
-    if not isinstance(dms_str, str):
-        return 0.0
-    
-    # 匹配模式: 数字 deg 数字' 数字" 方向
-    pattern = r"(\d+)\s*deg\s*(\d+)'\s*([\d.]+)\"\s*([NSEW])"
-    match = re.search(pattern, dms_str)
-    
-    if match:
-        deg = float(match.group(1))
-        minute = float(match.group(2))
-        second = float(match.group(3))
-        direction = match.group(4)
-        
-        # 核心公式: 度 + 分/60 + 秒/3600
-        dd = deg + minute/60 + second/3600
-        
-        # 南纬(S)和西经(W)为负数
-        if direction in ['S', 'W']:
-            dd = -dd
-            
-        return dd
-    
-    # 兜底：如果格式不对，尝试直接转换 (防止已经是数字的情况)
-    try:
-        return float(dms_str)
-    except:
-        return 0.0
-
-
-
 class DedupProcessor(ImageProcessor):
     """
     专用处理器：负责图像处理 + 提取原始 GPS 信息
@@ -251,45 +219,35 @@ class DedupProcessor(ImageProcessor):
     def process(self, item):
         img_path = item['image_path']
         detections = item['detections']
-        stem_name = Path(img_path).stem
+        img_name = Path(img_path).name
+        img_stem = Path(img_path).stem
         
         img = Image.open(img_path).convert('RGB')
-        img_w, img_h = img.size
+
+        img_exif = self.exif_db.get(img_name, None)
+        focal_length = img_exif.get('focal', None) if img_exif else None
+        lrf_dist = img_exif.get('lrf_dist', None) if img_exif else None
+        lon = img_exif.get('lon', None) if img_exif else None   
+        lat = img_exif.get('lat', None) if img_exif else None   
+        gps_str = convert_coordinate(lat, lon)
+
+        if img_exif["model"] in ["DJI M4T", "M4T"]:
+            if img_exif["camera_type"] in ["WideCamera"]:
+                pixel_size_um = config.CAMERA_PARAMS["M4T_Wide"]["pixel_size_um"]
+            elif img_exif["camera_type"] in ["InfraredCamera"]:
+                pixel_size_um = config.CAMERA_PARAMS["M4T_Thermal"]["pixel_size_um"]
+            else:
+                raise ValueError(f"Unknown camera_type: {img_exif['camera_type']}")
         
-        # 1. 提取元数据 (包含 GPS)
-        all_meta = self.meta_mgr.get_unified_metadata(img_path, img)
-        specs, _ = self.meta_mgr.get_camera_specs(all_meta, stem_name)
-        
-        # 提取 GPS 信息
-        lat = parse_dms_to_dd(all_meta.get('GPSLatitude'))
-        lon = parse_dms_to_dd(all_meta.get('GPSLongitude'))
-        alt = safe_float(all_meta.get('AbsoluteAltitude')) or safe_float(all_meta.get('GPSAltitude'))
-        
-        # 格式化 GPS 字符串
-        gps_str = "N/A"
-        if lat != 0.0 and lon != 0.0:
-            # 判断纬度方向
-            lat_dir = "N" if lat >= 0 else "S"
-            # 判断经度方向
-            lon_dir = "E" if lon >= 0 else "W"
-            
-            # 取绝对值显示，并加上字母
-            gps_str = f"{abs(lat):.6f}{lat_dir}, {abs(lon):.6f}{lon_dir}"
-            
-            if alt:
-                gps_str += f"\nAlt: {alt:.1f}m"
-        
-        # GSD 计算
-        focal = safe_float(all_meta.get('FocalLength')) or specs['focal_length_mm']
-        dist_mm = getattr(config, 'DEFAULT_DISTANCE_M', 15.0) * 1000 
-        gsd = calculate_gsd(dist_mm, focal, specs['sensor_width_mm'], img_w)
+        gsd = calculate_facade_gsd(lrf_dist, focal_length, pixel_size_um)
+
 
         # 2. 可视化
-        vis_path = os.path.join(self.vis_dir, f"{stem_name}.png")
+        vis_path = os.path.join(self.vis_dir, f"{img_stem}.png")
         vis_detections = detections[:, :] if len(detections) > 0 else []
         draw_box(img.copy(), vis_detections, self.labels, self.colors).save(vis_path)
         
-        crop_subdir = os.path.join(self.crop_dir, stem_name)
+        crop_subdir = os.path.join(self.crop_dir, img_stem)
         os.makedirs(crop_subdir, exist_ok=True)
         crops = crop_box(img, vis_detections)
 
@@ -297,7 +255,7 @@ class DedupProcessor(ImageProcessor):
         records = []
         for i, bbox in enumerate(detections):
             cls_id = int(bbox[0])
-            track_id = int(bbox[6]) # Dedup ID
+            id = int(bbox[6]) # Dedup ID
             
             w_pix = int(bbox[4]-bbox[2])
             h_pix = int(bbox[5]-bbox[3])
@@ -308,13 +266,13 @@ class DedupProcessor(ImageProcessor):
             level = level_judge([w_cm, h_cm])
             action = action_judge(level, category)
             
-            crop_p = os.path.join(crop_subdir, f"{i}.png")
-            if i < len(crops): crops[i].save(crop_p)
+            crop_path = os.path.join(crop_subdir, f"{i}.png")
+            if i < len(crops): crops[i].save(crop_path)
 
             res = {
                 'Path': img_path,
                 'VisPath': vis_path, 
-                'CropPath': crop_p, 
+                'CropPath': crop_path, 
                 'Category': category,
                 'Level': level,
                 'Score': float(bbox[1]),
@@ -328,19 +286,118 @@ class DedupProcessor(ImageProcessor):
                 'GPS': gps_str,
                 
                 # 内部字段
-                '_track_id': track_id,
-                '_stem_name': stem_name
+                'id': id,
+                'img_name': img_name
             }
             records.append(res)
             
         return pd.DataFrame(records)
 
+
+class DedupProcessor_AuxImage(ImageProcessor):
+    """
+    专用处理器：负责图像处理 + 提取原始 GPS 信息
+    """
+    def process(self, item):
+        detections = item['detections']
+        img_path = item['image_path']
+        img_aux_path = item['image_aux_path']
+        img_name = Path(img_path).name
+        img_stem = Path(img_path).stem
+        # img_aux_name = Path(img_aux_path).name
+        # img_aux_stem = Path(img_aux_path).stem
+
+        img = Image.open(img_path).convert('RGB')
+        img_aux = Image.open(img_aux_path).convert('RGB')
+
+        img_exif = self.exif_db.get(img_name, None)
+        focal_length = img_exif.get('focal', None) if img_exif else None
+        lrf_dist = img_exif.get('lrf_dist', None) if img_exif else None
+        lon = img_exif.get('lon', None) if img_exif else None   
+        lat = img_exif.get('lat', None) if img_exif else None   
+        gps_str = convert_coordinate(lat, lon)
+
+        if img_exif["model"] in ["DJI M4T", "M4T"]:
+            if img_exif["camera_type"] in ["WideCamera"]:
+                pixel_size_um = config.CAMERA_PARAMS["M4T_Wide"]["pixel_size_um"]
+            elif img_exif["camera_type"] in ["InfraredCamera"]:
+                pixel_size_um = config.CAMERA_PARAMS["M4T_Thermal"]["pixel_size_um"]
+            else:
+                raise ValueError(f"Unknown camera_type: {img_exif['camera_type']}")
+        
+        gsd = calculate_facade_gsd(lrf_dist, focal_length, pixel_size_um)
+
+
+        # 2. 可视化
+        vis_path = os.path.join(self.vis_dir, f"{img_stem}.png")
+        vis_aux_path = os.path.join(self.vis_aux_dir, f"{img_stem}.png")
+
+        vis_detections = detections[:, :] if len(detections) > 0 else []
+        draw_box(img.copy(), vis_detections, self.labels, self.colors).save(vis_path)
+        draw_box(img_aux.copy(), vis_detections, self.labels, self.colors).save(vis_aux_path)
+        
+        crop_subdir = os.path.join(self.crop_dir, img_stem)
+        crop_aux_subdir = os.path.join(self.crop_aux_dir, img_stem)
+        os.makedirs(crop_subdir, exist_ok=True)
+        os.makedirs(crop_aux_subdir, exist_ok=True)
+        crops = crop_box(img, vis_detections)
+        crops_aux = crop_box(img_aux, vis_detections)
+
+        # 3. 生成记录
+        records = []
+        for i, bbox in enumerate(detections):
+            cls_id = int(bbox[0])
+            id = int(bbox[6]) # Dedup ID
+            
+            w_pix = int(bbox[4]-bbox[2])
+            h_pix = int(bbox[5]-bbox[3])
+            w_cm = pixel_to_physical(w_pix, gsd)
+            h_cm = pixel_to_physical(h_pix, gsd)
+
+            category = self.labels[cls_id] if cls_id < len(self.labels) else f"Class_{cls_id}"
+            level = level_judge([w_cm, h_cm])
+            action = action_judge(level, category)
+            
+            crop_path = os.path.join(crop_subdir, f"{i}.png")
+            if i < len(crops): crops[i].save(crop_path)
+            crop_aux_path = os.path.join(crop_aux_subdir, f"{i}.png")
+            if i < len(crops_aux): crops_aux[i].save(crop_aux_path)
+            
+            res = {
+                'Path': img_path,
+                'VisPath': vis_path, 
+                'VisAuxPath': vis_aux_path,
+                'CropPath': crop_path, 
+                'CropAuxPath': crop_aux_path,
+                'Category': category,
+                'Level': level,
+                'Score': float(bbox[1]),
+                'Action': action,
+                'W_pix': w_pix, 'H_pix': h_pix, 'Area_pix': w_pix * h_pix,
+                'W_cm': float(f"{w_cm:.2f}") if w_cm else "N/A",
+                'H_cm': float(f"{h_cm:.2f}") if h_cm else "N/A", 
+                'Area_cm2': w_cm*h_cm if (w_cm and h_cm) else "N/A",
+                
+                # === 注入 GPS ===
+                'GPS': gps_str,
+                
+                # 内部字段
+                'id': id,
+                'img_name': img_name
+            }
+            records.append(res)
+            
+        return pd.DataFrame(records)
+
+
+
 class DedupReportEngine(ReportEngine):
     """
     Dedup 专用引擎 (支持多线程)
     """
-    def __init__(self, loader, labels, project_info_path, group_info_path, views_csv_path=None, target_class_names=None, floor_map_path=None):
+    def __init__(self, loader, labels, project_info_path, group_info_path, views_csv_path=None, target_class_names=None, floor_map_path=None, exif_db=None):
         super().__init__(loader, labels)
+        self.exif_db=exif_db
         if hasattr(loader, 'target_class_names') and loader.target_class_names:
             self.labels = loader.target_class_names
         elif target_class_names:
@@ -378,13 +435,13 @@ class DedupReportEngine(ReportEngine):
         ele_str = self.views_map.get(view_name.strip(), self.views_map.get(view_name, "Unknown"))
 
         for idx, row in df.iterrows():
-            track_id = row['_track_id']
-            img_name = row['_stem_name']
+            id = row['id']
+            img_name = row['img_name']
             
             fl = "N/A"
             if img_name in self.proj_meta:
                 for item in self.proj_meta[img_name]:
-                    if item.get('id') == track_id:
+                    if item.get('id') == id:
                         fl = item.get('floor', 'N/A')
                         proj = item.get('projection_world', {})
                         h_real_m = proj.get('h (obj_height_m)', proj.get('h', 0))
@@ -397,7 +454,7 @@ class DedupReportEngine(ReportEngine):
                         break
             
             floors.append(fl)
-            ids.append(track_id)
+            ids.append(id)
             orientations.append(ele_str)
 
         df['ID'] = ids
@@ -502,6 +559,7 @@ class DedupReportEngine(ReportEngine):
         
         print(f"Report Generated: {output_path}")
 
+
 class BatchDedupEngine(DedupReportEngine):
     """
     派生类：用于批量处理 View 并生成汇总报告。
@@ -526,6 +584,7 @@ class BatchDedupEngine(DedupReportEngine):
             txt_dir=label_dir, 
             class_path=class_path, 
             target_cls_ids=target_cls_ids,
+            exif_db=self.exif_db,
         )
         
         # ================== 【修复点开始】 ==================
@@ -557,10 +616,74 @@ class BatchDedupEngine(DedupReportEngine):
             os.makedirs(self.crop_dir, exist_ok=True)
 
         # 5. 处理图像 (确保传入了修复后的 self.labels)
-        processor = DedupProcessor(self.labels, config.COLOR_PALETTE, self.vis_dir, self.crop_dir)
+        processor = DedupProcessor(self.labels, config.COLOR_PALETTE, self.vis_dir, self.crop_dir, exif_db=self.exif_db)
         
         view_dfs = []
         for item in tqdm(raw_data, desc=f"    Analyzing {view_id}", leave=False):
+            df = processor.process(item)
+            if not df.empty:
+                df = self._enrich_data(df, view_id)
+                view_dfs.append(df)
+        
+        if not view_dfs:
+            return pd.DataFrame()
+            
+        return pd.concat(view_dfs, ignore_index=True)
+
+    def process_view_data_aux(self, view_id, img_dir, img_aux_dir, label_dir, project_info_path, class_path, target_cls_ids=None):
+        """
+        [核心扩展方法]
+        处理单个 View，返回 DataFrame，但不生成 PDF。
+        """
+        print(f"--- [Batch] Collecting data for {view_id} ---")
+        
+        # 1. 动态实例化 Loader
+        current_loader = DedupLoader_AuxImage(
+            img_dir=img_dir, 
+            img_aux_dir=img_aux_dir,
+            txt_dir=label_dir, 
+            class_path=class_path, 
+            target_cls_ids=target_cls_ids,
+            exif_db=self.exif_db,
+        )
+        
+        # ================== 【修复点开始】 ==================
+        # 关键修复：如果当前 Engine 没有标签（None或空），从 Loader 中获取
+        # DedupLoader 初始化时会自动读取 config.CLASS_PATH 并生成 target_class_names
+        if not self.labels and hasattr(current_loader, 'target_class_names'):
+            if current_loader.target_class_names:
+                self.labels = current_loader.target_class_names
+                # print(f"    [Info] Labels updated from loader: {self.labels}")
+        # ================== 【修复点结束】 ==================
+        
+        # 2. 更新项目元数据
+        if os.path.exists(project_info_path):
+             self.proj_meta = self._load_json(project_info_path)
+        else:
+             self.proj_meta = {}
+
+        # 3. 加载原始数据
+        raw_data = current_loader.load()
+        if not raw_data: 
+            print(f"    No data found for {view_id}")
+            return pd.DataFrame()
+
+        # 4. 准备图片输出路径
+        if not hasattr(self, 'vis_dir') or self.vis_dir is None:
+            self.vis_dir = os.path.join(label_dir, '../batch_vis')
+            self.crop_dir = os.path.join(label_dir, '../batch_crop')
+            self.vis_aux_dir = os.path.join(label_dir, '../batch_vis_aux')
+            self.crop_aux_dir = os.path.join(label_dir, '../batch_crop_aux')
+            os.makedirs(self.vis_dir, exist_ok=True)
+            os.makedirs(self.crop_dir, exist_ok=True)
+            os.makedirs(self.vis_aux_dir, exist_ok=True)
+            os.makedirs(self.crop_aux_dir, exist_ok=True)
+
+        # 5. 处理图像 (确保传入了修复后的 self.labels)
+        processor = DedupProcessor_AuxImage(self.labels, config.COLOR_PALETTE, self.vis_dir, self.crop_dir, self.vis_aux_dir, self.crop_aux_dir, exif_db=self.exif_db)
+        
+        view_dfs = []
+        for item in tqdm(raw_data, desc=f"Analyzing {view_id}", leave=False):
             df = processor.process(item)
             if not df.empty:
                 df = self._enrich_data(df, view_id)

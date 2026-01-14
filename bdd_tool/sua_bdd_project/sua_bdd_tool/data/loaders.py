@@ -5,11 +5,13 @@ import numpy as np
 from pathlib import Path
 from PIL import Image
 from collections import Counter
+from sua_bdd_tool.utils.file_opt import find_all_images
 
 class YoloLoader:
-    def __init__(self, img_dir, txt_dir, class_path, target_cls_ids=None):
+    def __init__(self, img_dir, txt_dir, class_path, target_cls_ids=None, exif_db=None):
         self.img_dir = img_dir
         self.txt_dir = txt_dir
+        self.exif_db = exif_db
 
         # 1. 读取完整类别列表
         self.full_classes = self._read_classes(class_path)
@@ -58,14 +60,8 @@ class YoloLoader:
         加载数据并返回标准格式列表
         Returns: List of dict {'image_path': str, 'detections': np.array}
         """
-        data_list = []
-        img_extensions = ['*.jpg', '*.jpeg', '*.png', '*.bmp']
-        img_paths = []
-        for ext in img_extensions:
-            img_paths.extend(glob.glob(os.path.join(self.img_dir, ext)))
-            img_paths.extend(glob.glob(os.path.join(self.img_dir, ext.upper())))
-        
-        img_paths = sorted(list(set(img_paths))) 
+
+        img_paths = find_all_images(self.img_dir)
         print(f"[Loader] Found {len(img_paths)} images in {self.img_dir}")
 
         # ✅ 1. 初始化统计器
@@ -73,6 +69,7 @@ class YoloLoader:
         final_counter = Counter()  # 统计通过筛选后保留的 ID
         total_boxes_raw = 0
 
+        data_list = []
         for img_path in img_paths:
             stem = Path(img_path).stem
             txt_path = os.path.join(self.txt_dir, stem + '.txt')
@@ -140,7 +137,6 @@ class YoloLoader:
         return data_list
 
 
-
 class DedupLoader(YoloLoader):
     """
     专门加载 yolo_dedup.py 生成的 labels_dedup_fuse 数据
@@ -184,3 +180,94 @@ class DedupLoader(YoloLoader):
         # 复用父类逻辑，但因为 _yolo_norm_to_pixel 变了，
         # 返回的 detections numpy array 会多一列
         return super().load()
+
+
+class DedupLoader_AuxImage(DedupLoader):
+    def __init__(self, img_dir, img_aux_dir, txt_dir, class_path, target_cls_ids=None, exif_db=None, img_aux_vis_dir=None):
+        super().__init__(img_dir, txt_dir, class_path, target_cls_ids, exif_db)
+        self.img_aux_dir = img_aux_dir
+        self.img_aux_vis_dir = img_aux_vis_dir
+
+    def load(self):
+        """
+        加载数据并返回标准格式列表
+        Returns: List of dict {'image_path': str, 'detections': np.array}
+        """
+
+        img_paths = find_all_images(self.img_dir)
+        img_aux_paths = find_all_images(self.img_aux_dir)
+        print(f"[Loader] Found {len(img_paths)} images in {self.img_dir}")
+        print(f"[Loader] Found {len(img_aux_paths)} aux images in {self.img_aux_dir}")
+        
+        # ✅ 1. 初始化统计器
+        raw_counter = Counter()    # 统计 txt 文件里实际存在的 ID
+        final_counter = Counter()  # 统计通过筛选后保留的 ID
+        total_boxes_raw = 0
+
+        data_list = []
+        for img_path, img_aux_path in zip(img_paths, img_aux_paths):
+            stem = Path(img_path).stem
+            txt_path = os.path.join(self.txt_dir, stem + '.txt')
+            detections = []
+            
+            # (读取图片尺寸部分省略，保持原样)
+            with Image.open(img_path) as img:
+                w, h = img.size
+            
+            if os.path.exists(txt_path):
+                with open(txt_path, 'r') as f:
+                    lines = f.readlines()
+                    for line in lines:
+                        if line.strip():
+                            det = self._yolo_norm_to_pixel(line, w, h)
+                            
+                            # det[0] 是 cls_id
+                            cls_id = int(det[0])
+
+                            # ✅ 2. 在筛选前统计（这是最真实的 txt 数据）
+                            raw_counter[cls_id] += 1
+                            total_boxes_raw += 1
+
+                            # === 类别筛选逻辑 ===
+                            if self.target_cls_ids is not None:
+                                # 🔍 重点怀疑对象：如果 v32 对应的 ID 不在这里，就被 continue 扔掉了
+                                if cls_id not in self.target_cls_ids:
+                                    continue 
+                            
+                            # ✅ 3. 在筛选后统计
+                            final_counter[cls_id] += 1
+                            detections.append(det)
+            
+            data_list.append({
+                'image_path': img_path,
+                'image_aux_path': img_aux_path,
+                'detections': np.array(detections) if detections else np.array([])
+            })
+            
+        # ✅ 4. 打印诊断报告 (这里会告诉你 v32 去哪了)
+        print("\n" + "="*50)
+        print(f"📊 [Loader Statistic Report]")
+        print(f"   - 原始检测框总数 (Raw): {total_boxes_raw}")
+        print(f"   - 筛选后保留总数 (Final): {sum(final_counter.values())}")
+        print(f"   - 目标 ID 列表 (target_cls_ids): {self.target_cls_ids}")
+        print("-" * 50)
+        print(f"{'Class ID':<10} | {'原始数量':<10} | {'最终数量':<10} | {'状态'}")
+        print("-" * 50)
+        
+        # 遍历所有出现过的 ID
+        all_ids = sorted(raw_counter.keys())
+        for cid in all_ids:
+            raw_count = raw_counter[cid]
+            final_count = final_counter[cid]
+            
+            status = "✅ 正常"
+            if raw_count > 0 and final_count == 0:
+                status = "❌ 被过滤 (不在 target_ids 中)"
+            elif raw_count != final_count:
+                status = "⚠️ 部分过滤"
+                
+            print(f"{cid:<10} | {raw_count:<10} | {final_count:<10} | {status}")
+            
+        print("="*50 + "\n")
+
+        return data_list
