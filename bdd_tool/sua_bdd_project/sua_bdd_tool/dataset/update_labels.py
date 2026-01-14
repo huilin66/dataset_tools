@@ -520,11 +520,11 @@ if __name__ == "__main__":
 
     # ================= 配置区域 =================
 
-    LBL_DIR = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\dataset\rgb_selected_3_p12\labels"       # 标注文件夹
-    IMG_DIR = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\dataset\rgb_selected_3_p12\images"       # 图片文件夹
-    OUT_DIR = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\dataset\rgb_selected_3_p12_v2\labels"   # 输出文件夹
+    LBL_DIR = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\dataset\rgb_selected_3_p3\labels"       # 标注文件夹
+    IMG_DIR = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\dataset\rgb_selected_3_p3\images"       # 图片文件夹
+    OUT_DIR = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\dataset\rgb_selected_3_p3_v3\labels"   # 输出文件夹
     
-    MIN_W = 50  # 最小宽度像素
-    MIN_H = 50  # 最小高度像素
+    MIN_W = 32  # 最小宽度像素
+    MIN_H = 32  # 最小高度像素
 
     remove_small_boxes_by_pixel(LBL_DIR, IMG_DIR, OUT_DIR, MIN_W, MIN_H)

@@ -15,22 +15,16 @@ T_VIEWS_EXIF_JSON = os.path.join(DOCUMENT_PATH, "exif_thermal_views.json")
 T_VIEWS_EXIF_UPDATE_JSON = os.path.join(DOCUMENT_PATH, "exif_thermal_views_update.json")
 VIEW_DIST_STATISTICS_JSON = os.path.join(DOCUMENT_PATH, "view_dist_statistics.json")
 CLASS_TXT = os.path.join(DOCUMENT_PATH, "class.txt")
-REPORT_DIR = os.path.join(ROOT_DIR, "reports")
 
 SPLIT_DATA_PATH = os.path.join(ROOT_DIR, "data_split")
 
 DATA_RGB_PATH = os.path.join(SPLIT_DATA_PATH, "visible")
 VIEWS_RGB_PATH = os.path.join(SPLIT_DATA_PATH, "visible_views")
 VIEWS_RGB_YOLO_PATH = os.path.join(SPLIT_DATA_PATH, "visible_views_infer")
-VIEWS_RGB_YOLO_DEDUP_PATH = os.path.join(SPLIT_DATA_PATH, "visible_views_infer_dedup")
-VIEWS_RGB_YOLO_DEDUP_VIS_ALL_PATH = os.path.join(SPLIT_DATA_PATH, "visible_views_infer_dedup_all")
-VIEWS_RGB_YOLO_DEDUP_VIS_BY_ID_PATH = os.path.join(SPLIT_DATA_PATH, "visible_views_infer_dedup_by_id")
-VIEWS_RGB_YOLO_DEDUP_FUSE_PATH = os.path.join(SPLIT_DATA_PATH, "visible_views_infer_dedup_fuse")
-VIEWS_RGB_YOLO_DEDUP_FUSE_VIS_ALL_PATH = os.path.join(SPLIT_DATA_PATH, "visible_views_infer_dedup_fuse_all")
-VIEWS_RGB_YOLO_DEDUP_FUSE_VIS_BY_ID_PATH = os.path.join(SPLIT_DATA_PATH, "visible_views_infer_dedup_fuse_by_id")
+VIEWS_RGB_YOLO_DEDUP_DIR = os.path.join(SPLIT_DATA_PATH, "visible_views_infer_dedup")
 
-VIEWS_RGB_YOLO_DEDUP_PROJ_INFO_PATH = os.path.join(SPLIT_DATA_PATH, "visible_views_infer_dedup_project_info.json")
-VIEWS_RGB_YOLO_DEDUP_GROUP_INFO_PATH = os.path.join(SPLIT_DATA_PATH, "visible_views_infer_dedup_group_info.json")
+VIEWS_RGB_ALIGN_PATH = os.path.join(SPLIT_DATA_PATH, "visible_views_align")
+VIEWS_RGB_ALIGN_COMPARE_PATH = os.path.join(SPLIT_DATA_PATH, "visible_views_align_compare")
 
 DATA_T_PATH = os.path.join(SPLIT_DATA_PATH, "thermal")
 VIEWS_T_PATH = os.path.join(SPLIT_DATA_PATH, "thermal_views")
@@ -48,10 +42,15 @@ YOLO_DEDUP_FUSE_VIS_BY_ID_NAME  = "labels_dedup_fuse_vis_by_id"
 
 YOLO_DEDUP_PROJ_INFO_NAME = "project_info.json"
 YOLO_DEDUP_GROUP_INFO_NAME = "group_info.json"
+YOLO_DEDUP_PROJ_VIS_NAME = 'project_vis.png'
 
-
+REPORT_DIR = os.path.join(DOCUMENT_PATH, "reports")
 REPORT_OVERALL_PATH = os.path.join(REPORT_DIR, "report_overall.pdf")
-REPORT_PATH = os.path.join(REPORT_DIR, "report_view.pdf")
+REPORT_VIEW_PATH = os.path.join(REPORT_DIR, "report_view.pdf")
+VIEW_REPORT = True
+REPORT_OVERALL_STYLE_ID=3
+REPORT_VIEW_STYLE_ID=4
+
 
 ANNO_DATA_PATH = os.path.join(ROOT_DIR, "data_anno")
 RGB_SELECT_STEP = 3
@@ -110,8 +109,6 @@ DEDUP_VIS = True
 VIS_FONT_SIZE=30
 
 DISPLAY_LEVELS = ['Minor', 'Moderate', 'Major'] 
-
-REPORT_STYLE_ID=4
 
 LEVELS_THRESHOLD = {
     'pix': [100, 500],

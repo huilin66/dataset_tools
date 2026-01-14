@@ -20,6 +20,16 @@ def project_adaptive(px, py, W, H, meta, wall_distance_m):
     :param meta: 当前图片的元数据 (alt, pitch, focal_35mm)
     :param wall_distance_m: 全局固定的墙面距离
     """
+
+    # 0. 【核心修正】将 LRF 直线距离转换为水平距离
+    # 假设 lrf_distance_m 是激光测距得到的直线距离
+    # 假设 pitch 水平为0，向上为正，向下为负
+    pitch_rad = math.radians(meta['pitch'])
+
+    # 水平距离 = 直线距离 * cos(云台俯仰角)
+    # 注意：这里假设激光打在图片中心点 (cx, cy)。如果激光没对准中心，会有误差，但通常可忽略。
+    dist_horizontal = wall_distance_m * math.cos(pitch_rad)
+
     # 1. 计算像素焦距 (基于 35mm 等效焦距)
     # 35mm 全画幅传感器宽度为 36mm
     # fx_pix = (F_35mm / 36mm) * ImageWidth_pix
@@ -38,13 +48,14 @@ def project_adaptive(px, py, W, H, meta, wall_distance_m):
     # 注意：DJI GimbalPitch 向上为正还是向下为正？通常水平是0，向下是负。
     # 根据你的数据 '+0.00'，假设向上为正。
     # 修正：通常俯视拍摄，Pitch是负的。如果 Pitch 是 +0.0，说明是水平拍摄。
-    theta_total = math.radians(meta['pitch']) + alpha_y
+    theta_total = pitch_rad + alpha_y
     
     # 4. 计算物理坐标
     # Z (高度) = 无人机高度 + 垂直增量
     # 垂直增量 = 距离 * tan(总角度)
-    z = meta['abs_alt'] + wall_distance_m * math.tan(theta_total)
-    
+    # z = meta['abs_alt'] + wall_distance_m * math.tan(theta_total)
+    z = meta['abs_alt'] + dist_horizontal * math.tan(theta_total)
+
     # X (水平) = 距离 * tan(水平夹角) / cos(垂直夹角修正)
     # 简单近似：x = u / fx * distance
     x = (u / fx) * wall_distance_m
@@ -95,19 +106,44 @@ def yolo_projecting(img_dir, yolo_txt_dir, exif_db, floor_manager, global_wall_d
                 cx, cy, w, h = vals[1:5]
                 conf = vals[5] if len(vals) > 5 else 1.0
                 
-                # 转换回像素坐标
+                # 1. 还原像素坐标 (Pixel Coordinates)
+                # 计算左上角 (x1, y1) 和 右下角 (x2, y2)
+                # YOLO 格式是 center_x, center_y, width, height
                 px, py, bw, bh = cx*W, cy*H, w*W, h*H
+
+                # # 1. 投影计算 (得到绝对海拔 Z)
+                # world_x, world_z_abs = project_adaptive(px, py, W, H, meta, global_wall_dist)
+
+                x1_pix, y1_pix, x2_pix, y2_pix = px - bw/2, py - bh/2, px + bw/2, py + bh/2
+
+                # 2. 【关键】分别投影 Top-Left 和 Bottom-Right
+                # 投影左上角 -> 得到墙面上物体的 左边界(Lx) 和 上边界(Tz)
+                world_x_left, world_z_top = project_adaptive(x1_pix, y1_pix, W, H, meta, meta['lrf_dist'])
                 
-                # 1. 投影计算 (得到绝对海拔 Z)
-                world_x, world_z_abs = project_adaptive(px, py, W, H, meta, global_wall_dist)
+                # 投影右下角 -> 得到墙面上物体的 右边界(Rx) 和 下边界(Bz)
+                world_x_right, world_z_bottom = project_adaptive(x2_pix, y2_pix, W, H, meta, meta['lrf_dist'])
+                
+                # 3. 重构物理属性
+                # 物理中心 X
+                world_x = (world_x_left + world_x_right) / 2
+                
+                # 物理中心 Z
+                world_z_abs = (world_z_top + world_z_bottom) / 2
+                
+                # 物理宽度 (由于透视，左右边界的投影距离可能不完全对称，取差值绝对值)
+                real_w = abs(world_x_right - world_x_left)
+                
+                # 物理高度 (这是解决“虚高”的关键)
+                real_h = abs(world_z_top - world_z_bottom)
+              
                 
                 # 2. [新增] 楼层计算
                 # 直接传入绝对海拔 Z
                 floor_name = floor_manager.get_floor(world_z_abs)
                 
                 # 计算物体实际高度
-                fx = (meta['focal_35'] / 36.0) * W
-                real_h = (bh / fx) * global_wall_dist
+                # fx = (meta['focal_35'] / 36.0) * W
+                # real_h = (bh / fx) * global_wall_dist
                 all_dets.append({
                     "gid": gid,
                     "img": image_name,

@@ -161,13 +161,13 @@ def generate_slice_split_txt(original_split_file, sliced_img_dir, output_split_f
 
 if __name__ == "__main__":
     # 修改这里为你真正的输入路径
-    root_dir = r'\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\dataset\rgb_selected_3_p12'
+    root_dir = r'\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\dataset\rgb_selected_3_p3'
     
     # 修改这里为你真正的输出路径（如果你想要保存在本地，就写本地路径如 C:\output）
     # 如果你保持原样，它就会保存在那个网络地址下
-    base_output_dir = r'\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\dataset\rgb_selected_3_p12_slice'
+    base_output_dir = r'\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\dataset\rgb_selected_3_p3_slice'
 
-    slice_nums = [640, 960, 1280]
+    slice_nums = [640, 960]
     
     orig_train_txt = os.path.join(root_dir, 'train.txt')
     orig_val_txt = os.path.join(root_dir, 'val.txt')

@@ -1,10 +1,15 @@
 from concurrent.futures import ProcessPoolExecutor
+import json
 import os
 from pathlib import Path
+from pathlib import Path
 import platform
+import random
 
 from PIL import Image, ImageDraw, ImageFont
 import cv2
+import matplotlib.patches as patches
+import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 from sua_bdd_tool.utils import load_class_names
@@ -300,6 +305,174 @@ class DedupVisualizer(YoloDetVisualizer):
                 print(f"❌ Error processing {img_name}: {e}")
 
 
+class FacadeVisualizer:
+    def __init__(self, floor_manager=None, font_size=20, color_palette=COLOR_PALETTE):
+        """
+        初始化可视化器
+        :param output_dir: 图片保存目录
+        :param view_name: 视图名称（用于生成文件名）
+        """
+        # 预设颜色盘 (避免颜色太乱)
+        self.palette = color_palette
+        self.color_map = {}
+        self.floor_manager = floor_manager
+
+    def _get_color(self, uid):
+        """获取颜色，并兼容 (0-255) 格式"""
+        color = None
+        
+        # 1. 获取原始颜色
+        if uid == -1:
+            color = '#BBBBBB'
+        elif uid in self.color_map:
+            color = self.color_map[uid]
+        else:
+            # 分配新颜色
+            if len(self.color_map) < len(self.palette):
+                color = self.palette[len(self.color_map)]
+            else:
+                color = "#"+''.join([random.choice('0123456789ABCDEF') for j in range(6)])
+            self.color_map[uid] = color
+
+        # 2. [关键修复] 检查并转换 (0-255) 的 RGB 元组为 (0-1)
+        if isinstance(color, (list, tuple)):
+            # 如果发现有数值大于 1.0，说明是 255 格式，需要归一化
+            if any(c > 1.0 for c in color):
+                color = [c / 255.0 for c in color]
+                # 确保转换后是 tuple 或 list，且数值在 0-1 之间
+                # 如果有 alpha 通道 (RGBA)，通常 alpha 是 0-1 或 0-255，这里简单统一除以 255
+                # 但要注意 matplotlib 的 alpha 参数通常是单独控制的
+        
+        return color
+
+    def load_and_plot(self, json_path, save_path, view_name):
+        """
+        主函数：读取 JSON 并绘图
+        :param json_path: projection_details.json 的路径
+        :param floor_manager: (可选) 传入 floor_manager 对象以绘制楼层线
+        :param save_suffix: 保存文件名的后缀
+        """
+        print(f"🎨 [FacadeVisualizer] Loading {json_path} ...")
+        
+        if not Path(json_path).exists():
+            print("❌ JSON file not found.")
+            return
+
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data_by_img = json.load(f)
+
+        # 1. 数据扁平化处理
+        all_points = []
+        unique_ids = set()
+        
+        for img_name, items in data_by_img.items():
+            for item in items:
+                proj = item['projection_world']
+                raw = item['raw_yolo']
+                
+                # 计算物理宽度: h_real * (w_pixel / h_pixel)
+                # 注意：假设像素长宽比为 1:1
+                aspect_ratio = raw['w'] / raw['h'] 
+                h_real = proj['h (obj_height_m)']
+                w_real = h_real * aspect_ratio
+
+                all_points.append({
+                    'x': proj['x (horizontal_m)'],
+                    'z': proj['z (height_m)'], # 这是中心点 Z
+                    'w': w_real,
+                    'h': h_real,
+                    'id': item['id'],
+                    'floor': item.get('floor', 'N/A')
+                })
+                unique_ids.add(item['id'])
+        min_boundary_x = min([p['x'] - p['w']/2 for p in all_points])
+
+        offset_x = -min_boundary_x
+        print(f"📐 Applying X-offset: {offset_x:.2f}m (Shifting negative values to positive)")
+        
+        for p in all_points:
+            p['x_plot'] = p['x'] + offset_x
+
+        if not all_points:
+            print("⚠️ No detection data to visualize.")
+            return
+
+        # 2. 开始绘图
+        self._plot_canvas(save_path, view_name, all_points, unique_ids)
+
+    def _plot_canvas(self, save_path, view_name, points, unique_ids):
+        # 动态计算画布大小
+        xs = [p['x_plot'] for p in points]
+        zs = [p['z'] for p in points]
+        x_span = max(xs) - min(xs)
+        z_span = max(zs) - min(zs)
+        
+        # 保持比例，但限制最小尺寸
+        fig_w = max(15, x_span / 2) 
+        fig_h = max(10, z_span / 2)
+        
+        fig, ax = plt.subplots(figsize=(fig_w, fig_h))
+        ax.set_title(f"Facade Map: {view_name} (IDs: {len(unique_ids)})", fontsize=16)
+        ax.set_xlabel("Horizontal Distance (m)")
+        ax.set_ylabel("Absolute Altitude (m)")
+        ax.grid(True, linestyle='--', alpha=0.6)
+        ax.set_aspect('equal') # 关键：保持 1:1 物理比例
+
+        # A. 绘制楼层线 (如果提供了 floor_manager)
+        if self.floor_manager:
+            # 假设 floor_manager 有一个方法或者属性获取所有楼层高度
+            # 这里模拟一下，你需要根据你的 floor_manager 实际结构调整
+            # 例如: floor_manager.floors = {'F1': 30.0, 'F2': 33.5}
+            if hasattr(self.floor_manager, 'floors_heights'): # 假设是个字典 {name: height}
+                 for fname, fheight in self.floor_manager.floors_heights.items():
+                     ax.axhline(y=fheight, color='gray', linestyle='-', alpha=0.3, linewidth=1)
+                     ax.text(min(xs)-2, fheight, fname, color='gray', va='center', fontsize=8)
+
+        # B. 绘制物体
+        groups = {}
+        for p in points:
+            groups.setdefault(p['id'], []).append(p)
+
+        for uid, group_points in groups.items():
+            color = self._get_color(uid)
+            
+            # 计算该组的几何中心，用于放置标签
+            center_x_sum = 0
+            center_z_sum = 0
+            
+            for p in group_points:
+                # Matplotlib Rectangle 接受左下角坐标 (x, y)
+                x0 = p['x_plot'] - p['w'] / 2
+                z0 = p['z'] - p['h'] / 2
+                
+                # 画框
+                rect = patches.Rectangle(
+                    (x0, z0), p['w'], p['h'],
+                    linewidth=1, edgecolor=color, facecolor=color, alpha=0.5
+                )
+                ax.add_patch(rect)
+                
+                # 画中心点
+                ax.plot(p['x_plot'], p['z'], marker='.', color='black', markersize=1, alpha=0.5)
+                
+                center_x_sum += p['x_plot']
+                center_z_sum += p['z']
+
+            # C. 绘制 ID 标签 (只在聚类中心画一次)
+            if uid != -1:
+                avg_x = center_x_sum / len(group_points)
+                avg_z = center_z_sum / len(group_points)
+                
+                # 标签带白底，防遮挡
+                ax.text(avg_x, avg_z, str(uid), fontsize=10, color='black', weight='bold',
+                        ha='center', va='center', 
+                        bbox=dict(boxstyle="circle,pad=0.2", fc="white", ec=color, alpha=0.8))
+
+        plt.tight_layout()
+        plt.savefig(save_path, dpi=200)
+        plt.close(fig) # 释放内存
+        print(f"✅ Visualization saved: {save_path}")
+
 def dedup_vis_colored(dets_by_img, img_dir, save_dir, class_names=None, font_size=20, vis=True):
     """
     优化后的 dedup_vis_colored
@@ -378,3 +551,5 @@ def batch_vis(root, use_pil, font, workers):
     # 4. 多进程执行
     with ProcessPoolExecutor(max_workers=workers) as executor:
         list(tqdm(executor.map(single_vis, tasks), total=len(tasks)))
+
+

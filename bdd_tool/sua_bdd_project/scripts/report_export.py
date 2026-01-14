@@ -17,7 +17,7 @@ def main():
     )
     os.makedirs(config.REPORT_DIR, exist_ok=True)
 
-    views_list = os.listdir(config.VIEWS_T_PATH)
+    views_list = os.listdir(config.VIEWS_T_PATH)[29:31]
     all_dfs = []
     print(f">>> Start to process {len(views_list)} views")
     for view_name in views_list:
@@ -40,6 +40,13 @@ def main():
             target_cls_ids=target_classes_is,
         )
         
+        if config.VIEW_REPORT:
+            engine.export_aggregated_report(
+                all_df=df, 
+                output_path=config.REPORT_VIEW_PATH.replace('.pdf', f'_{view_name}.pdf'),
+                style_id=config.REPORT_VIEW_STYLE_ID,
+            )
+
         if not df.empty:
             all_dfs.append(df)
 
@@ -51,7 +58,7 @@ def main():
         engine.export_aggregated_report(
             all_df=final_df, 
             output_path=config.REPORT_OVERALL_PATH,
-            style_id=config.REPORT_STYLE_ID,
+            style_id=config.REPORT_OVERALL_STYLE_ID,
         )
     else:
         print("No data collected from any view.")

@@ -4,6 +4,7 @@ from sua_bdd_tool.utils import load_class_names, load_json
 from sua_bdd_tool.structure.floor_manager import FloorManager
 from sua_bdd_tool.deduplicator.yolo_dedup import yolo_projecting, yolo_grouping, group_dets_by_image, merge_boxes_by_id, dets_write, analyze_and_vis_conflicts, export_projection_details_json, export_grouping_info
 from sua_bdd_tool.data.visulizer import dedup_vis
+from sua_bdd_tool.data.visulizer import FacadeVisualizer 
 
 def main():
 
@@ -12,11 +13,12 @@ def main():
     class_names = load_class_names(config.CLASS_TXT)
     target_classes = [class_names.index(cls) for cls in config.TARGET_CLASSES_NAME]
     floor_manager = FloorManager(cache_file=config.HEIGHT_MAP_JSON)
+    visualizer = FacadeVisualizer(floor_manager)
     exif_db = load_json(config.T_VIEWS_EXIF_JSON)
     views_distance = load_json(config.VIEW_DIST_STATISTICS_JSON)
     print(">>> Done!\n")
 
-    views_list = os.listdir(config.VIEWS_T_PATH)
+    views_list = os.listdir(config.VIEWS_T_PATH)[29:30]
     print(f">>> Start to process {len(views_list)} views")
     for view_name in views_list:
         view_distance = views_distance[view_name]
@@ -35,6 +37,7 @@ def main():
         YOLO_DEDUP_FUSE_VIS_BY_ID_PATH = os.path.join(YOLO_DEDUP_DIR, config.YOLO_DEDUP_FUSE_VIS_BY_ID_NAME)
 
         YOLO_DEDUP_PROJ_INFO_PATH = os.path.join(YOLO_DEDUP_DIR, config.YOLO_DEDUP_PROJ_INFO_NAME)
+        YOLO_DEDUP_PROJ_VIS_PATH = os.path.join(YOLO_DEDUP_DIR, config.YOLO_DEDUP_PROJ_VIS_NAME)
         YOLO_DEDUP_GROUP_INFO_PATH = os.path.join(YOLO_DEDUP_DIR, config.YOLO_DEDUP_GROUP_INFO_NAME)
 
         print(f">>>  [{view_name}] 1. loading and projecting yolo result...")
@@ -62,6 +65,7 @@ def main():
 
         print(f">>>  [{view_name}] 5. export projection, grouping info...")
         export_projection_details_json(all_dets_with_id, YOLO_DEDUP_PROJ_INFO_PATH)
+        visualizer.load_and_plot(YOLO_DEDUP_PROJ_INFO_PATH, YOLO_DEDUP_PROJ_VIS_PATH, view_name)
         export_grouping_info(all_dets_with_id, YOLO_DEDUP_GROUP_INFO_PATH)
         print(">>> Done!\n")
 

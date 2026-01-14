@@ -1,11 +1,16 @@
 import config
-from sua_bdd_tool.data.dataset_preparer import build_index, export_single_modal_data, split_data_by_index
-from sua_bdd_tool.structure.view_manager import process_views_data
-from sua_bdd_tool.structure.floor_manager import FloorManager
+from sua_bdd_tool.data.align import batch_align
+from sua_bdd_tool.data.dataset_preparer import (
+    build_index,
+    export_single_modal_data,
+    split_data_by_index,
+)
 from sua_bdd_tool.data.image_meta import build_metadata_json
-from sua_bdd_tool.utils.file_opt import copy_every_n_files
-from sua_bdd_tool.deduplicator.ssim_deduplication import filter_deduplication_ssim
 from sua_bdd_tool.data.lrf_tool import statistics_lrf_data
+from sua_bdd_tool.deduplicator.ssim_deduplication import filter_deduplication_ssim
+from sua_bdd_tool.structure.floor_manager import FloorManager
+from sua_bdd_tool.structure.view_manager import process_views_data
+from sua_bdd_tool.utils.file_opt import copy_every_n_files
 
 def main():
     pass
@@ -57,6 +62,11 @@ def main():
     filter_deduplication_ssim(config.ANNO_DATA_SELECT_RGB, config.ANNO_DATA_FILTER_RGB, num_workers=config.NUM_WORKERS)
     copy_every_n_files(config.DATA_T_PATH, config.ANNO_DATA_SELECT_T, config.T_SELECT_STEM, num_workers=config.NUM_WORKERS)
     filter_deduplication_ssim(config.ANNO_DATA_SELECT_T, config.ANNO_DATA_FILTER_T, num_workers=config.NUM_WORKERS)
+    print(">>> Done!\n")
+
+
+    print(">>> 10. align rgb extent with t extent...")
+    batch_align(config.RGBT_INDEX_FILE, config.VIEWS_RGB_PATH, config.VIEWS_T_PATH, config.VIEWS_RGB_ALIGN_PATH, config.VIEWS_RGB_ALIGN_COMPARE_PATH, num_workers=config.NUM_WORKERS)
     print(">>> Done!\n")
 
 

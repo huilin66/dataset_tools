@@ -187,3 +187,21 @@ class FloorManager:
         # 这里改用 self.base_height
         print(f"{'[BASE]':<10} ______  {self.base_height:7.2f}m")
         print("=" * 40 + "\n")
+    
+    @property
+    def floors_heights(self):
+        """
+        [新增] 适配 FacadeVisualizer 的接口
+        返回一个字典 { '楼层名': 高度值(通常是地板高度) }
+        """
+        simple_map = {}
+        # 遍历 floor_map, 提取每层的起始高度作为画线的依据
+        for name, (start_z, end_z) in self.floor_map.items():
+            # 这里的 name 可能是 "1/F", "2/F"，在图上显示不需要改
+            simple_map[name] = start_z
+        
+        # 也可以把顶层的封顶线加进去，但这可能导致图表最上面太挤
+        # 如果需要，可以解开下面这行
+        # simple_map['[TOP]'] = self.final_calc_height
+        
+        return simple_map

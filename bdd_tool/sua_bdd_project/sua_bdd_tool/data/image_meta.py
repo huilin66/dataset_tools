@@ -44,6 +44,7 @@ class ImageMeta:
 
     fov: Optional[float] = None
     focal_35: Optional[float] = None
+    zoom_ratio: Optional[float] = None
     camera_type: Optional[str] = None
     capture_time: Optional[str] = None
     shutter_type: Optional[str] = None
@@ -136,7 +137,9 @@ def process_single_image(file_path, root_dir):
 
     fov = parse_float(exif.get("FOV"))
     focal_35 = parse_float(exif.get('FocalLengthIn35mmFormat') or exif.get('FocalLength35efl'))
-
+    zoom_ratio = parse_float(exif.get('DigitalZoomRatio'))
+    if zoom_ratio != 1:
+        print(zoom_ratio, file_path)
     camera_type = exif.get('ImageSource')
     capture_time = exif.get('DateTimeOriginal')
     shutter_type = exif.get('ShutterType') or 'Unknown'
@@ -160,6 +163,7 @@ def process_single_image(file_path, root_dir):
         lrf_dist=lrf_dist,
         fov=fov,
         focal_35=focal_35,
+        zoom_ratio=zoom_ratio,
         camera_type=camera_type,
         capture_time=capture_time,
         shutter_type=shutter_type,
