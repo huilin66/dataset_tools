@@ -186,8 +186,6 @@ class DedupProcessor_AuxImage(ImageProcessor):
         img_aux_path = item['image_aux_path']
         img_name = Path(img_path).name
         img_stem = Path(img_path).stem
-        # img_aux_name = Path(img_aux_path).name
-        # img_aux_stem = Path(img_aux_path).stem
 
         img = Image.open(img_path).convert('RGB')
         img_aux = Image.open(img_aux_path).convert('RGB')

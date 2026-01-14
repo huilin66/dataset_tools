@@ -7,10 +7,12 @@ from sua_bdd_tool.utils import load_class_names, load_json
 def main():
     class_names = load_class_names(config.CLASS_TXT)
     exif_db = load_json(config.T_VIEWS_EXIF_UPDATE_JSON)
-    # target_classes_is = [class_names.index(cls) for cls in config.TARGET_CLASSES_NAME]
+    target_classes_ids = [class_names.index(cls) for cls in config.TARGET_CLASSES_NAME]
     engine = BatchDedupEngine(
         exif_db=exif_db,
         views_csv_path=config.VIEWS_MAP_CSV,
+        views_png_path=config.VIEWS_MAP_OVERVIEW_PNG,
+        explanation_json=config.EXPLANATION_JSON,
         floor_map_path=config.HEIGHT_MAP_JSON,
     )
     os.makedirs(config.REPORT_DIR, exist_ok=True)
@@ -46,6 +48,10 @@ def main():
                 all_df=df, 
                 output_path=config.REPORT_VIEW_PATH.replace('.pdf', f'_{view_name}.pdf'),
                 style_id=config.REPORT_VIEW_STYLE_ID,
+                logo_left=config.LOGO1,
+                logo_right=config.LOGO2,
+                target_cls_names=config.TARGET_CLASSES_NAME,
+                max_workers=config.NUM_WORKERS,
             )
 
         if not df.empty:
@@ -60,6 +66,10 @@ def main():
             all_df=final_df, 
             output_path=config.REPORT_OVERALL_PATH,
             style_id=config.REPORT_OVERALL_STYLE_ID,
+            logo_left=config.LOGO1,
+            logo_right=config.LOGO2,
+            target_cls_names=config.TARGET_CLASSES_NAME,
+            max_workers=config.NUM_WORKERS,
         )
     else:
         print("No data collected from any view.")

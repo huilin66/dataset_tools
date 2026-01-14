@@ -8,6 +8,7 @@ DOCUMENT_PATH = os.path.join(ROOT_DIR, "docs")
 RGBT_INDEX_FILE = os.path.join(DOCUMENT_PATH, "rgbt_index.json")
 VIEWS_MAP_XLSX = os.path.join(DOCUMENT_PATH, "views_map.xlsx")
 VIEWS_MAP_CSV = os.path.join(DOCUMENT_PATH, "views_map.csv")
+VIEWS_MAP_OVERVIEW_PNG = os.path.join(DOCUMENT_PATH, "views_map_overview.png")
 HEIGHT_MAP_JSON = os.path.join(DOCUMENT_PATH, "height_map.json")
 RGB_VIEWS_EXIF_JSON = os.path.join(DOCUMENT_PATH, "exif_visible_views.json")
 RGB_VIEWS_EXIF_UPDATE_JSON = os.path.join(DOCUMENT_PATH, "exif_visible_views_update.json")
@@ -15,6 +16,9 @@ T_VIEWS_EXIF_JSON = os.path.join(DOCUMENT_PATH, "exif_thermal_views.json")
 T_VIEWS_EXIF_UPDATE_JSON = os.path.join(DOCUMENT_PATH, "exif_thermal_views_update.json")
 VIEW_DIST_STATISTICS_JSON = os.path.join(DOCUMENT_PATH, "view_dist_statistics.json")
 CLASS_TXT = os.path.join(DOCUMENT_PATH, "class.txt")
+EXPLANATION_JSON = os.path.join(DOCUMENT_PATH, "explanation.json")
+LOGO1 = os.path.join(DOCUMENT_PATH, "logo1.png")
+LOGO2 = os.path.join(DOCUMENT_PATH, "logo2.png")
 
 SPLIT_DATA_PATH = os.path.join(ROOT_DIR, "data_split")
 
@@ -99,7 +103,7 @@ COLOR_PALETTE = [
     (128, 128, 0)     # 9: Olive
 ]
 
-TARGET_CLASSES_NAME = ['Subsurface Void High Risk', 'Subsurface Void High Medium', 'Subsurface Void High Low', 'Leakage High Risk']
+TARGET_CLASSES_NAME = ['Subsurface Void High Risk', 'Subsurface Void Medium Risk', 'Subsurface Void Low Risk', 'Leakage Medium Risk']
 
 IOU_THRESH = 0.5
 HEIGHT_THRESH_M = 0.3
@@ -114,8 +118,8 @@ DISPLAY_LEVELS = ['Minor', 'Moderate', 'Major']
 LEVELS_THRESHOLD = {
     'pix': [100, 500],
     'ratio': [0.1, 0.5],
-    'cm': [5, 20],
-    'mm': [50, 200],
+    'cm': [50, 100],
+    'mm': [500, 1000],
     }
 
 

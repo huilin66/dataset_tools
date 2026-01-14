@@ -139,8 +139,8 @@ class DedupReportEngine(ReportEngine):
     """
     Dedup 专用引擎 (支持多线程)
     """
-    def __init__(self, loader=None, labels=None, project_info_path=None, group_info_path=None, 
-                 views_csv_path=None, target_class_names=None, floor_map_path=None, exif_db=None):
+    def __init__(self, loader=None, labels=None, project_info_path=None, group_info_path=None, explanation_json=None,
+                 views_csv_path=None, views_png_path=None, target_class_names=None, floor_map_path=None, exif_db=None):
         
         # 调用父类初始化，允许 loader 为 None
         super().__init__(loader, labels)
@@ -157,6 +157,8 @@ class DedupReportEngine(ReportEngine):
         self.proj_meta = self._load_json(project_info_path) if project_info_path else {}
         
         self.views_map = self._load_views_map(views_csv_path)
+        self.views_png_path = views_png_path
+        self.explanation_json = self._load_json(explanation_json) if explanation_json else {}
 
         floor_config = self._load_json(floor_map_path).get('floor_map', {}) if floor_map_path else {}
         self.defined_floors = list(floor_config.keys()) if floor_config else []
@@ -299,7 +301,7 @@ class BatchDedupEngine(DedupReportEngine):
     """
     派生类：用于批量处理 View 并生成汇总报告。
     """
-    def __init__(self, exif_db, views_csv_path=None, floor_map_path=None, labels=None):
+    def __init__(self, exif_db, views_csv_path=None, views_png_path=None, floor_map_path=None, explanation_json=None, labels=None):
         """
         初始化批量引擎。
         只需传入全局通用的数据库和映射表，无需传入具体的 loader 或 project_path。
@@ -310,7 +312,9 @@ class BatchDedupEngine(DedupReportEngine):
             project_info_path=None,   # 批量模式下动态加载，初始为空
             group_info_path=None,     # 不需要
             views_csv_path=views_csv_path,
+            views_png_path=views_png_path,
             floor_map_path=floor_map_path,
+            explanation_json=explanation_json,
             exif_db=exif_db
         )
 
@@ -451,7 +455,7 @@ class BatchDedupEngine(DedupReportEngine):
             max_workers=max_workers,
         )
 
-    def export_aggregated_report(self, all_df, output_path, model_name="BDD-MODEL", style_id=4):
+    def export_aggregated_report(self, all_df, output_path, logo_left, logo_right, model_name="BDD-MODEL", style_id=4, target_cls_names=None, max_workers=1):
         """导出汇总报告"""
         if all_df.empty:
             print("[ERROR] No aggregated data to export.")
@@ -480,7 +484,9 @@ class BatchDedupEngine(DedupReportEngine):
             'input': {
                 'number': all_df['Path'].nunique(), 
                 'shape': (0,0,0,0), 
-                'type': f'Aggregated Views ({view_range_str})'
+                'type': f'Aggregated Views ({view_range_str})',
+                'views_png_path': self.views_png_path,
+                'explanation_json': self.explanation_json,
             },
             'output': {
                 'model': model_name, 
@@ -491,12 +497,12 @@ class BatchDedupEngine(DedupReportEngine):
             },
             'records': [all_df], 
             'defined_categories': self.labels,
-            'defined_floors': self.defined_floors
+            'defined_floors': self.defined_floors,
+            'target_cls_names': target_cls_names
         }
 
         # 3. 导出
         ExporterClass = EXPORTER_MAP.get(style_id)
         if ExporterClass: 
-            ExporterClass().export(report_data, output_path)
-            print(f"Done! Saved to {output_path}")
+            ExporterClass(logo_left, logo_right, max_workers=max_workers).export(report_data, output_path)
 

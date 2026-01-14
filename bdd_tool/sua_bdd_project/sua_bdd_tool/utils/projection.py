@@ -47,7 +47,7 @@ def calculate_gsd(distance_mm, focal_length_mm, sensor_width_mm, image_width_pix
         return None
 
 def calculate_facade_gsd(distance_m, focal_length, pixel_size_um=None, cos_theta = 1.0):
-    gsd_result = (distance_m * (pixel_size_um / 1000)) / (focal_length * cos_theta)
+    gsd_result = (distance_m * (pixel_size_um / 1000)) / (focal_length * cos_theta)*1000
     return gsd_result
 
 def pixel_to_physical(pix_value, gsd):
