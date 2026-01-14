@@ -7,13 +7,9 @@ from sua_bdd_tool.utils import load_class_names, load_json
 def main():
     class_names = load_class_names(config.CLASS_TXT)
     exif_db = load_json(config.T_VIEWS_EXIF_UPDATE_JSON)
-    target_classes_is = [class_names.index(cls) for cls in config.TARGET_CLASSES_NAME]
+    # target_classes_is = [class_names.index(cls) for cls in config.TARGET_CLASSES_NAME]
     engine = BatchDedupEngine(
         exif_db=exif_db,
-        loader=None, 
-        labels=[], 
-        project_info_path="", # 暂时为空，循环中会动态加载
-        group_info_path="",   # 暂时为空
         views_csv_path=config.VIEWS_MAP_CSV,
         floor_map_path=config.HEIGHT_MAP_JSON,
     )
@@ -42,7 +38,7 @@ def main():
             label_dir=label_dir,
             project_info_path=proj_info,
             class_path=config.CLASS_TXT,
-            target_cls_ids=target_classes_is,
+            max_workers=config.NUM_WORKERS,
         )
         
         if config.VIEW_REPORT:

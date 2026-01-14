@@ -5,6 +5,7 @@ EXPORTER_MAP = {
     1: PDFExporterDetailed,
     2: PDFExporterMeasurement,
     3: PDFExporterCompact,
+    32: PDFExporterCompactAuxImage,
     4: PDFExporterWithContext,
-    32: PDFExporterWithContextAuxImage,
+    42: PDFExporterWithContextAuxImage,
 }

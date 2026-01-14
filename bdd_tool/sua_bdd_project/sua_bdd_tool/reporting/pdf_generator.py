@@ -25,12 +25,17 @@ from tqdm import tqdm
 
 import config
 
-
+import concurrent.futures
 
 class BasePDFExporter:
-    def __init__(self):
+    def __init__(self, max_workers=1):
         self._init_fonts()
         self._init_styles()
+
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+
+    def generate_row_content(self, df_record):
+        raise NotImplementedError("Subclasses must implement generate_row_content")
 
     def _init_fonts(self):
         try:
@@ -66,10 +71,36 @@ class BasePDFExporter:
         raise NotImplementedError("Subclasses must implement generate_row_content")
 
     def export(self, report_data, save_path):
-        print(f"[{time.strftime('%H:%M:%S')}] PDF Generation started ({self.__class__.__name__})...")
+        """
+        异步导出方法。
+        调用此方法后，会立即返回一个 Future 对象，不会阻塞主线程。
+        实际的 PDF 生成和写入将在后台线程中执行。
+        """
+        print(f"[{time.strftime('%H:%M:%S')}] PDF Task queued: {os.path.basename(save_path)}")
+        
+        # 将实际的导出任务提交给线程池
+        # submit(函数名, 参数1, 参数2...)
+        future = self.executor.submit(self._execute_export_sync, report_data, save_path)
+        
+        # 你可以添加回调函数来处理完成后的通知（可选）
+        future.add_done_callback(lambda f: self._on_export_complete(f, save_path))
+        
+        return future
 
-        # --- 【修改点】动态页面大小 ---
-        # 默认使用 Letter 纵向，如果子类定义了 pagesize 属性（如横向），则使用子类的
+    def _on_export_complete(self, future, save_path):
+        try:
+            future.result() # 如果任务中有异常，会在这一步抛出
+            # print(f"Finished: {save_path}") # 可以在这里做日志记录
+        except Exception as e:
+            print(f"!!! Error exporting {save_path}: {e}")
+
+
+    def _execute_export_sync(self, report_data, save_path):
+        # =========================================================
+        # 这里的内容就是你原来 export() 函数的所有代码
+        # =========================================================
+        print(f"[{time.strftime('%H:%M:%S')}] PDF Generation started in background ({self.__class__.__name__})...")
+
         target_pagesize = getattr(self, 'pagesize', letter)
         doc = SimpleDocTemplate(save_path, pagesize=target_pagesize)
         
@@ -83,63 +114,44 @@ class BasePDFExporter:
         elements.append(Spacer(1, 10))
 
         records_df_list = report_data['records']
-
-        # ==========================================
-        # 【修改核心】：分支处理流式布局 vs 表格布局
-        # ==========================================
         
-        # 模式 A: 流式布局 (Style 3 - 解决超长表格跨页问题)
+        # 模式 A: 流式布局
         if hasattr(self, 'generate_flowables'):
-            from tqdm import tqdm
-            print("Generating flowables (Stream Mode)...")
-            
-            for df_record in tqdm(records_df_list, desc="Adding Images"):
+            # 注意：在线程中打印 tqdm 可能会导致进度条错乱，建议去掉 tqdm 或使用特定参数
+            # 这里简化为直接遍历
+            for df_record in records_df_list:
                 if df_record.empty: continue
-                # 直接获取元素列表（标题、图、表...）并加入主流程
                 record_elements = self.generate_flowables(df_record)
                 elements.extend(record_elements)
-                # 每张图片处理完后强制分页，保持报告整洁（可选，也可改为 Spacer）
                 elements.append(PageBreak())
 
-        # 模式 B: 统一大表格布局 (Style 0, 1, 2 - 保持原有逻辑)
+        # 模式 B: 统一大表格布局
         else:
             all_data_rows = []
             all_row_heights = []
 
-            from tqdm import tqdm
-            for df_record in tqdm(records_df_list, desc="Building Table Rows"):
+            for df_record in records_df_list:
                 if df_record.empty: continue
-                
-                # 调用子类的方法获取行数据
                 rows, heights = self.generate_row_content(df_record)
                 all_data_rows.extend(rows)
                 all_row_heights.extend(heights)
 
-            # --- 3. 构建并保存表格 ---
             if all_data_rows:
-                # 简单的长度保护
                 min_len = min(len(all_data_rows), len(all_row_heights))
                 all_data_rows = all_data_rows[:min_len]
                 all_row_heights = all_row_heights[:min_len]
 
                 from reportlab.lib.units import inch
-                # 基础布局还是 2 列，但我们会通过 Span 让 Style 3 变宽
                 t = Table(all_data_rows, hAlign='CENTER', colWidths=[2.5*inch, 4.5*inch], rowHeights=all_row_heights)
                 
                 final_style = TableStyle(self.table_style_common.getCommands())
                 
                 for i, row in enumerate(all_data_rows):
-                    # 1. 文件名行 (灰色背景 + 跨列)
                     if row[0] == 'FileName':
                         final_style.add('SPAN', (0, i), (-1, i))
                         final_style.add('BACKGROUND', (0, i), (-1, i), colors.lightgrey)
-                    
-                    # 2. 【新增】全宽行支持 (用于 Style 3 的横向表格)
-                    # 如果行的第一个元素是 'FullWidth'，我们只显示第二个元素的内容，并让它跨列
                     elif row[0] == 'FullWidth':
                         final_style.add('SPAN', (0, i), (-1, i))
-                        # 去掉中间的分隔线，只保留外框（可选）
-                        # final_style.add('BOX', (0, i), (-1, i), 1, colors.black)
 
                 t.setStyle(final_style)
                 elements.append(t)
@@ -147,20 +159,113 @@ class BasePDFExporter:
                 elements.append(Paragraph("No defects detected.", self.styles["font_text"]))
 
         try:
-            # ==========================================
-            # 【修改点】：在 doc.build 前增加提示信息
-            # ==========================================
-            print(f"[{time.strftime('%H:%M:%S')}] Compiling PDF and writing to disk... Please wait.")
-            
+            # 这一步是最耗时的，现在它在后台线程运行
+            print(f"[{time.strftime('%H:%M:%S')}] Compiling PDF {os.path.basename(save_path)}...")
             doc.build(elements)
-            
-            print(f"[{time.strftime('%H:%M:%S')}] Success! Report saved to {save_path}")
-            # ==========================================
+            print(f"[{time.strftime('%H:%M:%S')}] Success! Saved to {save_path}")
             
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"Error in thread: {e}")
             import traceback
             traceback.print_exc()
+            raise e # 抛出异常以便 Future 捕获
+
+    # def export(self, report_data, save_path):
+    #     print(f"[{time.strftime('%H:%M:%S')}] PDF Generation started ({self.__class__.__name__})...")
+
+    #     # --- 【修改点】动态页面大小 ---
+    #     # 默认使用 Letter 纵向，如果子类定义了 pagesize 属性（如横向），则使用子类的
+    #     target_pagesize = getattr(self, 'pagesize', letter)
+    #     doc = SimpleDocTemplate(save_path, pagesize=target_pagesize)
+        
+    #     elements = []
+
+    #     # --- 1. 通用表头与摘要 ---
+    #     self._add_summary_pages(elements, report_data)
+
+    #     # --- 2. 详细内容 ---
+    #     elements.append(Paragraph("Detailed Information:", self.styles["font_section"]))
+    #     elements.append(Spacer(1, 10))
+
+    #     records_df_list = report_data['records']
+
+    #     # ==========================================
+    #     # 【修改核心】：分支处理流式布局 vs 表格布局
+    #     # ==========================================
+        
+    #     # 模式 A: 流式布局 (Style 3 - 解决超长表格跨页问题)
+    #     if hasattr(self, 'generate_flowables'):
+    #         from tqdm import tqdm
+    #         print("Generating flowables (Stream Mode)...")
+            
+    #         for df_record in tqdm(records_df_list, desc="Adding Images"):
+    #             if df_record.empty: continue
+    #             # 直接获取元素列表（标题、图、表...）并加入主流程
+    #             record_elements = self.generate_flowables(df_record)
+    #             elements.extend(record_elements)
+    #             # 每张图片处理完后强制分页，保持报告整洁（可选，也可改为 Spacer）
+    #             elements.append(PageBreak())
+
+    #     # 模式 B: 统一大表格布局 (Style 0, 1, 2 - 保持原有逻辑)
+    #     else:
+    #         all_data_rows = []
+    #         all_row_heights = []
+
+    #         from tqdm import tqdm
+    #         for df_record in tqdm(records_df_list, desc="Building Table Rows"):
+    #             if df_record.empty: continue
+                
+    #             # 调用子类的方法获取行数据
+    #             rows, heights = self.generate_row_content(df_record)
+    #             all_data_rows.extend(rows)
+    #             all_row_heights.extend(heights)
+
+    #         # --- 3. 构建并保存表格 ---
+    #         if all_data_rows:
+    #             # 简单的长度保护
+    #             min_len = min(len(all_data_rows), len(all_row_heights))
+    #             all_data_rows = all_data_rows[:min_len]
+    #             all_row_heights = all_row_heights[:min_len]
+
+    #             from reportlab.lib.units import inch
+    #             # 基础布局还是 2 列，但我们会通过 Span 让 Style 3 变宽
+    #             t = Table(all_data_rows, hAlign='CENTER', colWidths=[2.5*inch, 4.5*inch], rowHeights=all_row_heights)
+                
+    #             final_style = TableStyle(self.table_style_common.getCommands())
+                
+    #             for i, row in enumerate(all_data_rows):
+    #                 # 1. 文件名行 (灰色背景 + 跨列)
+    #                 if row[0] == 'FileName':
+    #                     final_style.add('SPAN', (0, i), (-1, i))
+    #                     final_style.add('BACKGROUND', (0, i), (-1, i), colors.lightgrey)
+                    
+    #                 # 2. 【新增】全宽行支持 (用于 Style 3 的横向表格)
+    #                 # 如果行的第一个元素是 'FullWidth'，我们只显示第二个元素的内容，并让它跨列
+    #                 elif row[0] == 'FullWidth':
+    #                     final_style.add('SPAN', (0, i), (-1, i))
+    #                     # 去掉中间的分隔线，只保留外框（可选）
+    #                     # final_style.add('BOX', (0, i), (-1, i), 1, colors.black)
+
+    #             t.setStyle(final_style)
+    #             elements.append(t)
+    #         else:
+    #             elements.append(Paragraph("No defects detected.", self.styles["font_text"]))
+
+    #     try:
+    #         # ==========================================
+    #         # 【修改点】：在 doc.build 前增加提示信息
+    #         # ==========================================
+    #         print(f"[{time.strftime('%H:%M:%S')}] Compiling PDF and writing to disk... Please wait.")
+            
+    #         doc.build(elements)
+            
+    #         print(f"[{time.strftime('%H:%M:%S')}] Success! Report saved to {save_path}")
+    #         # ==========================================
+            
+    #     except Exception as e:
+    #         print(f"Error: {e}")
+    #         import traceback
+    #         traceback.print_exc()
 
     def _add_summary_pages(self, elements, report_data):
         """生成摘要页的通用逻辑"""
@@ -390,18 +495,20 @@ class PDFExporterCompact(BasePDFExporter):
 
         # --- 1. 标题与基础信息 ---
         elements.append(Paragraph("<b>Project Summary Report</b>", self.styles["font_title"]))
-        
-        elevation = output_info.get('elevation', '')
-        if elevation:
-            elements.append(Paragraph(f"Elevation Orientation: {elevation}", self.styles["font_section"]))
+
+        elements.append(Paragraph(f"Basic Information:", self.styles["font_section"]))
+        # elevation = output_info.get('elevation', '')
+        # if elevation:
+        #     elements.append(Paragraph(f"Elevation Orientation: {elevation}", self.styles["font_section"]))
         
         elements.append(Spacer(1, 20))
 
         data_input = [
-            ["Total Images:", str(input_info['number']), "Model:", output_info['model']],
-            ["Detected Defects:", str(output_info['defects']), "Data Range:", f"{input_info['shape'][0]}~{input_info['shape'][1]}"],
+            ["Total Images:", str(input_info['number'])],
+            ["Model:", output_info['model']],
+            ["Total Detected Defects:", str(output_info['defects'])],
         ]
-        t_input = Table(data_input, hAlign='LEFT', colWidths=[1.5*inch, 1.5*inch, 1.5*inch, 2.5*inch])
+        t_input = Table(data_input, hAlign='LEFT', colWidths=[3*inch, 3*inch])
         t_input.setStyle(self.style_blank)
         elements.append(t_input)
         elements.append(Spacer(1, 20))
@@ -698,6 +805,179 @@ class PDFExporterCompact(BasePDFExporter):
             elems.append(Spacer(1, 15))
 
         return elems 
+
+
+class PDFExporterCompactAuxImage(PDFExporterCompact):
+    """
+    样式 32 (Compact + Aux): 
+    基于 PDFExporterCompact (样式3)，在表格右侧增加 'Aux Image' 列。
+    适用于双光吊舱数据，以紧凑列表形式展示 RGB 和 Thermal 截图。
+    """
+    def generate_flowables(self, df_record):
+        elems = []
+        
+        # first_row = df_record.iloc[0]
+        # fname = Path(first_row['Path']).name
+        
+        # # 1. 标题 (灰色背景条)
+        # title_style = ParagraphStyle(
+        #     'CompactTitle', 
+        #     parent=self.styles['Heading2'], 
+        #     backColor=colors.lightgrey, 
+        #     borderPadding=5,
+        #     spaceAfter=5
+        # )
+        # elems.append(Paragraph(f"File: {fname}", title_style))
+
+        # # 2. 全景大图 (保持 Compact 原有逻辑，如果不需要可以注释掉)
+        # vis_path = first_row['VisPath']
+        # if os.path.exists(vis_path):
+        #     vis_img = RLImage(vis_path)
+        #     limit_w, limit_h = 8.5 * inch, 5.0 * inch
+        #     img_w, img_h = vis_img.imageWidth, vis_img.imageHeight
+        #     aspect = img_h / img_w if img_w > 0 else 1.0
+        #     draw_w = limit_w
+        #     draw_h = draw_w * aspect
+        #     if draw_h > limit_h:
+        #         draw_h = limit_h
+        #         draw_w = draw_h / aspect
+        #     vis_img.drawWidth = draw_w
+        #     vis_img.drawHeight = draw_h
+        #     elems.append(vis_img)
+        #     elems.append(Spacer(1, 10))
+
+        # ==========================================
+        # 3. 分组生成表格 (Group by Defect Type)
+        # ==========================================
+        
+        if 'Category' in df_record.columns:
+            unique_cats = sorted(df_record['Category'].unique())
+        else:
+            unique_cats = ["Unknown"]
+
+        # 定义样式
+        cell_style = ParagraphStyle('CellStyle', parent=self.styles['Normal'], fontSize=8, leading=10, alignment=1)
+        group_title_style = ParagraphStyle(
+            'GroupTitle', 
+            parent=self.styles['Heading3'], 
+            fontSize=12, 
+            spaceBefore=12, 
+            spaceAfter=6, 
+            textColor=colors.darkblue
+        )
+        
+        # --- 【修改点 1】: 增加 Aux Image 列头，并调整列宽以适应页面 ---
+        # 之前的总宽约 8.7 inch，新增一列后需要微调其他列宽
+        headers = ["No.", "Defect ID", "Location", "Floor", "Dimension\n(L x W)", "Severity", "Comment", "Action", "Image", "Aux Image"]
+        
+        col_widths = [
+            0.4*inch, # No.
+            0.7*inch, # ID
+            1.1*inch, # Location (略微缩小)
+            0.5*inch, # Floor (略微缩小)
+            1.2*inch, # Dimension (略微缩小)
+            0.7*inch, # Severity (略微缩小)
+            0.9*inch, # Comment (略微缩小)
+            0.8*inch, # Action
+            1.3*inch, # Image
+            1.3*inch  # Aux Image (新增)
+        ]
+
+        from tqdm import tqdm
+        print("\n[PDF Engine] Compiling Compact (Aux) Report elements...")
+        
+        for cat in tqdm(unique_cats, desc="Processing Categories"):
+            sub_df = df_record[df_record['Category'] == cat]
+            if sub_df.empty: continue
+            
+            if 'ID' in sub_df.columns:
+                try: sub_df = sub_df.sort_values(by=['ID'])
+                except: pass
+            
+            elems.append(Paragraph(f"Defect Type: {cat} (Count: {len(sub_df)})", group_title_style))
+            
+            table_data = [headers]
+            row_heights = [30]
+            
+            for local_idx, (_, row) in enumerate(sub_df.iterrows()):
+                
+                # --- 尺寸处理 ---
+                w_val, h_val = row.get('W_cm', 'N/A'), row.get('H_cm', 'N/A')
+                if w_val != 'N/A' and h_val != 'N/A':
+                    try:
+                        w_f, h_f = float(w_val), float(h_val)
+                        area_f = float(row.get('Area_cm2', 0))
+                        dim_str = f"H:{h_f:.1f} * W:{w_f:.1f}\n= {area_f:.1f} cm²"
+                    except:
+                        dim_str = f"H:{h_val} * W:{w_val}"
+                else:
+                    dim_str = f"H:{row.get('H_pix','-')} * W:{row.get('W_pix','-')}\n(pix)"
+                dim_para = Paragraph(dim_str, cell_style)
+
+                # --- 辅助函数：处理截图 (复用逻辑) ---
+                def process_crop(path_key):
+                    c_path = row.get(path_key, '')
+                    if c_path and os.path.exists(c_path):
+                        img = RLImage(c_path)
+                        target_w, max_h = 1.2 * inch, 1.6 * inch # 稍微改小一点适应列宽
+                        aspect = img.imageHeight / img.imageWidth if img.imageWidth > 0 else 1.0
+                        calc_h = target_w * aspect
+                        if calc_h > max_h:
+                            img.drawHeight = max_h
+                            img.drawWidth = max_h / aspect
+                        else:
+                            img.drawWidth = target_w
+                            img.drawHeight = calc_h
+                        return img, max(45, img.drawHeight + 6)
+                    return "", 45
+
+                # --- 图片处理 (Visible & Aux) ---
+                img_cell, h1 = process_crop('CropPath')
+                aux_img_cell, h2 = process_crop('CropAuxPath')
+                
+                # 行高取两者最大值
+                row_h = max(h1, h2)
+
+                # --- 其他信息 ---
+                lvl = row['Level']
+                display_lvl = 'Minor' if lvl == 'Slight' else ('Major' if lvl == 'Serious' else lvl)
+                
+                real_id = row.get('ID')
+                display_id = f"{real_id}" if real_id is not None else f"DF{local_idx+1}"
+
+                table_row = [
+                    str(local_idx + 1),
+                    display_id,
+                    f"{row.get('view', '')}\n{row.get('orientation', '')}",
+                    str(row.get('floor', '-')),
+                    dim_para,
+                    display_lvl,
+                    "", 
+                    row['Action'],
+                    img_cell,      # 原 Vis Crop
+                    aux_img_cell   # 新增 Aux Crop
+                ]
+                table_data.append(table_row)
+                row_heights.append(row_h)
+
+            t = Table(table_data, colWidths=col_widths, rowHeights=row_heights, repeatRows=1)
+            
+            style_list = [
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+                ('FONTNAME', (0, 0), (-1, 0), self.FONT_BOLD),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('FONTSIZE', (0, 0), (-1, -1), 8), # 字体调小适应内容
+                ('LEFTPADDING', (0, 0), (-1, -1), 2),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+            ]
+            t.setStyle(TableStyle(style_list))
+            
+            elems.append(t)
+            elems.append(Spacer(1, 15))
+
+        return elems
 
 
 class PDFExporterWithContext(PDFExporterCompact):

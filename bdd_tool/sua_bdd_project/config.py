@@ -48,9 +48,9 @@ YOLO_DEDUP_PROJ_VIS_NAME = 'project_vis.png'
 REPORT_DIR = os.path.join(DOCUMENT_PATH, "reports")
 REPORT_OVERALL_PATH = os.path.join(REPORT_DIR, "report_overall.pdf")
 REPORT_VIEW_PATH = os.path.join(REPORT_DIR, "report_view.pdf")
-VIEW_REPORT = False
+VIEW_REPORT = True
 REPORT_OVERALL_STYLE_ID=32
-REPORT_VIEW_STYLE_ID=3
+REPORT_VIEW_STYLE_ID=42
 
 
 ANNO_DATA_PATH = os.path.join(ROOT_DIR, "data_anno")
@@ -99,7 +99,7 @@ COLOR_PALETTE = [
     (128, 128, 0)     # 9: Olive
 ]
 
-TARGET_CLASSES_NAME = ['high', 'medium', 'low', 'leakage']
+TARGET_CLASSES_NAME = ['Subsurface Void High Risk', 'Subsurface Void High Medium', 'Subsurface Void High Low', 'Leakage High Risk']
 
 IOU_THRESH = 0.5
 HEIGHT_THRESH_M = 0.3
