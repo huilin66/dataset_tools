@@ -19,6 +19,7 @@ CLASS_TXT = os.path.join(DOCUMENT_PATH, "class.txt")
 EXPLANATION_JSON = os.path.join(DOCUMENT_PATH, "explanation.json")
 LOGO1 = os.path.join(DOCUMENT_PATH, "logo1.png")
 LOGO2 = os.path.join(DOCUMENT_PATH, "logo2.png")
+COVER_IMAGE = os.path.join(DOCUMENT_PATH, 'cover_image.png')
 
 SPLIT_DATA_PATH = os.path.join(ROOT_DIR, "data_split")
 
@@ -166,3 +167,10 @@ CAMERA_PARAMS = {
         "real_focal_length_mm": 12.0
     },
 }
+
+APP_NAME = 'BD-Detection'
+PROJECT_NAME = 'PROJECT: POLYU HMT HALL'
+ORIGINZE_NAME = 'POLYU SCRI'
+APP_DESCEPTION = "<u>An Al-based Building</u> Defect Detection System"
+
+VIEW_MAX_RECORD_NUM = 100000

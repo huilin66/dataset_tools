@@ -18,7 +18,7 @@ def main():
     views_distance = load_json(config.VIEW_DIST_STATISTICS_JSON)
     print(">>> Done!\n")
 
-    views_list = os.listdir(config.VIEWS_T_PATH)
+    views_list = os.listdir(config.VIEWS_T_PATH)[30:31]
     print(f">>> Start to process {len(views_list)} views")
     for view_name in views_list:
         view_distance = views_distance[view_name]

@@ -7,7 +7,6 @@ from sua_bdd_tool.utils import load_class_names, load_json
 def main():
     class_names = load_class_names(config.CLASS_TXT)
     exif_db = load_json(config.T_VIEWS_EXIF_UPDATE_JSON)
-    target_classes_ids = [class_names.index(cls) for cls in config.TARGET_CLASSES_NAME]
     engine = BatchDedupEngine(
         exif_db=exif_db,
         views_csv_path=config.VIEWS_MAP_CSV,
