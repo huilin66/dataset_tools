@@ -535,7 +535,7 @@ class BasePDFExporter:
         add_level_table("1. Summary by Defect Type:", sorted_cats, stats_cat_lev, "Defect Type")
         add_level_table("2. Summary by View:", sorted_views, stats_view_lev, "View ID")
         if sorted_oris:
-            add_level_table("3. Summary by Direction (Orientation):", sorted_oris, stats_ori_lev, "Direction")
+            add_level_table("3. Summary by Direction:", sorted_oris, stats_ori_lev, "Direction")
         add_level_table("4. Summary by Floor:", sorted_floors, stats_floor_lev, "Floor")
 
         elements.append(PageBreak())
@@ -806,12 +806,12 @@ class PDFExporterCompact(BasePDFExporter):
                 display_id = f"{real_id}" if real_id is not None else f"DF{local_idx+1}"
 
                 table_row = [
-                    str(local_idx + 1), # 组内序号
-                    display_id,         # Defect ID
-                    f"{row.get('view', '')}\n{row.get('orientation', '')}",
-                    str(row.get('floor', '-')),
+                    str(local_idx + 1),
+                    row['ID'],
+                    f"{row['view']}/\n{row['orientation']}",
+                    row['floor'],
                     dim_str,
-                    display_lvl,
+                    row['Level'],
                     row['Category'],
                     row['Action'],
                     img_cell
@@ -916,21 +916,13 @@ class PDFExporterCompactAuxImage(PDFExporterCompact):
                 
                 # 行高取两者最大值
                 row_h = max(h1, h2)
-
-                # --- 其他信息 ---
-                lvl = row['Level']
-                display_lvl = 'Minor' if lvl == 'Slight' else ('Major' if lvl == 'Serious' else lvl)
-                
-                real_id = row.get('ID')
-                display_id = f"{real_id}" if real_id is not None else f"DF{local_idx+1}"
-
                 table_row = [
                     str(local_idx + 1),
-                    display_id,
-                    f"{row.get('view', '')}\n{row.get('orientation', '')}",
-                    str(row.get('floor', '-')),
+                    row['ID'],
+                    f"{row['view']}/\n{row['orientation']}",
+                    row['floor'],
                     dim_str,
-                    display_lvl,
+                    row['Level'],
                     row['Category'],
                     row['Action'],
                     img_cell,      # 原 Vis Crop
@@ -1069,30 +1061,18 @@ class PDFExporterWithContext(PDFExporterCompact):
                     img_cell = c_img
                     this_row_h = max(45, c_img.drawHeight + 6)
 
-                # 3. 等级显示优化
-                lvl = row['Level']
-                display_lvl = 'Minor' if lvl == 'Slight' else ('Major' if lvl == 'Serious' else lvl)
-                
-                # 4. Location (View + Orientation)
-                view_info = str(row.get('view', '')).strip()
-                ori_info = str(row.get('orientation', '')).strip()
-                loc_str = f"{view_info}\n{ori_info}" if ori_info else view_info
-
-                # ID 处理
-                display_id = str(row.get('ID', f"{local_idx+1}"))
-
                 row_data = [
                     str(local_idx + 1),
-                    display_id,
-                    loc_str,
-                    str(row.get('floor', '-')),
+                    row['ID'],
+                    f"{row['view']}/\n{row['orientation']}",
+                    row['floor'],
                     dim_str,
-                    display_lvl,
+                    row['Level'],
                     row['Category'],
                     row['Action'],
                     img_cell
                 ]
-                
+
                 table_data.append(row_data)
                 row_heights.append(this_row_h)
 
@@ -1248,25 +1228,13 @@ class PDFExporterWithContextAuxImage(PDFExporterWithContext):
                 # 当前行高取最大值
                 this_row_h = max(h1, h2)
 
-                # 3. 等级显示优化
-                lvl = row['Level']
-                display_lvl = 'Minor' if lvl == 'Slight' else ('Major' if lvl == 'Serious' else lvl)
-                
-                # 4. Location (View + Orientation)
-                view_info = str(row.get('view', '')).strip()
-                ori_info = str(row.get('orientation', '')).strip()
-                loc_str = f"{view_info}\n{ori_info}" if ori_info else view_info
-
-                # ID 处理
-                display_id = str(row.get('ID', f"{local_idx+1}"))
-
                 row_data = [
                     str(local_idx + 1),
-                    display_id,
-                    loc_str,
-                    str(row.get('floor', '-')),
+                    row['ID'],
+                    f"{row['view']}/\n{row['orientation']}",
+                    row['floor'],
                     dim_str,
-                    display_lvl,
+                    row['Level'],
                     row['Category'],
                     row['Action'],
                     img_cell,      # 原 Vis Crop

@@ -14,11 +14,11 @@ def main():
     target_classes = [class_names.index(cls) for cls in config.TARGET_CLASSES_NAME]
     floor_manager = FloorManager(cache_file=config.HEIGHT_MAP_JSON)
     visualizer = FacadeVisualizer(floor_manager)
-    exif_db = load_json(config.T_VIEWS_EXIF_JSON)
+    exif_db = load_json(config.T_VIEWS_EXIF_UPDATE_JSON)
     views_distance = load_json(config.VIEW_DIST_STATISTICS_JSON)
     print(">>> Done!\n")
 
-    views_list = os.listdir(config.VIEWS_T_PATH)[29:30]
+    views_list = os.listdir(config.VIEWS_T_PATH)
     print(f">>> Start to process {len(views_list)} views")
     for view_name in views_list:
         view_distance = views_distance[view_name]
@@ -53,14 +53,14 @@ def main():
         print(f">>>  [{view_name}] 3. grouping yolo result by image...")
         dets_by_img = group_dets_by_image(all_dets_with_id)
         dets_write(dets_by_img, YOLO_DEDUP_PATH)
-        dedup_vis(dets_by_img, image_dir, YOLO_DEDUP_VIS_ALL_PATH, YOLO_DEDUP_VIS_BY_ID_PATH, vis=config.DEDUP_VIS)
+        dedup_vis(dets_by_img, image_dir, YOLO_DEDUP_VIS_ALL_PATH, YOLO_DEDUP_VIS_BY_ID_PATH, vis=config.DEDUP_VIS, num_workers=config.NUM_WORKERS)
         print(">>> Done!\n")
 
         print(f">>>  [{view_name}] 4. merge boxes by id...")
         analyze_and_vis_conflicts(dets_by_img, image_dir, YOLO_DEDUP_FUSE_ANA_PATH, class_names=class_names, vis_font_size=config.VIS_FONT_SIZE, vis=config.DEDUP_VIS)
         dets_by_img_fuse = merge_boxes_by_id(dets_by_img)
         dets_write(dets_by_img_fuse, YOLO_DEDUP_FUSE_PATH)
-        dedup_vis(dets_by_img_fuse, image_dir, YOLO_DEDUP_FUSE_VIS_ALL_PATH, YOLO_DEDUP_FUSE_VIS_BY_ID_PATH, vis=config.DEDUP_VIS)
+        dedup_vis(dets_by_img_fuse, image_dir, YOLO_DEDUP_FUSE_VIS_ALL_PATH, YOLO_DEDUP_FUSE_VIS_BY_ID_PATH, vis=config.DEDUP_VIS, num_workers=config.NUM_WORKERS)
         print(">>> Done!\n")
 
         print(f">>>  [{view_name}] 5. export projection, grouping info...")

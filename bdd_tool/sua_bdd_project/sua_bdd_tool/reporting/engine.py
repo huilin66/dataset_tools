@@ -498,11 +498,10 @@ class BatchDedupEngine(DedupReportEngine):
             'records': [all_df], 
             'defined_categories': self.labels,
             'defined_floors': self.defined_floors,
-            'target_cls_names': target_cls_names
         }
 
         # 3. 导出
         ExporterClass = EXPORTER_MAP.get(style_id)
         if ExporterClass: 
-            ExporterClass(logo_left, logo_right, max_workers=max_workers).export(report_data, output_path)
+            ExporterClass(logo_left, logo_right, target_cls_names, max_workers=max_workers).export(report_data, output_path)
 

@@ -17,7 +17,7 @@ def main():
     )
     os.makedirs(config.REPORT_DIR, exist_ok=True)
 
-    views_list = os.listdir(config.VIEWS_T_PATH)[29:31]
+    views_list = os.listdir(config.VIEWS_T_PATH)[30:31]
     all_dfs = []
     print(f">>> Start to process {len(views_list)} views")
     for view_name in views_list:

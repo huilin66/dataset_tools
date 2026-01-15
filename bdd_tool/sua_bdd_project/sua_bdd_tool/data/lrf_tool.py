@@ -6,7 +6,7 @@ import numpy as np
 from tqdm import tqdm
 from sua_bdd_tool.utils import load_json
 
-def calculate_robust_wall_distance(img_files, exif_db, trim_ratio=0.05, bin_size=0.5):
+def calculate_robust_wall_distance(img_files, exif_db, trim_ratio=0.05, bin_size=0.5, min_dist=1.0, max_dist=10.0):
     """
     更加鲁棒的墙面距离计算函数
     :param img_files: 图片路径列表
@@ -33,8 +33,8 @@ def calculate_robust_wall_distance(img_files, exif_db, trim_ratio=0.05, bin_size
         dist = meta['lrf_dist']
         if dist is None:
             continue
-        # 过滤明显的错误数据 (比如 < 1m 或 > 100m)
-        if 1.0 < dist < 100.0:
+        # 过滤明显的错误数据 (比如 < min_dist 或 > max_dist)
+        if min_dist < dist < max_dist:
             raw_data.append(dist)
         else:
             raw_data.append(None) # 保持索引对应，方便截断
@@ -98,6 +98,8 @@ def statistics_lrf_data(
     input_json_path, 
     output_repaired_json_path, 
     output_view_dist_json_path=None,
+    min_dist=1.0,
+    max_dist=10.0,
 ):
     """
     读取元数据 -> 按 View 分组 -> 计算鲁棒距离 -> 修复异常数据 -> 保存
@@ -120,7 +122,7 @@ def statistics_lrf_data(
     # --- 步骤 B: 计算每个 View 的 Robust Wall Distance ---
     view_wall_distances = {}
     for view_name, img_files in tqdm(view_groups.items(), desc="Calculating Distances"):
-        view_wall_distances[view_name] = calculate_robust_wall_distance(img_files, exif_db)
+        view_wall_distances[view_name] = calculate_robust_wall_distance(img_files, exif_db, min_dist=min_dist, max_dist=max_dist)
 
     # --- 步骤 C: 修复数据 ---
     repaired_count = 0
@@ -130,10 +132,14 @@ def statistics_lrf_data(
         status = item.get('lrf_status')
         current_dist = item.get('lrf_dist')
         
-        needs_repair = (status != 'Normal') or (current_dist is None or current_dist <= 0)
+        needs_repair = (status != 'Normal') or (current_dist is None or not (min_dist <= current_dist <= max_dist))
         if needs_repair:
             ref_dist = view_wall_distances[rel_dir]
             if ref_dist is not None:
+                if current_dist is not None:
+                    print(f"修复 {filename}：原始距离 {current_dist:.4f}m -> 修复为 {ref_dist:.4f}m")
+                else:
+                    print(f"修复 {filename}：原始距离 None -> 修复为 {ref_dist:.4f}m")
                 item['lrf_status_original'] = item['lrf_status']
                 item['lrf_lat_original'] = item['lrf_lat']
                 item['lrf_lon_original'] = item['lrf_lon']
@@ -166,11 +172,3 @@ def statistics_lrf_data(
     print(f"View 距离表已保存至: {output_view_dist_json_path}")
     print(f"修复后的元数据已保存至: {output_repaired_json_path}")
     print(f"共修复异常记录: {repaired_count} 条")
-
-# ================= 调用示例 =================
-if __name__ == "__main__":
-    repair_lrf_data(
-        input_json_path="metadata.json",                # 输入
-        output_repaired_json_path="metadata_repaired.json", # 输出1：修复后的完整数据
-        output_view_dist_json_path="view_wall_distances.json" # 输出2：每个View的计算距离
-    )
