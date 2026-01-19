@@ -15,8 +15,11 @@ RGB_VIEWS_EXIF_UPDATE_JSON = os.path.join(DOCUMENT_PATH, "exif_visible_views_upd
 T_VIEWS_EXIF_JSON = os.path.join(DOCUMENT_PATH, "exif_thermal_views.json")
 T_VIEWS_EXIF_UPDATE_JSON = os.path.join(DOCUMENT_PATH, "exif_thermal_views_update.json")
 VIEW_DIST_STATISTICS_JSON = os.path.join(DOCUMENT_PATH, "view_dist_statistics.json")
-CLASS_TXT = os.path.join(DOCUMENT_PATH, "class.txt")
-EXPLANATION_JSON = os.path.join(DOCUMENT_PATH, "explanation.json")
+
+CLASS_RGB_TXT = os.path.join(DOCUMENT_PATH, "class_rgb.txt")
+CLASS_T_TXT = os.path.join(DOCUMENT_PATH, "class_t.txt")
+EXPLANATION_T_JSON = os.path.join(DOCUMENT_PATH, "explanation_t.json")
+EXPLANATION_RGB_JSON = os.path.join(DOCUMENT_PATH, "explanation_rgb.json")
 LOGO1 = os.path.join(DOCUMENT_PATH, "logo1.png")
 LOGO2 = os.path.join(DOCUMENT_PATH, "logo2.png")
 COVER_IMAGE = os.path.join(DOCUMENT_PATH, 'cover_image.png')
@@ -37,6 +40,8 @@ VIEWS_T_PATH = os.path.join(SPLIT_DATA_PATH, "thermal_views")
 VIEWS_T_YOLO_PATH = os.path.join(SPLIT_DATA_PATH, "thermal_views_infer")
 VIEWS_T_YOLO_DEDUP_DIR = os.path.join(SPLIT_DATA_PATH, "thermal_views_infer_dedup")
 
+REID_ONNX_MODEL_PATH = os.path.join("./", "sua_bdd_tool", "deduplicator", "msmt_sbs_R101-ibn.onnx")
+
 YOLO_DEDUP_NAME = "labels_dedup"
 YOLO_DEDUP_VIS_ALL_NAME = "labels_dedup_vis_all"
 YOLO_DEDUP_VIS_BY_ID_NAME = "labels_dedup_vis_by_id"
@@ -50,13 +55,18 @@ YOLO_DEDUP_PROJ_INFO_NAME = "project_info.json"
 YOLO_DEDUP_GROUP_INFO_NAME = "group_info.json"
 YOLO_DEDUP_PROJ_VIS_NAME = 'project_vis.png'
 
-REPORT_DIR = os.path.join(DOCUMENT_PATH, "reports")
-REPORT_OVERALL_PATH = os.path.join(REPORT_DIR, "report_overall.pdf")
-REPORT_VIEW_PATH = os.path.join(REPORT_DIR, "report_view.pdf")
-VIEW_REPORT = True
-REPORT_OVERALL_STYLE_ID=32
-REPORT_VIEW_STYLE_ID=42
 
+REPORT_DIR_T = os.path.join(DOCUMENT_PATH, "reports_t")
+REPORT_OVERALL_T_PATH = os.path.join(REPORT_DIR_T, "report_overall.pdf")
+REPORT_VIEW_T_PATH = os.path.join(REPORT_DIR_T, "report_view.pdf")
+REPORT_DIR_RGB = os.path.join(DOCUMENT_PATH, "reports_rgb")
+REPORT_OVERALL_RGB_PATH = os.path.join(REPORT_DIR_RGB, "report_overall.pdf")
+REPORT_VIEW_RGB_PATH = os.path.join(REPORT_DIR_RGB, "report_view.pdf")
+VIEW_REPORT = True
+REPORT_OVERALL_STYLE_ID_T=32
+REPORT_VIEW_STYLE_ID_T=42
+REPORT_OVERALL_STYLE_ID_RGB=3
+REPORT_VIEW_STYLE_ID_RGB=4
 
 ANNO_DATA_PATH = os.path.join(ROOT_DIR, "data_anno")
 RGB_SELECT_STEP = 3
@@ -104,11 +114,22 @@ COLOR_PALETTE = [
     (128, 128, 0)     # 9: Olive
 ]
 
-TARGET_CLASSES_NAME = ['Subsurface Void High Risk', 'Subsurface Void Medium Risk', 'Subsurface Void Low Risk', 'Leakage Medium Risk']
+TARGET_CLASSES_NAME_T = [
+    'Subsurface Void High Risk', 
+    'Subsurface Void Medium Risk', 
+    # 'Subsurface Void Low Risk', 
+    'Leakage Medium Risk'
+    ]
+TARGET_CLASSES_NAME_RGB = None
 
 IOU_THRESH = 0.5
 HEIGHT_THRESH_M = 0.3
 X_THRESH_M = 1.5
+
+REID_DEUP_THRESH = 0.75
+
+CONF_THRESH_PRIMARY = 0.25
+CONF_THRESH_FINAL = 0.5
 
 EXIF_LRF_DIST_MIN=1.0
 EXIF_LRF_DIST_MAX=10.0
@@ -174,3 +195,6 @@ ORIGINZE_NAME = 'POLYU SCRI'
 APP_DESCEPTION = "<u>An Al-based Building</u> Defect Detection System"
 
 VIEW_MAX_RECORD_NUM = 100000
+
+REID_DEUP_T = False
+REID_DEUP_RGB = True

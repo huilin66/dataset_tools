@@ -188,7 +188,7 @@ class DedupProcessor_AuxImage(ImageProcessor):
         img_stem = Path(img_path).stem
 
         img = Image.open(img_path).convert('RGB')
-        img_aux = Image.open(img_aux_path).convert('RGB')
+        img_aux = Image.open(img_aux_path).convert('RGB') if img_aux_path else None
 
         img_exif = self.exif_db.get(img_name, None)
         focal_length = img_exif.get('focal', None) if img_exif else None
@@ -210,18 +210,18 @@ class DedupProcessor_AuxImage(ImageProcessor):
 
         # 2. 可视化
         vis_path = os.path.join(self.vis_dir, f"{img_stem}.png")
-        vis_aux_path = os.path.join(self.vis_aux_dir, f"{img_stem}.png")
+        vis_aux_path = os.path.join(self.vis_aux_dir, f"{img_stem}.png") if img_aux_path else None
 
         vis_detections = detections[:, :] if len(detections) > 0 else []
         draw_box(img.copy(), vis_detections, self.labels, self.colors).save(vis_path)
-        draw_box(img_aux.copy(), vis_detections, self.labels, self.colors).save(vis_aux_path)
+        draw_box(img_aux.copy(), vis_detections, self.labels, self.colors).save(vis_aux_path) if img_aux_path else None
         
         crop_subdir = os.path.join(self.crop_dir, img_stem)
-        crop_aux_subdir = os.path.join(self.crop_aux_dir, img_stem)
+        crop_aux_subdir = os.path.join(self.crop_aux_dir, img_stem) if img_aux_path else None
         os.makedirs(crop_subdir, exist_ok=True)
-        os.makedirs(crop_aux_subdir, exist_ok=True)
+        os.makedirs(crop_aux_subdir, exist_ok=True) if img_aux_path else None
         crops = crop_box(img, vis_detections)
-        crops_aux = crop_box(img_aux, vis_detections)
+        crops_aux = crop_box(img_aux, vis_detections) if img_aux_path else None
 
         # 3. 生成记录
         records = []
@@ -240,8 +240,12 @@ class DedupProcessor_AuxImage(ImageProcessor):
             
             crop_path = os.path.join(crop_subdir, f"{i}.png")
             if i < len(crops): crops[i].save(crop_path)
-            crop_aux_path = os.path.join(crop_aux_subdir, f"{i}.png")
-            if i < len(crops_aux): crops_aux[i].save(crop_aux_path)
+            
+            if img_aux_path:
+                crop_aux_path = os.path.join(crop_aux_subdir, f"{i}.png")
+                if i < len(crops_aux): crops_aux[i].save(crop_aux_path)
+            else:
+                crop_aux_path = None
             
             res = {
                 'Path': img_path,

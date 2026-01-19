@@ -256,6 +256,7 @@ class BasePDFExporter:
                 canvas.drawImage(img_path, x, y, width=width, height=height, mask='auto')
             except:
                 pass
+
     def _draw_cover(self, canvas, doc):
         canvas.saveState()
         w, h = doc.pagesize
@@ -264,7 +265,8 @@ class BasePDFExporter:
         # 1. 绘制顶部的 Logo (如果需要)
         # 假设 self.logo_left 是你的 logo 路径
         if hasattr(self, 'logo_left') and self.logo_left:
-            self._draw_logo_on_canvas(canvas, self.logo_left, x=50, y=h-80, height=40)
+            # self._draw_logo_on_canvas(canvas, self.logo_left, x=50, y=h-80, height=40)
+            self._draw_header_logos(canvas, doc) 
 
         # 绘制文字
         canvas.setFont("Helvetica", 9)

@@ -197,7 +197,7 @@ class DedupLoader_AuxImage(DedupLoader):
         img_paths = find_all_images(self.img_dir)
         img_aux_paths = find_all_images(self.img_aux_dir)
         print(f"[Loader] Found {len(img_paths)} images in {self.img_dir}")
-        print(f"[Loader] Found {len(img_aux_paths)} aux images in {self.img_aux_dir}")
+        print(f"[Loader] Found {len(img_aux_paths)} aux images in {self.img_aux_dir}") if img_aux_paths else print(f"[Loader] No aux images found in {self.img_aux_dir}")
         
         # ✅ 1. 初始化统计器
         raw_counter = Counter()    # 统计 txt 文件里实际存在的 ID
@@ -205,7 +205,8 @@ class DedupLoader_AuxImage(DedupLoader):
         total_boxes_raw = 0
 
         data_list = []
-        for img_path, img_aux_path in zip(img_paths, img_aux_paths):
+        for idx, img_path in enumerate(img_paths):
+            img_aux_path = img_aux_paths[idx] if img_aux_paths else None
             stem = Path(img_path).stem
             txt_path = os.path.join(self.txt_dir, stem + '.txt')
             detections = []

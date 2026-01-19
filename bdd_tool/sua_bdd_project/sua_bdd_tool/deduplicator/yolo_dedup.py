@@ -2,6 +2,7 @@ import json
 import math
 import os
 from pathlib import Path
+import cv2
 
 from PIL import Image, ImageDraw, ImageFont
 from folium.utilities import none_max
@@ -10,9 +11,8 @@ from tqdm import tqdm
 import config
 from sua_bdd_tool.utils import yolo_write
 from sua_bdd_tool.utils.file_opt import find_all_images
-from sua_bdd_tool.utils.projection import compute_iou_2d, iou_1d
-from sua_bdd_tool.utils.visualization import get_class_color, get_contrasting_text_color
-
+from sua_bdd_tool.utils.visualization import get_class_color
+from sua_bdd_tool.deduplicator.reid_dedup import FastReID_ONNX, compute_cosine_similarity
 
 def project_adaptive(px, py, W, H, meta, wall_distance_m):
     """
@@ -67,9 +67,12 @@ def project_adaptive(px, py, W, H, meta, wall_distance_m):
     return x, z
 
 # ===================== 2. 核心处理流程 =====================
-def yolo_projecting(img_dir, yolo_txt_dir, exif_db, floor_manager, global_wall_dist, target_classes=None):
+def yolo_projecting(img_dir, yolo_txt_dir, exif_db, floor_manager, conf_thresh, 
+                    reid_model_path=None, target_classes=None, start_gid=0):
     all_dets = []
-    gid = 0
+    gid = start_gid
+
+    reid_model = FastReID_ONNX(reid_model_path)
 
     # 1. 获取所有图片列表
     img_files = find_all_images(img_dir)
@@ -94,7 +97,7 @@ def yolo_projecting(img_dir, yolo_txt_dir, exif_db, floor_manager, global_wall_d
             
         # 【关键步骤】读取当前图片的元数据
         meta = exif_db.get(image_name, none_max)
-
+        img_cv2 = cv2.imread(str(img_path))
         with open(txt_path) as f:
             for line in f:
                 vals = list(map(float, line.strip().split()))
@@ -105,6 +108,8 @@ def yolo_projecting(img_dir, yolo_txt_dir, exif_db, floor_manager, global_wall_d
                 
                 cx, cy, w, h = vals[1:5]
                 conf = vals[5] if len(vals) > 5 else 1.0
+                if conf < conf_thresh: 
+                    continue
                 
                 # 1. 还原像素坐标 (Pixel Coordinates)
                 # 计算左上角 (x1, y1) 和 右下角 (x2, y2)
@@ -116,6 +121,23 @@ def yolo_projecting(img_dir, yolo_txt_dir, exif_db, floor_manager, global_wall_d
 
                 x1_pix, y1_pix, x2_pix, y2_pix = px - bw/2, py - bh/2, px + bw/2, py + bh/2
 
+                # --- ReID Extraction Start ---
+                embedding = None
+                if reid_model is not None:
+                    # Clip coordinates to image bounds
+                    x1_c = max(0, int(x1_pix))
+                    y1_c = max(0, int(y1_pix))
+                    x2_c = min(W, int(x2_pix))
+                    y2_c = min(H, int(y2_pix))
+                    
+                    if x2_c > x1_c and y2_c > y1_c:
+                        patch = img_cv2[y1_c:y2_c, x1_c:x2_c]
+                        try:
+                            embedding = reid_model.extract(patch)
+                        except Exception as e:
+                            print(f"ReID Error on {image_name}: {e}")
+                # --- ReID Extraction End ---
+
                 # 2. 【关键】分别投影 Top-Left 和 Bottom-Right
                 # 投影左上角 -> 得到墙面上物体的 左边界(Lx) 和 上边界(Tz)
                 world_x_left, world_z_top = project_adaptive(x1_pix, y1_pix, W, H, meta, meta['lrf_dist'])
@@ -125,21 +147,21 @@ def yolo_projecting(img_dir, yolo_txt_dir, exif_db, floor_manager, global_wall_d
                 
                 # 3. 重构物理属性
                 # 物理中心 X
-                world_x = (world_x_left + world_x_right) / 2
+                world_x_center = (world_x_left + world_x_right) / 2
                 
                 # 物理中心 Z
-                world_z_abs = (world_z_top + world_z_bottom) / 2
+                world_z_center = (world_z_top + world_z_bottom) / 2
                 
                 # 物理宽度 (由于透视，左右边界的投影距离可能不完全对称，取差值绝对值)
-                real_w = abs(world_x_right - world_x_left)
+                word_w = abs(world_x_right - world_x_left)
                 
                 # 物理高度 (这是解决“虚高”的关键)
-                real_h = abs(world_z_top - world_z_bottom)
+                word_h = abs(world_z_top - world_z_bottom)
               
                 
                 # 2. [新增] 楼层计算
                 # 直接传入绝对海拔 Z
-                floor_name = floor_manager.get_floor(world_z_abs)
+                floor_name = floor_manager.get_floor(world_z_center)
                 
                 # 计算物体实际高度
                 # fx = (meta['focal_35'] / 36.0) * W
@@ -151,22 +173,23 @@ def yolo_projecting(img_dir, yolo_txt_dir, exif_db, floor_manager, global_wall_d
                     "conf": conf,
                     "cxcywh": (cx, cy, w, h),
                     "pxpywh": (px, py, bw, bh),
-                    "x": world_x,
-                    "z": world_z_abs,
-                    "h": real_h,
+                    "r_xyxy": (world_x_left, world_z_top, world_x_right, world_z_bottom),
+                    "r_xywh": (world_x_center, world_z_center, word_w, word_h),
+                    "x": world_x_center,
+                    "z": world_z_center,
+                    'w': word_w,
+                    "h": word_h,
                     "img_w": W,  # [新增] 图片宽度
                     "img_h": H,  # [新增] 图片高度
                     "floor": floor_name,
-                    # 保存一些元数据方便 debug
-                    "meta_alt": meta['abs_alt'],
-                    "meta_lrf": meta['lrf_dist'] 
+                    "embedding": embedding,
                 })
                 gid += 1
     print(f"loaded {len(all_dets)} boxes from {len(img_files)} images")
     return all_dets
 
 
-def merge_boxes_by_id(dets_by_img):
+def merge_boxes_by_id(dets_by_img, conf_thresh=0):
     print("🔄 正在生成合并版数据 (Calculating Union Boxes)...")
     merged_dets_by_img = {}
 
@@ -178,7 +201,16 @@ def merge_boxes_by_id(dets_by_img):
         
         merged_list = []
         for uid, group in id_groups.items():
-            # 如果该 ID 只有一个框，直接保留
+            # ================= 核心：组级过滤 (Group Filter) =================
+            # 找出一组里最强的那个框
+            max_conf = max(d['conf'] for d in group)
+            
+            # 如果这一组里的“最强者”都没达到 0.5，说明这一组全是噪点，直接丢弃！
+            if max_conf < conf_thresh:
+                continue 
+            # ===============================================================
+
+            # 如果该 ID 只有一个框，且通过了阈值检查，直接保留
             if len(group) == 1:
                 merged_list.append(group[0])
                 continue
@@ -215,9 +247,11 @@ def merge_boxes_by_id(dets_by_img):
             
             # 5. 构造新的检测对象 (复制第一个作为模板)
             new_det = group[0].copy()
+            new_det = group[0].copy()
             new_det['cxcywh'] = (new_cx, new_cy, new_nw, new_nh) # 更新 YOLO 坐标
             new_det['pxpywh'] = (new_px, new_py, new_bw, new_bh) # 更新像素坐标
-            new_det['conf'] = max([d['conf'] for d in group])     # 更新置信度 (取最大)
+            new_det['conf'] = max_conf                           # 更新置信度 (取组内最大)
+            new_det['merged_count'] = len(group)                 # [新增] 标记这是合并过的
             
             # 注意：投影坐标(x, z) 此时取中心点的投影可能不太准，
             # 但既然合并了，说明是一个物体，保留原来的 x,z 或者重新投影都可以。
@@ -230,60 +264,242 @@ def merge_boxes_by_id(dets_by_img):
     return merged_dets_by_img
 
 
-def yolo_grouping(all_dets, iou_thresh=0.5, height_thresh_m=0.3, x_thresh_m=1.5):
-    """
-    x_thresh_m: 新增参数，水平方向允许的最大合并距离（米）
-    """
-    print("🧹 基于立面高度 + 水平距离去重...")
 
-    assigned = {}
-    clusters = {}
-    cid = 0
-    for i, a in enumerate(tqdm(all_dets)):
-        if a["gid"] in assigned:
+# ================= 辅助工具：坐标计算修复 =================
+
+def compute_iou_ios_2d(box1, box2):
+    """
+    计算 2D IoU 和 IoS。
+    已修复：自动处理坐标顺序问题 (ymin > ymax 或 ymin < ymax 均可)
+    """
+    # 强制标准化坐标：[xmin, ymin, xmax, ymax]
+    b1 = [min(box1[0], box1[2]), min(box1[1], box1[3]), 
+          max(box1[0], box1[2]), max(box1[1], box1[3])]
+    b2 = [min(box2[0], box2[2]), min(box2[1], box2[3]), 
+          max(box2[0], box2[2]), max(box2[1], box2[3])]
+
+    # 计算交集区域
+    xx1 = max(b1[0], b2[0])
+    yy1 = max(b1[1], b2[1])
+    xx2 = min(b1[2], b2[2])
+    yy2 = min(b1[3], b2[3])
+
+    w = max(0, xx2 - xx1)
+    h = max(0, yy2 - yy1)
+    inter_area = w * h
+
+    if inter_area == 0:
+        return 0.0, 0.0
+
+    # 计算各自面积
+    area1 = (b1[2] - b1[0]) * (b1[3] - b1[1])
+    area2 = (b2[2] - b2[0]) * (b2[3] - b2[1])
+    
+    union_area = area1 + area2 - inter_area
+    smaller_area = min(area1, area2)
+
+    iou = inter_area / union_area if union_area > 0 else 0
+    ios = inter_area / smaller_area if smaller_area > 0 else 0 
+    
+    return iou, ios
+
+class UnionFind:
+    """并查集工具类"""
+    def __init__(self, n):
+        self.parent = list(range(n))
+    
+    def find(self, i):
+        if self.parent[i] != i:
+            self.parent[i] = self.find(self.parent[i]) # 路径压缩
+        return self.parent[i]
+    
+    def union(self, i, j):
+        root_i = self.find(i)
+        root_j = self.find(j)
+        if root_i != root_j:
+            self.parent[root_i] = root_j
+
+# ================= 核心逻辑：ID 分配 (保留全量数据) =================
+
+def yolo_grouping(all_dets, 
+                  iou_thresh=0.5, 
+                  ios_thresh=0.7, 
+                  reid_thresh=0.75,
+                  spatial_limit_m=2.0,
+                  y_search_range=2.0,
+                  id_offset=0,
+                  ):
+    """
+    基于立面全局坐标(r_xyxy)进行 2D 聚类，仅分配 ID，不合并结果。
+    
+    Returns:
+        all_dets: 原始列表，但每个元素增加了 'id' 字段。
+    """
+    print(f"🧹 启动基于立面全局坐标(r_xyxy)的 2D ID分配(offset={id_offset})...")
+    
+    n = len(all_dets)
+    uf = UnionFind(n)
+    
+    # 1. 预处理：记录原始索引，防止排序后找不到回家的路
+    for idx, d in enumerate(all_dets):
+        d['_orig_idx'] = idx # 临时字段，用于 UnionFind 映射
+    
+    # 2. 排序：按全局 Y 坐标 (ymin) 排序，极大加速检索
+    # 注意：使用 normalized 后的 min 值排序，防止数据格式混乱
+    sorted_dets = sorted(all_dets, key=lambda x: min(x['r_xyxy'][1], x['r_xyxy'][3]))
+
+    # 3. 建立连接 (构建图)
+    # 使用排序后的列表进行双重循环
+    for i in tqdm(range(n), desc="Grouping IDs"):
+        a = sorted_dets[i]
+        a_idx = a['_orig_idx']
+        
+        # 归一化 a 的坐标用于快速比较
+        a_raw = a['r_xyxy']
+        a_ymin = min(a_raw[1], a_raw[3])
+        a_ymax = max(a_raw[1], a_raw[3])
+        
+        for j in range(i + 1, n):
+            b = sorted_dets[j]
+            b_idx = b['_orig_idx']
+            
+            # 归一化 b 的坐标
+            b_raw = b['r_xyxy']
+            b_ymin = min(b_raw[1], b_raw[3])
+            
+            # 【加速策略】Early Break
+            # 如果 b 的顶部 已经在 a 的底部下面很远，后续的更不用看了
+            if b_ymin - a_ymax > y_search_range: 
+                break 
+
+            # 【同图互斥】同一张图出的框，物理上绝对不合并
+            if a['img'] == b['img']:
+                continue
+
+            # 计算 2D 空间关系
+            iou, ios = compute_iou_ios_2d(a_raw, b_raw)
+
+            # 【判定逻辑】只要满足任意一个条件，就认为是同一个物理对象
+            is_match = False
+            if iou > iou_thresh or ios > ios_thresh: 
+                is_match = True
+            elif a['embedding'] is not None and b['embedding'] is not None:
+                dist_x = abs(a['x'] - b['x'])
+                dist_z = abs(a['z'] - b['z'])
+
+                if dist_x < spatial_limit_m and dist_z < spatial_limit_m:
+                    # 计算 ReID 相似度
+                    sim = compute_cosine_similarity(a['embedding'], b['embedding'])
+                    if sim > reid_thresh:
+                        is_match = True
+            
+            if is_match:
+                uf.union(a_idx, b_idx)
+
+    # 4. 结果回写：将计算出的 Root ID 赋予原始数据
+    unique_ids = set()
+    for d in all_dets:
+        root_id = uf.find(d['_orig_idx'])
+        d['id'] = root_id+id_offset
+        unique_ids.add(root_id)
+        
+        # 清理临时字段
+        del d['_orig_idx']
+
+    print(f"✅ ID 分配完成：原始 {n} 个检测框 -> 归属于 {len(unique_ids)} 个物理对象")
+    return all_dets
+
+# ================= 可视化：同图冲突审计 (精简版) =================
+
+def analyze_and_vis_conflicts(dets_by_img, img_dir, output_dir, class_names=None, vis_font_size=20, vis=True):
+    """
+    仅生成可视化图片，用于人工检查“同一张图里是否有多个框被分到了同一个ID”。
+    这通常意味着：
+    1. 碎片化检测（应该合并）
+    2. 错误的关联（不该合并）
+    """
+    if not vis:
+        return
+    
+    print("🕵️ 正在生成同图冲突可视化 (Visual Audit)...")
+    
+    conflict_vis_dir = os.path.join(output_dir, "vis_conflicts_audit")
+    os.makedirs(conflict_vis_dir, exist_ok=True)
+    
+    # 字体加载
+    try:
+        font = ImageFont.truetype("arial.ttf", size=vis_font_size)
+    except:
+        font = ImageFont.load_default()
+
+    vis_count = 0
+    
+    for img_name, dets in tqdm(dets_by_img.items(), desc="Visualizing"):
+        # 1. 在当前图片内，按 ID 分组
+        id_groups = {}
+        for d in dets:
+            id_groups.setdefault(d['id'], []).append(d)
+        
+        # 2. 筛选出有冲突的组 (len > 1)
+        conflict_groups = [group for group in id_groups.values() if len(group) > 1]
+        
+        if not conflict_groups:
+            continue # 如果这张图没有冲突，跳过，节省时间
+
+        vis_count += 1
+        
+        # 3. 绘图
+        img_path = os.path.join(img_dir, img_name)
+        if not os.path.exists(img_path):
+             # 尝试拼接 jpg 后缀 (适配代码中可能的命名差异)
+            img_path = os.path.join(img_dir, img_name + ".jpg") 
+        
+        if not os.path.exists(img_path):
             continue
 
-        clusters[cid] = [a]
-        assigned[a["gid"]] = cid
+        try:
+            with Image.open(img_path).convert("RGB") as img:
+                draw = ImageDraw.Draw(img)
+                
+                # A. 仅绘制有冲突的那些框 (重点突出)
+                # 如果你想看全量框，可以遍历 dets，但这里为了聚焦问题，只画冲突组
+                for group in conflict_groups:
+                    
+                    # 给这一组生成一个随机颜色，或者统一用红色警示
+                    # 这里为了区分不同组，使用其中一个框的 class 颜色
+                    main_cls = group[0]['cls']
+                    color = get_class_color(main_cls, config.COLOR_PALETTE)
+                    
+                    # 画组内的小框
+                    for d in group:
+                        px, py, bw, bh = d['pxpywh']
+                        x1, y1 = px - bw/2, py - bh/2
+                        x2, y2 = px + bw/2, py + bh/2
+                        
+                        draw.rectangle([x1, y1, x2, y2], outline=color, width=3)
+                        
+                        # 标签：显示 ID
+                        label = f"ID:{d['id']}"
+                        draw.text((x1, y1 - 15), label, fill="yellow", font=font)
 
-        for b in all_dets[i + 1:]:
-            if b["gid"] in assigned:
-                continue
-            if a["cls"] != b["cls"]:
-                continue
+                    # 画一个大的包围框 (Union Box) 表示合并范围
+                    all_x1 = [d['pxpywh'][0] - d['pxpywh'][2]/2 for d in group]
+                    all_y1 = [d['pxpywh'][1] - d['pxpywh'][3]/2 for d in group]
+                    all_x2 = [d['pxpywh'][0] + d['pxpywh'][2]/2 for d in group]
+                    all_y2 = [d['pxpywh'][1] + d['pxpywh'][3]/2 for d in group]
+                    
+                    ux1, uy1 = min(all_x1), min(all_y1)
+                    ux2, uy2 = max(all_x2), max(all_y2)
+                    
+                    # 使用白色虚线风格 (实线代替) 框住这一组
+                    draw.rectangle([ux1-5, uy1-5, ux2+5, uy2+5], outline="white", width=4)
+                    draw.text((ux1, uy1 - 40), f"MERGE GROUP {group[0]['id']}", fill="white", font=font, stroke_width=2, stroke_fill="black")
 
-            # ===================== 新增修复逻辑 ====================
-            # 1. 【同图互斥检查】
-            # 如果两个框来自同一张图片，且像素 IoU 很小（没有重叠），
-            # 那么它们绝对是两个不同的物体，禁止合并！
-            if a["img"] == b["img"]:
-                pixel_iou = compute_iou_2d(a["cxcywh"], b["cxcywh"])
-                if pixel_iou < 0.1: # 阈值很低，只要不重叠就是不同物体
-                    continue
+                img.save(os.path.join(conflict_vis_dir, f"AUDIT_{img_name}.jpg"))
+        except Exception as e:
+            print(f"Error drawing {img_name}: {e}")
 
-            # 2. 【水平距离检查】(简单的 X 轴过滤)
-            # 计算投影后的水平 X 距离
-            # 注意：这假设无人机主要是垂直飞行(做电梯运动)，或者 X 轴相对位置变化不大
-            x_diff = abs(a["x"] - b["x"])
-            if x_diff > x_thresh_m:
-                continue
-            
-            # =======================================================
-            # 原有的高度检查逻辑
-            a_min, a_max = a["z"] - a["h"]/2, a["z"] + a["h"]/2
-            b_min, b_max = b["z"] - b["h"]/2, b["z"] + b["h"]/2
-
-            if abs(a["z"] - b["z"]) < height_thresh_m and \
-               iou_1d(a_min, a_max, b_min, b_max) > iou_thresh:
-                clusters[cid].append(b)
-                assigned[b["gid"]] = cid
-
-        cid += 1
-
-    print(f"✅ 形成 {len(clusters)} 个唯一物体 ID")
-    for d in all_dets:
-        d["id"] = assigned[d["gid"]]
-    return all_dets
+    print(f"✅ 可视化完成！生成了 {vis_count} 张包含合并组的图片到: {conflict_vis_dir}")
 
 
 def group_dets_by_image(all_dets):
@@ -304,115 +520,115 @@ def dets_write(dets_by_img, save_dir):
     print(f"✅ 写入 {len(dets_by_img)} 个文件到 {save_dir}")
 
 
-def analyze_and_vis_conflicts(dets_by_img, img_dir, output_dir, class_names=None, vis_font_size=20, vis=True):
-    if not vis:
-        return
-    print("🕵️ 正在分析同图 ID 冲突并生成合并预览...")
+# def analyze_and_vis_conflicts(dets_by_img, img_dir, output_dir, class_names=None, vis_font_size=20, vis=True):
+#     if not vis:
+#         return
+#     print("🕵️ 正在分析同图 ID 冲突并生成合并预览...")
     
-    # 路径准备
-    conflict_vis_dir = os.path.join(output_dir, "vis_conflicts_audit")
-    os.makedirs(conflict_vis_dir, exist_ok=True)
-    report_path = os.path.join(output_dir, "intra_image_conflicts_report.txt")
+#     # 路径准备
+#     conflict_vis_dir = os.path.join(output_dir, "vis_conflicts_audit")
+#     os.makedirs(conflict_vis_dir, exist_ok=True)
+#     report_path = os.path.join(output_dir, "intra_image_conflicts_report.txt")
     
-    # 字体加载
-    try:
-        font = ImageFont.truetype("arial.ttf", size=vis_font_size) # Windows
-    except:
-        font = ImageFont.load_default()
+#     # 字体加载
+#     try:
+#         font = ImageFont.truetype("arial.ttf", size=vis_font_size) # Windows
+#     except:
+#         font = ImageFont.load_default()
 
-    conflict_count = 0
+#     conflict_count = 0
     
-    with open(report_path, "w", encoding="utf-8") as f_rpt:
-        f_rpt.write("Image_Name, ID, Class, Count, Merge_Suggestion\n")
+#     with open(report_path, "w", encoding="utf-8") as f_rpt:
+#         f_rpt.write("Image_Name, ID, Class, Count, Merge_Suggestion\n")
         
-        for img_name, dets in tqdm(dets_by_img.items()):
-            # 1. 在当前图片内，按 ID 分组
-            id_groups = {}
-            for d in dets:
-                id_groups.setdefault(d['id'], []).append(d)
+#         for img_name, dets in tqdm(dets_by_img.items()):
+#             # 1. 在当前图片内，按 ID 分组
+#             id_groups = {}
+#             for d in dets:
+#                 id_groups.setdefault(d['id'], []).append(d)
             
-            # 2. 检查是否有 ID 的数量 > 1
-            has_conflict = False
-            img_conflicts = [] # 记录当前图的冲突组
+#             # 2. 检查是否有 ID 的数量 > 1
+#             has_conflict = False
+#             img_conflicts = [] # 记录当前图的冲突组
             
-            for uid, group in id_groups.items():
-                if len(group) > 1:
-                    has_conflict = True
-                    conflict_count += 1
+#             for uid, group in id_groups.items():
+#                 if len(group) > 1:
+#                     has_conflict = True
+#                     conflict_count += 1
                     
-                    # 获取类别名
-                    cls_idx = group[0]['cls']
-                    cls_str = class_names[cls_idx] if class_names and cls_idx < len(class_names) else str(cls_idx)
+#                     # 获取类别名
+#                     cls_idx = group[0]['cls']
+#                     cls_str = class_names[cls_idx] if class_names and cls_idx < len(class_names) else str(cls_idx)
                     
-                    # 写入报告
-                    # 计算这一组在图片上的最大跨度，帮助判断是否应该合并
-                    xs = [d['pxpywh'][0] for d in group]
-                    span_px = max(xs) - min(xs)
-                    suggestion = f"Span {int(span_px)}px"
-                    f_rpt.write(f"{img_name}, {uid}, {cls_str}, {len(group)}, {suggestion}\n")
+#                     # 写入报告
+#                     # 计算这一组在图片上的最大跨度，帮助判断是否应该合并
+#                     xs = [d['pxpywh'][0] for d in group]
+#                     span_px = max(xs) - min(xs)
+#                     suggestion = f"Span {int(span_px)}px"
+#                     f_rpt.write(f"{img_name}, {uid}, {cls_str}, {len(group)}, {suggestion}\n")
                     
-                    img_conflicts.append(group)
+#                     img_conflicts.append(group)
 
-            # 3. 如果有冲突，生成专门的“审计图”
-            if has_conflict:
-                img_path = os.path.join(img_dir, img_name + ".jpg") # 假设是 jpg，需注意扩展名
-                if not os.path.exists(img_path):
-                     # 尝试 .JPG
-                    img_path = os.path.join(img_dir, img_name + ".JPG")
+#             # 3. 如果有冲突，生成专门的“审计图”
+#             if has_conflict:
+#                 img_path = os.path.join(img_dir, img_name + ".jpg") # 假设是 jpg，需注意扩展名
+#                 if not os.path.exists(img_path):
+#                      # 尝试 .JPG
+#                     img_path = os.path.join(img_dir, img_name + ".JPG")
                 
-                if not os.path.exists(img_path): continue
+#                 if not os.path.exists(img_path): continue
                 
-                with Image.open(img_path).convert("RGB") as img:
-                    draw = ImageDraw.Draw(img)
+#                 with Image.open(img_path).convert("RGB") as img:
+#                     draw = ImageDraw.Draw(img)
                     
-                    # A. 先画所有的常规框 (按类别着色)
-                    for d in dets:
-                        cls_color = get_class_color(d['cls'], config.COLOR_PALETTE)
+#                     # A. 先画所有的常规框 (按类别着色)
+#                     for d in dets:
+#                         cls_color = get_class_color(d['cls'], config.COLOR_PALETTE)
 
-                        px, py, bw, bh = d['pxpywh']
-                        x1, y1 = px - bw/2, py - bh/2
-                        x2, y2 = px + bw/2, py + bh/2
+#                         px, py, bw, bh = d['pxpywh']
+#                         x1, y1 = px - bw/2, py - bh/2
+#                         x2, y2 = px + bw/2, py + bh/2
                         
-                        # 画实线小框
-                        draw.rectangle([x1, y1, x2, y2], outline=cls_color, width=3)
+#                         # 画实线小框
+#                         draw.rectangle([x1, y1, x2, y2], outline=cls_color, width=3)
                         
-                        # 标签
-                        cls_idx = d['cls']
-                        cls_str = class_names[cls_idx] if class_names and cls_idx < len(class_names) else str(cls_idx)
-                        label = f"{cls_str}|{d['id']}"
+#                         # 标签
+#                         cls_idx = d['cls']
+#                         cls_str = class_names[cls_idx] if class_names and cls_idx < len(class_names) else str(cls_idx)
+#                         label = f"{cls_str}|{d['id']}"
                         
-                        # 标签背景
-                        text_bbox = font.getbbox(label)
-                        tw, th = text_bbox[2]-text_bbox[0], text_bbox[3]-text_bbox[1]
-                        draw.rectangle([x1, y1 - th - 4, x1 + tw + 4, y1], fill=cls_color)
-                        txt_color = get_contrasting_text_color(cls_color)
-                        draw.text((x1 + 2, y1 - th - 4), label, fill=txt_color, font=font)
+#                         # 标签背景
+#                         text_bbox = font.getbbox(label)
+#                         tw, th = text_bbox[2]-text_bbox[0], text_bbox[3]-text_bbox[1]
+#                         draw.rectangle([x1, y1 - th - 4, x1 + tw + 4, y1], fill=cls_color)
+#                         txt_color = get_contrasting_text_color(cls_color)
+#                         draw.text((x1 + 2, y1 - th - 4), label, fill=txt_color, font=font)
 
-                    # B. 再画“合并预览框” (Union Box) - 只针对有冲突的组
-                    for group in img_conflicts:
-                        # 计算 Union Box 坐标
-                        all_x1 = [d['pxpywh'][0] - d['pxpywh'][2]/2 for d in group]
-                        all_y1 = [d['pxpywh'][1] - d['pxpywh'][3]/2 for d in group]
-                        all_x2 = [d['pxpywh'][0] + d['pxpywh'][2]/2 for d in group]
-                        all_y2 = [d['pxpywh'][1] + d['pxpywh'][3]/2 for d in group]
+#                     # B. 再画“合并预览框” (Union Box) - 只针对有冲突的组
+#                     for group in img_conflicts:
+#                         # 计算 Union Box 坐标
+#                         all_x1 = [d['pxpywh'][0] - d['pxpywh'][2]/2 for d in group]
+#                         all_y1 = [d['pxpywh'][1] - d['pxpywh'][3]/2 for d in group]
+#                         all_x2 = [d['pxpywh'][0] + d['pxpywh'][2]/2 for d in group]
+#                         all_y2 = [d['pxpywh'][1] + d['pxpywh'][3]/2 for d in group]
                         
-                        ux1, uy1 = min(all_x1), min(all_y1)
-                        ux2, uy2 = max(all_x2), max(all_y2)
+#                         ux1, uy1 = min(all_x1), min(all_y1)
+#                         ux2, uy2 = max(all_x2), max(all_y2)
                         
-                        # 画一个醒目的白色大框包围它们
-                        # 模拟虚线效果不好做，直接用粗白线 + 内部无填充
-                        draw.rectangle([ux1-5, uy1-5, ux2+5, uy2+5], outline="white", width=4)
+#                         # 画一个醒目的白色大框包围它们
+#                         # 模拟虚线效果不好做，直接用粗白线 + 内部无填充
+#                         draw.rectangle([ux1-5, uy1-5, ux2+5, uy2+5], outline="white", width=4)
                         
-                        # 在大框顶部写上提示
-                        merge_label = f"MERGE PREVIEW: ID {group[0]['id']} (x{len(group)})"
-                        draw.text((ux1, uy1 - 30), merge_label, fill="white", font=font, stroke_width=2, stroke_fill="black")
+#                         # 在大框顶部写上提示
+#                         merge_label = f"MERGE PREVIEW: ID {group[0]['id']} (x{len(group)})"
+#                         draw.text((ux1, uy1 - 30), merge_label, fill="white", font=font, stroke_width=2, stroke_fill="black")
 
-                    # 保存图片到 vis_conflicts_audit 文件夹
-                    img.save(os.path.join(conflict_vis_dir, img_name + "_audit.jpg"))
+#                     # 保存图片到 vis_conflicts_audit 文件夹
+#                     img.save(os.path.join(conflict_vis_dir, img_name + "_audit.jpg"))
 
-    print(f"✅ 冲突分析完成！发现 {conflict_count} 处潜在合并。")
-    print(f"📄 报告已保存: {report_path}")
-    print(f"🖼️ 可视化已保存: {conflict_vis_dir}")
+#     print(f"✅ 冲突分析完成！发现 {conflict_count} 处潜在合并。")
+#     print(f"📄 报告已保存: {report_path}")
+#     print(f"🖼️ 可视化已保存: {conflict_vis_dir}")
 
 
 def export_projection_details_json(all_dets, output_path):

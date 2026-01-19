@@ -9,6 +9,8 @@ from tqdm import tqdm
 
 
 def find_all_images(folder):
+    if folder is None:
+        return None
     if isinstance(folder, str):
         folder = Path(folder)
     exts = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".JPG", ".JPEG", ".PNG", ".TIF", ".TIFF"}

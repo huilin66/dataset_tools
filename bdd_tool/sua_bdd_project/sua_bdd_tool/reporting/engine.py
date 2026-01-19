@@ -424,7 +424,7 @@ class BatchDedupEngine(DedupReportEngine):
             max_workers=max_workers,
         )
 
-    def process_view_data_aux(self, view_id, img_dir, img_aux_dir, label_dir, project_info_path, class_path, target_cls_ids=None, max_workers=1):
+    def process_view_data_aux(self, view_id, img_dir, label_dir, project_info_path, class_path, target_cls_ids=None, img_aux_dir=None, max_workers=1):
         """处理双图 (Aux) 模式"""
         if self.project_info_path != project_info_path:
             self.proj_meta = self._load_json(project_info_path)
@@ -434,17 +434,20 @@ class BatchDedupEngine(DedupReportEngine):
         output_dirs = {
             'vis': os.path.join(base_output, 'batch_vis'),
             'crop': os.path.join(base_output, 'batch_crop'),
-            'vis_aux': os.path.join(base_output, 'batch_vis_aux'),
-            'crop_aux': os.path.join(base_output, 'batch_crop_aux')
         }
 
         loader_kwargs = {
             'img_dir': img_dir,
-            'img_aux_dir': img_aux_dir,
             'txt_dir': label_dir,
             'class_path': class_path,
             'target_cls_ids': target_cls_ids
         }
+        if img_aux_dir is not None:
+            output_dirs['vis_aux'] = os.path.join(base_output, 'batch_vis_aux')
+            output_dirs['crop_aux'] = os.path.join(base_output, 'batch_crop_aux')
+            loader_kwargs['img_aux_dir'] = img_aux_dir
+        else:
+            loader_kwargs['img_aux_dir'] = None
 
         return self._process_view_generic(
             view_id, 
