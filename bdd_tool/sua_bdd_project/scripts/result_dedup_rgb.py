@@ -18,7 +18,7 @@ def main():
     views_distance = load_json(config.VIEW_DIST_STATISTICS_JSON)
     print(">>> Done!\n")
 
-    views_list = os.listdir(config.VIEWS_RGB_PATH)[:1]
+    views_list = os.listdir(config.VIEWS_RGB_PATH)
     print(f">>> Start to process {len(views_list)} views")
     for view_name in views_list:
         view_id = int(view_name[1:])
@@ -49,7 +49,7 @@ def main():
         print(">>> Done!\n")
  
         print(f">>>  [{view_name}] 2. assign id to yolo result...")
-        all_dets_with_id = yolo_grouping(all_dets, config.IOU_THRESH, config.HEIGHT_THRESH_M, config.X_THRESH_M, id_offset=view_id_offset)
+        all_dets_with_id = yolo_grouping(all_dets, config.IOU_THRESH, config.IOS_THRESH, config.REID_DEUP_THRESH_RGB, config.SPATIAL_LIMIT_THRESHOLD, id_offset=view_id_offset)
         print(">>> Done!\n")
 
         print(f">>>  [{view_name}] 3. grouping yolo result by image...")

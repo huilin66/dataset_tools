@@ -6,7 +6,7 @@ def main():
     # result_dedup_t.main()
     # report_export_t.main()
     result_dedup_rgb.main()
-    # report_export_rgb.main()
+    report_export_rgb.main()
 
 if __name__ == "__main__":
     main()

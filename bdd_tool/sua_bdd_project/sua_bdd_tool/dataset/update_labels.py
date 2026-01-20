@@ -1,6 +1,11 @@
+
 import os
 from pathlib import Path
+import shutil
+
 from PIL import Image
+import pandas as pd
+from tqdm import tqdm
 
 
 def update_labels(
@@ -493,6 +498,168 @@ def remove_small_boxes_by_pixel(
     )
 
 
+def update_excel_from_folders(crop_dir, excel_path, class_name_src, col_src, col_dst, col_name='name'):
+    new_datas = []
+
+    class_folders = [d for d in os.listdir(crop_dir) if os.path.isdir(os.path.join(crop_dir, d))]
+
+    print(f"正在扫描文件夹: {class_folders}...")
+
+    for class_name_dst in class_folders:
+        new_data = []
+        class_dir = os.path.join(crop_dir, class_name_dst)
+        # 遍历该类别文件夹下的所有图片
+        for filename in os.listdir(class_dir):
+            if filename.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp')):
+                new_data.append({
+                    col_name:filename, 
+                    col_src:class_name_src, 
+                    col_dst:class_name_dst})
+        print(f'find {len(new_data)} records for class {class_name_dst}')
+        new_datas.extend(new_data)
+    
+    print(f'find {len(new_datas)} records in total')
+
+    # 创建新的 DataFrame
+    df_new = pd.DataFrame(new_datas)
+
+    # 检查 Excel 是否已存在
+    if os.path.exists(excel_path):
+        print("Excel文件已存在，正在追加数据...")
+        df_old = pd.read_excel(excel_path)
+        print(f"原有数据{len(df_old)}条")
+        df_final = pd.concat([df_old, df_new], ignore_index=True)
+    else:
+        print("创建新的Excel文件...")
+        df_final = df_new
+
+    print(f"更新完成！共写入记录: {len(df_final)} 条。")
+    df_final.drop_duplicates(subset=[col_name], keep='last', inplace=True)
+    print(f"去重完成！共写入记录: {len(df_final)} 条。")
+    df_final.to_excel(excel_path, index=False)
+    print(f"保存至: {excel_path}")
+
+
+def update_yolo_labels(class_path, excel_path, input_dir, output_dir, col_src, col_dst, col_name='name'):
+    # 1. 加载类别映射
+    name_to_id = load_class_map(class_path)
+    print(f"类别映射加载成功: {name_to_id}")
+
+    df = pd.read_excel(excel_path)
+    
+    # 创建输出目录
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+        print(f"已创建输出目录: {output_dir}")
+
+    # ============================================================
+    # 阶段一：在内存中按文件名汇总所有修改 (防止多次写入互相覆盖)
+    # 结构: { "image_01.txt": { 0: 2, 5: 1 } }  即 { 文件名: { 行号: 新类别ID } }
+    # ============================================================
+    file_updates_map = {}
+    
+    success_count = 0
+    keep_count = 0
+    empty_count = 0
+    print("正在分析 Excel 数据...")
+    for index, row in df.iterrows():
+        file_full_name = str(row[col_name])
+        src_class_name = str(row[col_src])
+        new_class_name = str(row[col_dst])
+
+        src_class_id = name_to_id[src_class_name]
+        new_class_id = name_to_id[new_class_name] if new_class_name != 'nan' else -1
+
+
+        name_no_ext = os.path.splitext(file_full_name)[0]
+        image_name_str, box_id_str = name_no_ext.rsplit('_', 1)
+        box_id = int(box_id_str)
+        txt_filename = image_name_str + ".txt"
+        
+        # 将修改记录存入字典
+        if txt_filename not in file_updates_map:
+            file_updates_map[txt_filename] = {}
+        
+        # 记录：第 box_id 行 需要改成 new_class_id
+        file_updates_map[txt_filename][box_id] = [src_class_id, new_class_id]
+
+
+    # ============================================================
+    # 阶段二：应用修改并生成新文件 (保留未修改的行)
+    # ============================================================
+    print(f"开始处理 TXT 文件，共涉及 {len(file_updates_map)} 个文件...")
+    
+    processed_files_count = 0
+
+    for txt_filename, updates in file_updates_map.items():
+        txt_input_path = os.path.join(input_dir, txt_filename)
+        txt_output_path = os.path.join(output_dir, txt_filename)
+
+
+        # 读取原始文件所有行
+        with open(txt_input_path, 'r') as f_in:
+            lines = f_in.readlines()
+
+        new_lines = []
+        # 遍历原始文件的每一行 (每一行对应一个框)
+        for idx, line in enumerate(lines):
+            parts = line.strip().split()
+            if not parts: 
+                continue # 跳过空行
+
+            # 检查当前行 (BoxID) 是否在我们的更新列表中
+            if idx in updates:
+                old_cls_id_txt = int(parts[0])
+                old_cls_id, new_cls_id = int(updates[idx][0]), int(updates[idx][1])
+                
+                # 如果类别确实不同，进行修改
+                assert old_cls_id_txt == old_cls_id, f"old_cls_id_txt({old_cls_id_txt}) != old_cls_id({old_cls_id}), 行号{idx}, 文件名{txt_filename}"
+                if new_cls_id == -1:
+                    empty_count += 1
+                    continue
+                
+                parts[0] = str(new_cls_id)
+                new_line = " ".join(parts) + "\n"
+                new_lines.append(new_line)
+                success_count += 1
+            else:
+                # 这是一个不在 Excel 中的框，必须保留！
+                new_lines.append(line)
+                keep_count += 1
+
+        # 写入新文件夹
+        with open(txt_output_path, 'w') as f_out:
+            f_out.writelines(new_lines)
+            
+        processed_files_count += 1
+
+    copy_file_count = 0
+    input_list = os.listdir(input_dir)
+    for file_name in tqdm(input_list):
+        input_path = os.path.join(input_dir, file_name)
+        output_path = os.path.join(output_dir, file_name)
+        if not os.path.exists(output_path):
+            shutil.copy(input_path, output_path)
+            copy_file_count += 1
+
+    print("-" * 30)
+    print(f"处理完成。")
+    print(f"- 复制文件数: {copy_file_count}")
+    print(f"- 涉及文件数: {processed_files_count}")
+    print(f"- 成功更新框数: {success_count}")
+    print(f"- 失败/跳过记录: {empty_count}")
+    print(f"- 保留框数: {keep_count}")
+    print(f"- 结果已保存至: {output_dir}")
+
+# 辅助函数示例 (你需要确保这个函数在你的代码中已定义)
+def load_class_map(class_path):
+    mapping = {}
+    with open(class_path, 'r') as f:
+        for idx, line in enumerate(f):
+            name = line.strip()
+            if name:
+                mapping[name] = idx
+    return mapping
 
 # ================= 配置区域 =================
 if __name__ == "__main__":
@@ -520,11 +687,31 @@ if __name__ == "__main__":
 
     # ================= 配置区域 =================
 
-    LBL_DIR = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\dataset\rgb_selected_3_p3\labels"       # 标注文件夹
-    IMG_DIR = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\dataset\rgb_selected_3_p3\images"       # 图片文件夹
-    OUT_DIR = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\dataset\rgb_selected_3_p3_v3\labels"   # 输出文件夹
+    LBL_DIR = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\dataset\rgb_selected_3_p12_v3\labels"       # 标注文件夹
+    IMG_DIR = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\dataset\rgb_selected_3_p12_v3\images"       # 图片文件夹
+    OUT_DIR = r"\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\dataset\rgb_selected_3_p12_v4\labels"   # 输出文件夹
     
     MIN_W = 32  # 最小宽度像素
     MIN_H = 32  # 最小高度像素
 
     remove_small_boxes_by_pixel(LBL_DIR, IMG_DIR, OUT_DIR, MIN_W, MIN_H)
+
+    # ================= 配置区域 =================
+    # # 1. crop图片所在的根目录 (里面包含各个类别的子文件夹)
+    # CROP_ROOT_DIR = r'\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\dataset\rgb_selected_3_p12\images_crop\efflorescence_update' 
+
+    # # 2. Excel文件保存路径
+    # EXCEL_PATH = r'\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\dataset\rgb_selected_3_p12\images_crop\data.xlsx'
+
+    # # 3. 定义Excel的列名
+    # COL_SRC = 'cat0'   # 对应 prompt 中的 column_src (文件名)
+    # COL_DST = 'cat1'   # 对应 prompt 中的 column_dst (类别/文件夹名)
+    # CLASS_NAME_SRC = 'Efflorescence'
+    # # update_excel_from_folders(CROP_ROOT_DIR, EXCEL_PATH, CLASS_NAME_SRC, COL_SRC, COL_DST)
+    # # ===========================================
+
+
+    # LABEL_DIR_SRC = r'\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\dataset\rgb_selected_3_p12\labels' 
+    # LABEL_DIR_DST = r'\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\dataset\rgb_selected_3_p12_v3\labels' 
+    # CLASSES_TXT_PATH = r'\\158.132.186.40\isds\huilin\bdd\collected_data\HMT_data\dataset\rgb_selected_3_p12\class.txt'
+    # update_yolo_labels(CLASSES_TXT_PATH, EXCEL_PATH, LABEL_DIR_SRC, LABEL_DIR_DST, COL_SRC, COL_DST)

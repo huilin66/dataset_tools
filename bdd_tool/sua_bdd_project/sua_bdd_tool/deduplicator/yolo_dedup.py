@@ -324,9 +324,8 @@ class UnionFind:
 def yolo_grouping(all_dets, 
                   iou_thresh=0.5, 
                   ios_thresh=0.7, 
-                  reid_thresh=0.75,
+                  reid_thresh=0.5,
                   spatial_limit_m=2.0,
-                  y_search_range=2.0,
                   id_offset=0,
                   ):
     """
@@ -348,62 +347,45 @@ def yolo_grouping(all_dets,
     # 注意：使用 normalized 后的 min 值排序，防止数据格式混乱
     sorted_dets = sorted(all_dets, key=lambda x: min(x['r_xyxy'][1], x['r_xyxy'][3]))
 
-    # 3. 建立连接 (构建图)
-    # 使用排序后的列表进行双重循环
-    for i in tqdm(range(n), desc="Grouping IDs"):
+    for i in tqdm(range(n), desc="UnionFind Grouping"):
         a = sorted_dets[i]
-        a_idx = a['_orig_idx']
-        
-        # 归一化 a 的坐标用于快速比较
-        a_raw = a['r_xyxy']
-        a_ymin = min(a_raw[1], a_raw[3])
-        a_ymax = max(a_raw[1], a_raw[3])
         
         for j in range(i + 1, n):
             b = sorted_dets[j]
-            b_idx = b['_orig_idx']
             
-            # 归一化 b 的坐标
-            b_raw = b['r_xyxy']
-            b_ymin = min(b_raw[1], b_raw[3])
-            
-            # 【加速策略】Early Break
-            # 如果 b 的顶部 已经在 a 的底部下面很远，后续的更不用看了
-            if b_ymin - a_ymax > y_search_range: 
+            # 如果 b 在 a 太远，直接 break
+            dist_z = min(b['r_xyxy'][1], b['r_xyxy'][3]) - max(a['r_xyxy'][1], a['r_xyxy'][3])
+            dist_x = min(b['r_xyxy'][0], b['r_xyxy'][2]) - max(a['r_xyxy'][0], a['r_xyxy'][2])
+            if dist_z > spatial_limit_m or dist_x > spatial_limit_m: 
                 break 
 
-            # 【同图互斥】同一张图出的框，物理上绝对不合并
-            if a['img'] == b['img']:
-                continue
+            if a['img'] == b['img']: continue # 同图不合并
 
-            # 计算 2D 空间关系
-            iou, ios = compute_iou_ios_2d(a_raw, b_raw)
-
-            # 【判定逻辑】只要满足任意一个条件，就认为是同一个物理对象
-            is_match = False
-            if iou > iou_thresh or ios > ios_thresh: 
-                is_match = True
-            elif a['embedding'] is not None and b['embedding'] is not None:
-                dist_x = abs(a['x'] - b['x'])
-                dist_z = abs(a['z'] - b['z'])
-
-                if dist_x < spatial_limit_m and dist_z < spatial_limit_m:
-                    # 计算 ReID 相似度
-                    sim = compute_cosine_similarity(a['embedding'], b['embedding'])
-                    if sim > reid_thresh:
-                        is_match = True
+            # 3. 计算 IoU/IoS
+            iou, ios = compute_iou_ios_2d(a['r_xyxy'], b['r_xyxy'])
             
-            if is_match:
-                uf.union(a_idx, b_idx)
+            should_merge = False
+            
+            # --- 策略 A: 强空间重叠 (原有逻辑) ---
+            if iou > iou_thresh or ios > ios_thresh:
+                should_merge = True
+            
+            # --- 策略 B: 小目标投影错位修复 (新增逻辑) ---
+            # 如果空间重叠不够，但物理距离很近，且长得一样
+            elif 'embedding' in a and 'embedding' in b:
+                sim = compute_cosine_similarity(a['embedding'], b['embedding'])
+                if sim > reid_thresh:
+                    should_merge = True
+            
+            if should_merge:
+                uf.union(a['_orig_idx'], b['_orig_idx'])
 
-    # 4. 结果回写：将计算出的 Root ID 赋予原始数据
+    # 4. 回写 ID
     unique_ids = set()
     for d in all_dets:
-        root_id = uf.find(d['_orig_idx'])
-        d['id'] = root_id+id_offset
-        unique_ids.add(root_id)
-        
-        # 清理临时字段
+        root = uf.find(d['_orig_idx'])
+        d['id'] = root + id_offset
+        unique_ids.add(root)
         del d['_orig_idx']
 
     print(f"✅ ID 分配完成：原始 {n} 个检测框 -> 归属于 {len(unique_ids)} 个物理对象")

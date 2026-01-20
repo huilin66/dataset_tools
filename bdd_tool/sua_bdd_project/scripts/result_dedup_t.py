@@ -49,7 +49,7 @@ def main():
         print(">>> Done!\n")
  
         print(f">>>  [{view_name}] 2. assign id to yolo result...")
-        all_dets_with_id = yolo_grouping(all_dets, config.IOU_THRESH, config.HEIGHT_THRESH_M, config.X_THRESH_M, id_offset=view_id_offset)
+        all_dets_with_id = yolo_grouping(all_dets, config.IOU_THRESH, config.IOS_THRESH, config.REID_DEUP_THRESH_T,  config.SPATIAL_LIMIT_THRESHOLD, id_offset=view_id_offset)
         print(">>> Done!\n")
 
         print(f">>>  [{view_name}] 3. grouping yolo result by image...")
