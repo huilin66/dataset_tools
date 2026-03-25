@@ -1,0 +1,85 @@
+Role: 你是一位顶级的全栈工程师与计算机视觉专家，擅长使用 Vue 3/React、Canvas API、状态管理工具（Pinia/Zustand）以及 Python 进行复杂数据处理系统的开发
+
+Project Goal: 构建一个支持多视图协同标注的系统（MultiAnno），该系统支持加载多模态数据、多波段数据，将任意图像的任意波段数据在不同view中展示，以便用户观察跨波段数据特征并进行语义分割、目标检测、实例分割等任务的标注。
+
+核心设计哲学 (Core Philosophy)：
+Main-Centric (主视图中心制)： 所有的标注坐标、画布尺寸、导出基准均以 Main View 为准。
+Virtual Mapping (虚拟映射)：辅助视图 (Aug Views) 的对齐是在前端渲染时通过数学变换（仿射矩阵）实现的，绝不改变或重采样原始图像文件。
+Modality Independence (模态解耦)： 文件夹结构按模态划分，通过文件名（Stem）进行逻辑关联。
+后端使用python的fastapi实现
+
+
+模块化功能架构
+应将系统划分为以下四个核心模块：
+1.Data Preload & Project Management
+加载用户本地文件夹数据、检查数据，根据用户设置确定view
+2.View Extent Check
+以第一个main view为基准，建立各个view与main view的范围映射关系
+3.Sync Annotation
+展示多个view，实现用户标注行为在多个view的同步展示，使用 Pinia (Vue) 或 Zustand (React) 维护 shapes 数组，保存单个标注结果json文件
+4.data format exchange
+根据json以及其他数据，导出不同格式的数据
+
+具体实现建议：
+A.数据组织逻辑 (Data & Storage)
+Stem-Based Scene Group Matching:系统不修改原始文件。不同模态数据存储在不同文件夹，通过“Stem”关联文件夹，形成场景组scene group。例如：stem001，对应images_rgb/001.jpg、 images_Multispectral/001.tiff、images_dem/001.tiff。
+Project Meta(project_meta.json): 维护全局配置，存储文件夹路径、文件元数据、每个视图关联的文件夹波段组合（1或3个波段），及全局硬件级对齐参数（offsetX, offsetY, scaleX, scaleY），第一个 View 必须被定义为 Main View。
+Label Files(labels/[stem].json): 每个Scene Group标注结果独立保存，仅存储基于 Main View 的绝对像素坐标和多维属性。
+
+B. 数学模型与视图引擎 (Coordinate System & Engine)
+Main-Centric: 坐标系 $O(0,0)$ 固定在 Main View。
+Frontend Dynamic Mapping: 采用“前端动态映射”方案。后端仅传输原图，前端利用 Canvas Transform 实现视觉对齐。
+Layered Canvas:Interaction Layer (Top): 透明，尺寸固定为 Main View。捕获所有 BBox/Polygon 事件。Aug View Layers (Middle): 渲染辅助图，应用仿射变换矩阵 $M$。Main View Layer (Bottom): 渲染底图。
+Viewport Sync: 实现 1x1 到 3x3 的分屏网格。所有视图共享一个全局 Viewport（Zoom, Pan），实现同步缩放联动。
+
+C. 核心功能模块实现要求
+0.主界面：
+主界面最左侧为label时的工具，左侧主要区域为view的位置，右侧是标注信息，主界面整体布局与主流标注工具相似。右侧上方是project meta信息，中间是label信息，下方是Scene Group的stem list
+主界面的左上角显示菜单，中间部分显示logo，在标注过程中显示Scene Group的stem。
+其他内容都应该基于这个主界面页面做弹窗
+
+1.Data Preload & Project Management：
+数据加载：根据用户需求，动态加载任意个文件夹路径，用户确认后，进行数据加载确认，显示成功加载多少个scene group，每个文件夹跳过了多少未匹配文件，同时，显示每个文件夹中图像的元信息（height、width、bands、file type、data type）
+view绑定：用户可以不断增加view（最多9个view），每个view需要选择来自某个文件数据的1个波段或者3个波段，以便在对应view中进行可视化。第一个view为mian view，后续的坐标以该view为基准，需要再ui中显示地提示这一点，其他的为aug view。
+ui设计
+第一栏为文件夹路径，初始为一个空的占位符，下方一个加号，表示可以动态拓展，增加新的文件夹路径
+第二栏为文件元数据，显示原信息
+第三栏为view，初始为一个空的占位符，下方一个加号，表示可以动态拓展，增加新的view，单击view后可以选择任意文件夹，然后选择其中的任意1或者3个波段
+
+2.View Extent Check
+view绑定结束后，如果只有单个文件，也就是所有数据属于单文件多波段，提示用户跳过该过程；否则，开始手动实现该过程
+view extent对齐：采用 main vs aug_1，main vs aug_2 的模式逐个比对，可以加载其他view已有的对齐参数，也可以用户手动调整主界面中的aug view图像进行对齐参数的确认，aug的对齐操作类似于在ppt中图像裁剪的操作，也就是以main view为最终的extent，可以对aug view进行裁剪缩放，多余的部分用灰度掩膜遮罩，同时为了方便在不同尺度对齐，也支持对main view做缩放。
+PPT 裁剪隐喻 (核心交互):
+Main View 是一个带有高对比度边框的“固定观察窗”。
+用户通过鼠标拖拽、滚轮缩放的是底层的 Aug View。
+技术铁律：这里的“裁剪”在代码层面必须是改变 Aug View 的 translate 和 scale 属性，超出 Main View 边界的部分用灰度遮罩遮挡，绝不能破坏原图数据。
+必须区分“视口缩放 (View Matrix)”和“数据对齐缩放 (Transform Matrix)”。
+
+ui设计
+1. 左侧主体：对齐工作区 (Canvas Workspace)
+背景：黑色背景
+main view固定边界与灰度掩膜 (The PPT Crop Metaphor)：给 main view 的边界加一条高对比度的虚线或实线边框（比如亮色或反色），确保即使在极暗或极亮的图像区域，用户也能一眼看出“绝对边界”在哪里。该边界可以通过鼠标拖动来等比例缩放。
+aug view对齐 (Global Canvas Viewport)：缩放支持鼠标滚轮进行aug view缩放，支持长按鼠标左键对aug view整体位置进行调整，支持通过鼠标拖动来裁剪aug view。这些操作要同步到右侧参数管理面板。
+必须严格区分**“视图矩阵 (View Matrix)”和“数据变换矩阵 (Transform Matrix)”**。main view的变换，绝对不能把这个缩放值写进 aug view 的对齐参数里；只有用户主动拖拽控制点缩放 aug view 时，才更新对齐参数。
+2. 上方：视觉控制台 (Top Control Bar)
+透明度调节 (Opacity/Alpha Slider)：调整aug view的透明度
+卷帘操作 (Swipe / Curtain Tool)：调整aug view在main view上的范围
+闪烁切换 (Blink Toggle)：开关aug view
+3. 右侧：参数管理面板 (Right Parameter Panel)
+上方：已有view的参数库 (Presets Box)：展示全局缓存中的历史参数。用户点击即可一键应用到左侧画布。
+下方：当前参数实时状态 (Current Parameters)：显示当前的 X/Y 偏移量、缩放比例 (Scale)。每个为slider，可以拖动刚调整并同步到左侧画布，同时可以直接输入数字进行精准控制
+最下方： 选择不同augview。所有aug view确认后，把data-preload中的所有文件夹路径、文件元数据、view绑定关系、view对齐参数保存到json文件中
+
+3.Sync Annotation
+标注界面参考anylabeling进行排版，但是在画布上，需要注意多view的设计。
+预设好1-9 个网格视图的位置排版，当完成View Extent Check后，根据view数量将view排列显示，1-9 个网格视图共享一套 Viewport 状态（Zoom, Pan）。在任意窗口缩放，全屏同步联动。
+标注交互逻辑绘制: 支持矩形框 (BBox) 和多边形 (Polygon)。跨视图绘制: 若用户在 Aug View 上绘图，需自动应用变换矩阵的逆矩阵 $M^{-1}$，将其换算回 Main 坐标保存。
+text录入 UI: 绘制完成后，在框体旁弹出非阻断式的轻量级悬浮菜单，供用户快速选择类别 (Class) 和附加本文。
+数据持久化策略Memory Store: 使用响应式状态管理使用 Pinia/Zustand 维护单一标注结果数据源。三级落盘：实时存内存 -> 停止操作 3 秒后防抖存磁盘 -> 切换图片前强制存磁盘。
+
+4.data format exchange
+降维映射: 仅以 Main View 为基准导出，必须弹窗提醒用户“导出结果仅针对主视图坐标系，多模态训练需用户根据 mapping.json 自行关联”。
+YOLO 导出: 将绝对坐标转换为归一化中心点坐标 $x_{center}, y_{center}, w, h$。
+COCO / Mask 导出: 生成对应 JSON 或单通道灰度 PNG。
+
+
