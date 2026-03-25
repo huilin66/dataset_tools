@@ -1,0 +1,18 @@
+
+C:/Users/USER/.conda/envs/common/python.exe -m bddfacade.pipeline_cli --data-root "E:\data\thesis\HTM\collected data" --out-dir outputs
+
+C:/Users/USER/.conda/envs/common/python.exe -m pip install -r requirements.txt
+C:/Users/USER/.conda/envs/common/python.exe -m pip install -e .
+C:/Users/USER/.conda/envs/common/python.exe -m bddfacade.server --host 127.0.0.1 --port 8080
+
+
+
+
+
+python -m pip install -r requirements.txt
+python -m pip install -e .
+python -m bddfacade.server --host 127.0.0.1 --port 8080
+
+python -m bddfacade.pipeline_cli --data-root "E:\data\thesis\HTM\collected data" --out-dir outputs
+
+python -m bddfacade.build_pseudo3d_cli --poses outputs/poses_rgb.json --out-glb outputs/building.glb

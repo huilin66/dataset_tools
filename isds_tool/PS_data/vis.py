@@ -116,6 +116,7 @@ def img_vis(img, results, vis_item='abcd', small_threshold=None):
     risk_sum = 0
     for result in results:
         id = result['id']
+        score = float(result['score'])
         cat = result['category']
         risk_a = result['risk_a']
         risk_b = result['risk_b']
@@ -139,7 +140,7 @@ def img_vis(img, results, vis_item='abcd', small_threshold=None):
                 risk_sum += risk_c
             if 'd' in vis_item:
                 risk_sum += risk_d
-        defect_str = f'{id}:'
+        defect_str = f'{id}/{score:.4f}:'
         if risk_a>0:
             defect_str += 'riskA;'
         if risk_b>0:

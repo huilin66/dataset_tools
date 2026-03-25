@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>BDD Facade Viewer</title>
+  <link rel="stylesheet" href="/web/styles.css"/>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <h2>Images</h2>
+      <div class="controls">
+        <label><input type="checkbox" id="onlyRTK" checked> 只看 RTK</label>
+        <label>Yaw阈值(°): <input id="yawTol" type="number" value="10"/></label>
+      </div>
+      <div id="list" class="list"></div>
+    </aside>
+
+    <main class="main">
+      <div class="panel">
+        <div class="imgs">
+          <div>
+            <h3>RGB (_V)</h3>
+            <img id="rgbImg" />
+          </div>
+          <div>
+            <h3>Thermal (_T)</h3>
+            <img id="tImg" />
+          </div>
+        </div>
+
+        <h3>Pose / RTK / Gimbal</h3>
+        <pre id="meta"></pre>
+      </div>
+    </main>
+  </div>
+
+  <script src="/web/app.js"></script>
+</body>
+</html>
