@@ -42,14 +42,14 @@ def uzip_file(zip_path, result_path):
 def uzip_fastest(zip_path, result_path):
     print(f'{zip_path} unzip with 7z (Subprocess)...')
     os.makedirs(result_path, exist_ok=True)
-    
+
     # 构造命令: 7z x "source.zip" -o"dest_folder" -y
     # x: 解压并保持目录结构
     # -o: 指定输出目录 (注意-o后面紧跟路径，没有空格)
     # -y: 自动覆盖不提示
     # -bsp1: (可选) 输出进度到控制台
     cmd = ['7z', 'x', zip_path, f'-o{result_path}', '-y', '-bsp1']
-    
+
     try:
         # 调用命令行
         subprocess.run(cmd, check=True)
