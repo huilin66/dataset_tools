@@ -83,3 +83,7 @@ YOLO 导出: 将绝对坐标转换为归一化中心点坐标 $x_{center}, y_{ce
 COCO / Mask 导出: 生成对应 JSON 或单通道灰度 PNG。
 
 
+prompt
+1.主界面应该有菜单，包括Data Preload等功能
+2.启动项目是应该只显示主界面，而不是data preload窗口
+3.整个项目支持深色、浅色模式，默认浅色模式

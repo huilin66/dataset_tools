@@ -1,0 +1,4 @@
+TypeError: 'SimpleTokenizer' object is not callable
+
+pip uninstall clip -y
+pip install git+https://github.com/ultralytics/CLIP.git
