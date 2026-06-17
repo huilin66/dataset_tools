@@ -13,6 +13,11 @@ isds_tool/PS_data/token.json
 *.jpg
 *.png
 
+# data files
+*.txt
+*.csv
+*.json
+
 # output / data folders
 runs/
 data/

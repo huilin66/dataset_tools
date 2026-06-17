@@ -371,7 +371,10 @@ def xywh2xyxy(
             label_h = text_params['text_h']
             line_h = int(label_h * 0.85)
             attr_x = label_p1[0]
-            attr_start_y = label_p1[1] + label_h + max(line_h // 3, 2)
+            if text_params['outside']:
+                attr_start_y = label_p1[1] + max(line_h, 2)
+            else:
+                attr_start_y = label_p1[1] + label_h + max(line_h, 2)
         else:
             font_scale = 0.5
             font_thickness = 1
@@ -402,6 +405,7 @@ def xywh2xyxy(
                 font_scale,
                 color,
                 font_thickness,
+                lineType=cv2.LINE_AA,
             )
             (text_width, text_height), baseline = cv2.getTextSize(
                 text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness
@@ -440,6 +444,7 @@ def xywh2xyxy(
                     font_scale,
                     color,
                     font_thickness,
+                    lineType=cv2.LINE_AA,
                 )
                 (text_width, text_height), baseline = cv2.getTextSize(
                     text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness
@@ -483,7 +488,6 @@ def xywh2poly(
         pos1 = float(polypos[i]) * w
         pos2 = float(polypos[i + 1]) * h
         polys.append([pos1, pos2])
-        polys.append([pos1, pos2])
 
     polys = np.array(polys, np.int32)
     if crop:
@@ -501,7 +505,8 @@ def xywh2poly(
         img_crop = None
 
     poly_color = get_yolo_color(label) if yolo_vis else colormap[int(label)]
-    cv2.polylines(img_vis, [polys], isClosed=True, color=poly_color, thickness=2)
+    if not yolo_vis:
+        cv2.polylines(img_vis, [polys], isClosed=True, color=poly_color, thickness=2)
     mask = img_vis.copy()
     if add_mask:
         cv2.fillPoly(mask, [polys], color=poly_color)
@@ -542,7 +547,10 @@ def xywh2poly(
             label_h = text_params['text_h']
             line_h = int(label_h * 0.85)
             attr_x = label_p1[0]
-            attr_start_y = label_p1[1] + label_h + max(line_h // 3, 2)
+            if text_params['outside']:
+                attr_start_y = label_p1[1] + max(line_h, 2)
+            else:
+                attr_start_y = label_p1[1] + label_h + max(line_h, 2)
         else:
             font_scale = 0.5
             font_thickness = 1
@@ -571,6 +579,7 @@ def xywh2poly(
                 font_scale,
                 color,
                 font_thickness,
+                lineType=cv2.LINE_AA,
             )
             (text_width, text_height), baseline = cv2.getTextSize(
                 text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness
@@ -607,6 +616,7 @@ def xywh2poly(
                     font_scale,
                     color,
                     font_thickness,
+                    lineType=cv2.LINE_AA,
                 )
                 (text_width, text_height), baseline = cv2.getTextSize(
                     text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, font_thickness
@@ -684,7 +694,7 @@ def yolo_data_vis(
                         continue
                     if crop_dir is None:
                         img_vis, _, _ = xywh2poly(
-                            x, w, h, img, img_vis, img_viscats=cats
+                            x, w, h, img, img_vis, cats=cats
                         )
                     else:
                         img_vis, img_crop, _ = xywh2poly(
@@ -901,7 +911,7 @@ if __name__ == "__main__":
     # root_dir = r'E:\data\tp\sar_det'
     # root_dir = r'E:\data\0111_testdata\data_new\yolo_src'
     # root_dir = r'E:\cp_dir\data'
-    root_dir = r"\\158.132.186.40\isds\huilin\isds\back up\demo_data\0612"
+    root_dir = r"\\158.132.186.40\isds\huilin\traffic_sign\demo_0617"
     # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\bd1-9hgll-94afa\train'
     # root_dir = r'E:\data\20241113_road_veg\dataset'
     # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\crack-bpxku-hcu46\train'
@@ -934,7 +944,7 @@ if __name__ == "__main__":
     # crop_folder = os.path.join(root_dir, 'img_crop_slice')
     # output_folder = os.path.join(root_dir, 'img_vis_merge')
     # crop_folder = os.path.join(root_dir, 'img_crop_merge')
-    attribute_file = os.path.join(root_dir, "attribute_all.yaml")
+    attribute_file = os.path.join(root_dir, "attribute.yaml")
     # attribute_file = os.path.join(root_dir, 'attribute_v4.yaml')
     class_file = os.path.join(root_dir, "class.txt")
     # class_file = os.path.join(root_dir, 'class_update.txt')
@@ -948,7 +958,7 @@ if __name__ == "__main__":
     #     output_folder,
     #     class_file,
     #     crop_dir=crop_folder,
-    #     seg=False,
+    #     seg=True,
     # )
     # yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=True)
     # yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=False, attribute_file=attribute_file, filter_no=True, crop_keep_shape=True, det_crop=True)
