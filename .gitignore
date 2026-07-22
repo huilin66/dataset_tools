@@ -21,3 +21,6 @@ isds_tool/PS_data/token.json
 # output / data folders
 runs/
 data/
+
+.ydm_edit/
+*.patch
