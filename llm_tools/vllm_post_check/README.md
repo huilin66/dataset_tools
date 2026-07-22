@@ -22,13 +22,14 @@ python test_vllm.py ^
   --model Qwen/Qwen3-VL-8B-Instruct
 ```
 
-To test the defect-detection prompt and JSON parser:
+To test the generic detection prompt and JSON parser:
 
 ```powershell
 python test_vllm.py ^
   --image E:\data\images\one_image.jpg ^
   --classes E:\data\classes.txt ^
   --mode detect ^
+  --task-type "damaged traffic sign detection" ^
   --base-url http://127.0.0.1:18001/v1 ^
   --model Qwen/Qwen3-VL-8B-Instruct ^
   --raw-output E:\data\vllm_test_raw.json
@@ -46,7 +47,8 @@ python cli.py full-image ^
   --classes E:\data\classes.txt ^
   --output E:\data\vllm_full ^
   --base-url http://127.0.0.1:8000/v1 ^
-  --model Qwen/Qwen3-VL-8B-Instruct
+  --model Qwen/Qwen3-VL-8B-Instruct ^
+  --task-type "damaged traffic sign detection"
 ```
 
 Output:
@@ -72,13 +74,26 @@ python cli.py crop-refine ^
   --base-url http://127.0.0.1:8000/v1 ^
   --model Qwen/Qwen3-VL-8B-Instruct ^
   --crop-padding 0.15 ^
-  --mode classification
+  --mode classification ^
+  --task-type "damaged traffic sign detection"
 ```
 
 Modes:
 
 - `classification`: Qwen keeps/rejects/corrects class; original YOLO box is preserved.
 - `detect`: Qwen returns a bbox inside the crop; the bbox is mapped back to the original image.
+
+## Generic prompt
+
+Prompts are task-agnostic by default. The model only receives the allowed class list from `classes.txt`.
+
+Use `--task-type` to add optional context without hard-coding a domain:
+
+```powershell
+--task-type "damaged traffic sign detection"
+--task-type "building facade defect detection"
+--task-type "construction safety object detection"
+```
 
 ## YOLO txt format
 

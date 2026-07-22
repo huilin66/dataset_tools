@@ -132,13 +132,14 @@ def run_full_image(args) -> None:
                 "classes_path": str(args.classes),
                 "model": args.model,
                 "base_url": args.base_url,
+                "task_type": args.task_type,
                 "detections": [],
                 "output_boxes": [],
             }
             try:
                 width, height = image_size(image_path)
                 result["image_size"] = {"width": width, "height": height}
-                response_text = client.predict(image_path, full_image_prompt(classes))
+                response_text = client.predict(image_path, full_image_prompt(classes, args.task_type))
                 _write_raw(raw_path, response_text)
                 detections = parse_detections(response_text, width, height, require_bbox=True)
                 boxes = detections_to_yolo(detections, classes, width, height, args.min_conf, args.iou)
@@ -214,6 +215,7 @@ def run_crop_refine(args) -> None:
                 "classes_path": str(args.classes),
                 "model": args.model,
                 "base_url": args.base_url,
+                "task_type": args.task_type,
                 "crop_padding": args.crop_padding,
                 "input_boxes": [],
                 "crops": [],
@@ -262,7 +264,7 @@ def run_crop_refine(args) -> None:
                         "message": "",
                     }
                     try:
-                        response_text = client.predict(crop_path, crop_refine_prompt(classes, candidate_class))
+                        response_text = client.predict(crop_path, crop_refine_prompt(classes, candidate_class, args.task_type))
                         _write_raw(raw_path, response_text)
                         crop_width, crop_height = crop_item.crop_size
                         parsed = parse_detections(response_text, crop_width, crop_height, require_bbox=args.mode == "detect")
@@ -350,6 +352,7 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--timeout", type=float, default=120.0)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--max-tokens", type=int, default=1024)
+    parser.add_argument("--task-type", default="", help="Optional task context, e.g. damaged traffic sign detection")
     parser.add_argument("--min-conf", type=float, default=0.0)
     parser.add_argument("--iou", type=float, default=0.5, help="Class-wise NMS IoU threshold")
     parser.add_argument("--limit", type=int, default=0, help="Limit images for smoke tests")

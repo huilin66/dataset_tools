@@ -35,6 +35,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--timeout", type=float, default=120.0)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--max-tokens", type=int, default=1024)
+    parser.add_argument("--task-type", default="", help="Optional task context for --mode detect")
     parser.add_argument("--raw-output", default="", help="Optional path to save raw model response")
     return parser.parse_args()
 
@@ -50,7 +51,7 @@ def main() -> None:
         if not args.classes:
             raise ValueError("--classes is required when --mode detect")
         classes = load_classes(args.classes)
-        prompt = full_image_prompt(classes)
+        prompt = full_image_prompt(classes, args.task_type)
     else:
         classes = []
         prompt = SIMPLE_PROMPT
