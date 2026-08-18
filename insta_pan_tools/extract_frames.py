@@ -8,6 +8,7 @@ at a time, which is important for high-resolution 360-degree videos.
 from __future__ import annotations
 
 import argparse
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Sequence, Union
@@ -45,6 +46,19 @@ def _load_cv2():
     return cv2
 
 
+def _load_tqdm():
+    """Import tqdm lazily so the module can still display CLI help."""
+
+    try:
+        from tqdm import tqdm
+    except ImportError as exc:  # pragma: no cover - depends on the environment
+        raise RuntimeError(
+            "未安装 tqdm，请先执行: python -m pip install -r "
+            "insta_pan_tools/requirements.txt"
+        ) from exc
+    return tqdm
+
+
 def _normalise_format(image_format: str) -> str:
     extension = image_format.lower().lstrip(".")
     if extension not in SUPPORTED_FORMATS:
@@ -73,6 +87,7 @@ def extract_frames(
     frame_step: int = 1,
     jpeg_quality: int = 95,
     overwrite: bool = False,
+    show_progress: bool = True,
 ) -> ExtractionResult:
     """Extract frames from an Insta360 ``.insv`` file.
 
@@ -94,6 +109,9 @@ def extract_frames(
     overwrite:
         Overwrite an existing output image with the same frame number. Without
         this flag, existing images are left untouched.
+    show_progress:
+        Show a terminal progress bar while decoding. Set to ``False`` when the
+        function is called from a non-interactive application.
 
     Returns
     -------
@@ -142,6 +160,15 @@ def extract_frames(
     frames_read = 0
     frames_saved = 0
     frames_skipped = 0
+    tqdm = _load_tqdm()
+    progress = tqdm(
+        total=reported_frame_count,
+        desc="提取帧",
+        unit="帧",
+        disable=not show_progress,
+        file=sys.stderr,
+        dynamic_ncols=True,
+    )
     write_params = (
         [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality]
         if extension == "jpg"
@@ -156,6 +183,7 @@ def extract_frames(
 
             frame_index = frames_read
             frames_read += 1
+            progress.update(1)
             if frame_index % frame_step != 0:
                 continue
 
@@ -169,6 +197,7 @@ def extract_frames(
             frames_saved += 1
     finally:
         capture.release()
+        progress.close()
 
     return ExtractionResult(
         input_path=source,
@@ -221,6 +250,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="覆盖输出目录中同名的已存在图片",
     )
+    parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="不显示终端进度条",
+    )
     return parser
 
 
@@ -250,6 +284,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             frame_step=args.frame_step,
             jpeg_quality=args.jpeg_quality,
             overwrite=args.overwrite,
+            show_progress=not args.no_progress,
         )
     except (FileNotFoundError, OSError, RuntimeError, ValueError) as exc:
         parser.error(str(exc))

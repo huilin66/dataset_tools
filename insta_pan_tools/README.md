@@ -39,6 +39,8 @@ python insta_pan_tools/extract_frames.py "D:\video\VID_20260818_120000.insv" `
 
 默认输出文件名形如 `frame_000000.png`、`frame_000001.png`。不指定 `--overwrite` 时，输出目录中已存在的同名文件会被跳过。
 
+运行时会使用 `tqdm` 在终端显示抽帧进度条；如不需要进度输出，可加上 `--no-progress`。
+
 也可以作为 Python 函数调用：
 
 ```python
