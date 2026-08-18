@@ -36,7 +36,6 @@ import numpy as np
 import torch
 import torch._dynamo
 
-
 # ============================================================
 # 兼容部分 Ultralytics 版本的 torch.compile 参数问题
 # ============================================================
@@ -74,19 +73,12 @@ def resize_binary_mask(
     """将 SAM3 mask 转为原图尺寸的 bool mask。"""
 
     if isinstance(mask, torch.Tensor):
-        mask = (
-            mask.detach()
-            .float()
-            .cpu()
-            .numpy()
-        )
+        mask = mask.detach().float().cpu().numpy()
 
     mask = np.squeeze(mask)
 
     if mask.ndim != 2:
-        raise ValueError(
-            f"无效 mask shape：{mask.shape}"
-        )
+        raise ValueError(f"无效 mask shape：{mask.shape}")
 
     if mask.shape != (image_height, image_width):
         mask = cv2.resize(
@@ -140,8 +132,7 @@ def mask_to_largest_polygon(
     contours = [
         contour
         for contour in contours
-        if cv2.contourArea(contour) >= min_area
-        and len(contour) >= 3
+        if cv2.contourArea(contour) >= min_area and len(contour) >= 3
     ]
 
     if not contours:
@@ -168,10 +159,7 @@ def mask_to_largest_polygon(
         closed=True,
     )
 
-    polygon = (
-        polygon.reshape(-1, 2)
-        .astype(np.float32)
-    )
+    polygon = polygon.reshape(-1, 2).astype(np.float32)
 
     if len(polygon) < 3:
         return None
@@ -202,11 +190,7 @@ def polygon_to_yolo_line(
         1.0,
     )
 
-    coordinates = " ".join(
-        f"{value:.6f}"
-        for point in polygon
-        for value in point
-    )
+    coordinates = " ".join(f"{value:.6f}" for point in polygon for value in point)
 
     return f"{class_id} {coordinates}"
 
@@ -253,27 +237,17 @@ def segment_all_traffic_signs(
         包含所有交通标志实例信息的字典。
     """
 
-    image_path = Path(
-        image_path
-    ).expanduser().resolve()
+    image_path = Path(image_path).expanduser().resolve()
 
-    model_path = Path(
-        model_path
-    ).expanduser().resolve()
+    model_path = Path(model_path).expanduser().resolve()
 
-    output_dir = Path(
-        output_dir
-    ).expanduser().resolve()
+    output_dir = Path(output_dir).expanduser().resolve()
 
     if not image_path.is_file():
-        raise FileNotFoundError(
-            f"图像不存在：{image_path}"
-        )
+        raise FileNotFoundError(f"图像不存在：{image_path}")
 
     if not model_path.is_file():
-        raise FileNotFoundError(
-            f"SAM3 模型不存在：{model_path}"
-        )
+        raise FileNotFoundError(f"SAM3 模型不存在：{model_path}")
 
     output_dir.mkdir(
         parents=True,
@@ -296,9 +270,7 @@ def segment_all_traffic_signs(
     image = cv2.imread(str(image_path))
 
     if image is None:
-        raise ValueError(
-            f"OpenCV 无法读取图像：{image_path}"
-        )
+        raise ValueError(f"OpenCV 无法读取图像：{image_path}")
 
     image_height, image_width = image.shape[:2]
 
@@ -320,19 +292,14 @@ def segment_all_traffic_signs(
     try:
         print("====== 正在加载 SAM3 ======")
 
-        predictor = SAM3SemanticPredictor(
-            overrides=overrides
-        )
+        predictor = SAM3SemanticPredictor(overrides=overrides)
 
         print("====== 正在提取图像特征 ======")
 
         # 同一图像只提取一次特征
         predictor.set_image(image)
 
-        print(
-            f"====== 使用文本提示分割："
-            f"{prompt!r} ======"
-        )
+        print(f"====== 使用文本提示分割：{prompt!r} ======")
 
         # SAM3 Semantic Predictor 会查找所有匹配实例
         results = predictor(
@@ -347,9 +314,7 @@ def segment_all_traffic_signs(
             results = list(results)
 
         if not results:
-            raise RuntimeError(
-                "SAM3 没有返回 Results。"
-            )
+            raise RuntimeError("SAM3 没有返回 Results。")
 
         result = results[0]
 
@@ -369,9 +334,7 @@ def segment_all_traffic_signs(
                 "objects": [],
             }
 
-            result_json_path = (
-                output_dir / "result.json"
-            )
+            result_json_path = output_dir / "result.json"
 
             with result_json_path.open(
                 "w",
@@ -385,10 +348,7 @@ def segment_all_traffic_signs(
                 )
 
             # 创建空标签文件
-            label_path = (
-                label_dir
-                / f"{image_path.stem}.txt"
-            )
+            label_path = label_dir / f"{image_path.stem}.txt"
             label_path.touch()
 
             return empty_result
@@ -396,16 +356,8 @@ def segment_all_traffic_signs(
         masks_tensor = result.masks.data
 
         # 获取置信度
-        if (
-            result.boxes is not None
-            and result.boxes.conf is not None
-        ):
-            scores = (
-                result.boxes.conf.detach()
-                .float()
-                .cpu()
-                .numpy()
-            )
+        if result.boxes is not None and result.boxes.conf is not None:
+            scores = result.boxes.conf.detach().float().cpu().numpy()
         else:
             scores = np.ones(
                 len(masks_tensor),
@@ -413,16 +365,8 @@ def segment_all_traffic_signs(
             )
 
         # 获取 SAM3 bbox
-        if (
-            result.boxes is not None
-            and result.boxes.xyxy is not None
-        ):
-            predicted_boxes = (
-                result.boxes.xyxy.detach()
-                .float()
-                .cpu()
-                .numpy()
-            )
+        if result.boxes is not None and result.boxes.xyxy is not None:
+            predicted_boxes = result.boxes.xyxy.detach().float().cpu().numpy()
         else:
             predicted_boxes = None
 
@@ -438,9 +382,7 @@ def segment_all_traffic_signs(
 
         valid_index = 0
 
-        for raw_index, mask_tensor in enumerate(
-            masks_tensor
-        ):
+        for raw_index, mask_tensor in enumerate(masks_tensor):
             mask = resize_binary_mask(
                 mask=mask_tensor,
                 image_height=image_height,
@@ -451,17 +393,10 @@ def segment_all_traffic_signs(
             mask_area = int(mask.sum())
 
             if mask_area < min_mask_area:
-                print(
-                    f"[Filter] mask {raw_index} 面积过小："
-                    f"{mask_area}"
-                )
+                print(f"[Filter] mask {raw_index} 面积过小：{mask_area}")
                 continue
 
-            score = (
-                float(scores[raw_index])
-                if raw_index < len(scores)
-                else 1.0
-            )
+            score = float(scores[raw_index]) if raw_index < len(scores) else 1.0
 
             if score < conf:
                 continue
@@ -469,15 +404,8 @@ def segment_all_traffic_signs(
             valid_index += 1
 
             # 优先采用 SAM3 返回的 bbox
-            if (
-                predicted_boxes is not None
-                and raw_index < len(predicted_boxes)
-            ):
-                bbox = [
-                    float(value)
-                    for value
-                    in predicted_boxes[raw_index]
-                ]
+            if predicted_boxes is not None and raw_index < len(predicted_boxes):
+                bbox = [float(value) for value in predicted_boxes[raw_index]]
             else:
                 bbox = mask_to_bbox(mask)
 
@@ -508,9 +436,7 @@ def segment_all_traffic_signs(
             combined_mask |= mask
 
             # 保存单实例 mask
-            mask_filename = (
-                f"traffic_sign_{valid_index:03d}.png"
-            )
+            mask_filename = f"traffic_sign_{valid_index:03d}.png"
 
             mask_path = mask_dir / mask_filename
 
@@ -529,9 +455,7 @@ def segment_all_traffic_signs(
             polygon_list = []
 
             if polygon is not None:
-                polygon_list = (
-                    polygon.astype(int).tolist()
-                )
+                polygon_list = polygon.astype(int).tolist()
 
                 yolo_line = polygon_to_yolo_line(
                     polygon=polygon,
@@ -555,7 +479,8 @@ def segment_all_traffic_signs(
                 + np.asarray(
                     color,
                     dtype=np.float32,
-                ) * 0.50
+                )
+                * 0.50
             ).astype(np.uint8)
 
             cv2.rectangle(
@@ -566,9 +491,7 @@ def segment_all_traffic_signs(
                 2,
             )
 
-            label = (
-                f"traffic_sign {score:.3f}"
-            )
+            label = f"traffic_sign {score:.3f}"
 
             cv2.putText(
                 overlay,
@@ -598,10 +521,7 @@ def segment_all_traffic_signs(
                     "bbox_norm_1000": bbox_norm_1000,
                     "mask_area_pixels": mask_area,
                     "mask_area_ratio": round(
-                        mask_area
-                        / float(
-                            image_width * image_height
-                        ),
+                        mask_area / float(image_width * image_height),
                         8,
                     ),
                     "mask_path": str(mask_path),
@@ -609,17 +529,10 @@ def segment_all_traffic_signs(
                 }
             )
 
-            print(
-                f"[{valid_index}] "
-                f"score={score:.4f}, "
-                f"bbox={bbox}, "
-                f"area={mask_area}"
-            )
+            print(f"[{valid_index}] score={score:.4f}, bbox={bbox}, area={mask_area}")
 
         # 保存所有实例合并 mask
-        combined_mask_path = (
-            output_dir / "combined_mask.png"
-        )
+        combined_mask_path = output_dir / "combined_mask.png"
 
         cv2.imwrite(
             str(combined_mask_path),
@@ -635,9 +548,7 @@ def segment_all_traffic_signs(
         )
 
         # 保存 YOLO instance segmentation TXT
-        label_path = (
-            label_dir / f"{image_path.stem}.txt"
-        )
+        label_path = label_dir / f"{image_path.stem}.txt"
 
         with label_path.open(
             "w",
@@ -655,18 +566,12 @@ def segment_all_traffic_signs(
             "num_objects": len(objects),
             "objects": objects,
             "overlay_path": str(overlay_path),
-            "combined_mask_path": str(
-                combined_mask_path
-            ),
+            "combined_mask_path": str(combined_mask_path),
             "yolo_label_path": str(label_path),
-            "yolo_names": {
-                "0": "traffic_sign"
-            },
+            "yolo_names": {"0": "traffic_sign"},
         }
 
-        result_json_path = (
-            output_dir / "result.json"
-        )
+        result_json_path = output_dir / "result.json"
 
         with result_json_path.open(
             "w",
@@ -680,10 +585,7 @@ def segment_all_traffic_signs(
             )
 
         print("=" * 60)
-        print(
-            f"检测到交通标志数量："
-            f"{len(objects)}"
-        )
+        print(f"检测到交通标志数量：{len(objects)}")
         print(f"JSON：{result_json_path}")
         print(f"可视化：{overlay_path}")
         print(f"合并 mask：{combined_mask_path}")
@@ -709,16 +611,15 @@ def segment_all_traffic_signs(
 
 
 def parse_args():
+    path1 = r"\\158.132.186.40\isds\huilin\traffic_sign\demo_0617\images\DA5324655_20250806125609500.jpg"
+    path2 = r"\\158.132.186.40\isds\huilin\vmms\filtered\traffic_sign\traffic_sign_cube_20260724_171032\pseudo_dataset\images\right\hyd_20240919_central_1_pano_0a305e539a3444a7.jpg"
     parser = argparse.ArgumentParser(
-        description=(
-            "使用 Ultralytics SAM3 "
-            "分割图像中的所有交通标志"
-        )
+        description=("使用 Ultralytics SAM3 分割图像中的所有交通标志")
     )
 
     parser.add_argument(
         "--image",
-        default=r'\\158.132.186.40\isds\huilin\traffic_sign\demo_0617\images\DA5324655_20250806125609500.jpg',
+        default=path2,
         help="输入图像路径",
     )
 

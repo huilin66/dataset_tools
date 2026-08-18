@@ -11,9 +11,25 @@ from typing import Iterable
 from classes import load_classes, resolve_class_id
 from crop import create_crop, crop_xyxy_to_image
 from image_io import image_size, iter_images, matching_label_path
-from parser import ParsedDetection, parse_detections
-from postprocess import detections_to_yolo
-from prompts import crop_refine_prompt, full_image_prompt
+from parser import (
+    ParsedDetection,
+    ParsedP2GroundingDetection,
+    parse_detections,
+    parse_p2_crop_classification,
+    parse_p2_full_detections,
+)
+from postprocess import (
+    detections_to_yolo,
+    p2_classification_to_yolo,
+    p2_detections_to_yolo,
+)
+from prompts import (
+    PROMPT_VERSIONS,
+    crop_refine_prompt,
+    full_image_prompt,
+    p2_crop_refine_prompt,
+    p2_full_image_prompt,
+)
 from vllm_client import VLLMClient
 from yolo_io import YoloBox, nms_yolo, read_yolo_txt, write_yolo_txt, xyxy_to_yolo
 
@@ -75,7 +91,14 @@ def _box_to_dict(box: YoloBox) -> dict:
     }
 
 
-def _parsed_to_dict(det: ParsedDetection) -> dict:
+def _parsed_to_dict(det: ParsedDetection | ParsedP2GroundingDetection) -> dict:
+    if isinstance(det, ParsedP2GroundingDetection):
+        return {
+            "class_name": det.class_name,
+            "bbox_norm_1000": list(det.bbox_norm_1000),
+            "confidence": det.confidence,
+            "keep": True,
+        }
     return {
         "class_name": det.class_name,
         "bbox_xyxy": list(det.xyxy) if det.xyxy is not None else None,
@@ -124,6 +147,9 @@ def run_full_image(args) -> None:
                 continue
             result = {
                 "mode": "full-image",
+                "prompt_version": args.prompt_version,
+                "yolo_converter": args.yolo_converter,
+                "p2_confidence": args.p2_confidence,
                 "image": str(image_path),
                 "label_path": str(label_path),
                 "raw_path": str(raw_path),
@@ -139,10 +165,27 @@ def run_full_image(args) -> None:
             try:
                 width, height = image_size(image_path)
                 result["image_size"] = {"width": width, "height": height}
-                response_text = client.predict(image_path, full_image_prompt(classes, args.task_type))
+                prompt = (
+                    p2_full_image_prompt(classes, args.task_type)
+                    if args.prompt_version == "p2"
+                    else full_image_prompt(classes, args.task_type)
+                )
+                response_text = client.predict(image_path, prompt)
                 _write_raw(raw_path, response_text)
-                detections = parse_detections(response_text, width, height, require_bbox=True)
-                boxes = detections_to_yolo(detections, classes, width, height, args.min_conf, args.iou)
+                if args.yolo_converter == "p2":
+                    detections = parse_p2_full_detections(
+                        response_text, args.p2_confidence
+                    )
+                    boxes = p2_detections_to_yolo(
+                        detections, classes, width, height, args.min_conf, args.iou
+                    )
+                else:
+                    detections = parse_detections(
+                        response_text, width, height, require_bbox=True
+                    )
+                    boxes = detections_to_yolo(
+                        detections, classes, width, height, args.min_conf, args.iou
+                    )
                 write_yolo_txt(label_path, boxes, include_conf=not args.no_conf)
                 result["detections"] = [_parsed_to_dict(det) for det in detections]
                 result["output_boxes"] = [_box_to_dict(box) for box in boxes]
@@ -205,6 +248,9 @@ def run_crop_refine(args) -> None:
 
             result = {
                 "mode": "crop-refine",
+                "prompt_version": args.prompt_version,
+                "yolo_converter": args.yolo_converter,
+                "p2_confidence": args.p2_confidence,
                 "refine_mode": args.mode,
                 "image": str(image_path),
                 "pred_label_path": str(pred_path),
@@ -264,8 +310,61 @@ def run_crop_refine(args) -> None:
                         "message": "",
                     }
                     try:
-                        response_text = client.predict(crop_path, crop_refine_prompt(classes, candidate_class, args.task_type))
+                        prompt = (
+                            p2_crop_refine_prompt(
+                                classes, candidate_class, args.task_type
+                            )
+                            if args.prompt_version == "p2"
+                            else crop_refine_prompt(
+                                classes, candidate_class, args.task_type
+                            )
+                        )
+                        response_text = client.predict(crop_path, prompt)
                         _write_raw(raw_path, response_text)
+                        if args.yolo_converter == "p2":
+                            class_name = parse_p2_crop_classification(
+                                response_text, classes
+                            )
+                            output_box = (
+                                p2_classification_to_yolo(
+                                    class_name,
+                                    source_box,
+                                    classes,
+                                    args.p2_confidence,
+                                )
+                                if class_name is not None
+                                else None
+                            )
+                            crop_record["detections"] = (
+                                [
+                                    {
+                                        "class_name": class_name,
+                                        "bbox_xyxy": None,
+                                        "confidence": (
+                                            output_box.confidence
+                                            if output_box is not None
+                                            else None
+                                        ),
+                                        "keep": True,
+                                    }
+                                ]
+                                if output_box is not None
+                                else []
+                            )
+                            if (
+                                output_box is not None
+                                and (
+                                    output_box.confidence is None
+                                    or output_box.confidence >= args.min_conf
+                                )
+                            ):
+                                output_boxes.append(output_box)
+                                crop_record["kept"] = True
+                                crop_record["output_boxes"] = [
+                                    _box_to_dict(output_box)
+                                ]
+                            result["crops"].append(crop_record)
+                            continue
                         crop_width, crop_height = crop_item.crop_size
                         parsed = parse_detections(response_text, crop_width, crop_height, require_bbox=args.mode == "detect")
                         crop_record["detections"] = [_parsed_to_dict(det) for det in parsed]
@@ -346,6 +445,24 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--images", required=True, help="Image directory")
     parser.add_argument("--classes", required=True, help="classes.txt path")
     parser.add_argument("--output", required=True, help="Output directory")
+    parser.add_argument(
+        "--prompt-version",
+        choices=PROMPT_VERSIONS,
+        default="p1",
+        help="Prompt protocol: p1 generic, p2 qwen3vl_yolo_finetune-compatible",
+    )
+    parser.add_argument(
+        "--yolo-converter",
+        choices=PROMPT_VERSIONS,
+        default="p1",
+        help="YOLO converter protocol; must match --prompt-version",
+    )
+    parser.add_argument(
+        "--p2-confidence",
+        type=float,
+        default=1.0,
+        help="Fixed confidence for p2 outputs, which have no confidence field",
+    )
     parser.add_argument("--model", default=None, help="VLLM model name")
     parser.add_argument("--base-url", default=None, help="OpenAI-compatible base URL, e.g. http://127.0.0.1:8000/v1")
     parser.add_argument("--api-key", default=None, help="API key; use EMPTY for local VLLM")
@@ -376,7 +493,24 @@ def parse_args() -> argparse.Namespace:
     crop.add_argument("--crop-padding", type=float, default=0.15)
     crop.add_argument("--mode", choices=["classification", "detect"], default="classification")
     crop.set_defaults(func=run_crop_refine)
-    return parser.parse_args()
+    args = parser.parse_args()
+    if not 0.0 <= args.p2_confidence <= 1.0:
+        parser.error("--p2-confidence must be between 0 and 1")
+    if args.prompt_version != args.yolo_converter:
+        parser.error(
+            "--prompt-version and --yolo-converter must match because p1 and p2 "
+            "use different response formats and coordinate conventions"
+        )
+    if (
+        args.command == "crop-refine"
+        and args.prompt_version == "p2"
+        and args.mode != "classification"
+    ):
+        parser.error(
+            "p2 crop-refine only supports --mode classification because p2 "
+            "crop training returns one class name without a bounding box"
+        )
+    return args
 
 
 def main() -> None:
@@ -386,3 +520,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+

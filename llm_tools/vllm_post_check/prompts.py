@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 
 def class_list_text(classes: list[str]) -> str:
     return "\n".join(f"{idx}: {name}" for idx, name in enumerate(classes))
@@ -207,3 +209,30 @@ def crop_refine_prompt(
 4. 如果裁剪图中有多个目标，优先复核位于裁剪图中心、最可能对应原始 YOLO 候选框的目标。
 5. 不要因为原始 YOLO 给出了候选框就默认保留，必须重新根据图像证据判断。
 """.strip()
+
+PROMPT_VERSIONS = ("p1", "p2")
+
+
+def p2_full_image_prompt(classes: list[str], task_type: str | None = None) -> str:
+    """Exact prompt emitted by convert_full_detection.py."""
+    del task_type
+    return (
+        "Detect every target belonging to the following classes: "
+        f"{json.dumps(classes, ensure_ascii=False)}. "
+        "Return only a JSON array. Each item must contain exactly "
+        '"bbox_2d": [x1, y1, x2, y2] and "label". '
+        "Return [] when no target exists."
+    )
+
+
+def p2_crop_refine_prompt(
+    classes: list[str], candidate_class: str, task_type: str | None = None
+) -> str:
+    """Exact prompt emitted by convert_crop_classification.py."""
+    del candidate_class, task_type
+    return (
+        "Classify the main target in this cropped image. "
+        f"Choose exactly one label from {json.dumps(classes, ensure_ascii=False)}. "
+        "Return only the label, without explanation or JSON."
+    )
+

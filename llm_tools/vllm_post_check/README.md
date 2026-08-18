@@ -179,3 +179,42 @@ VLLM_MODEL=Qwen/Qwen3-VL-8B-Instruct
 
 
 
+
+## P1 and P2 protocol selection
+
+The default is p1, which keeps the existing generic prompt and JSON parser.
+
+P2 is for the two SFT formats generated in E:\repository\Qwen3-VL\qwen_servides\qwen3vl_yolo_finetune:
+
+- Full-image p2 uses the exact training prompt from convert_full_detection.py. The response must be a JSON array of objects with bbox_2d and label. bbox_2d is interpreted as Qwen3-VL normalized-1000 xyxy and converted directly to YOLO xywh.
+- Crop-refine p2 uses the exact training prompt from convert_crop_classification.py. The response is one class name. The original YOLO candidate box is retained and only its class is replaced.
+
+Use the matching pair of parameters. The CLI rejects mixed versions because their output formats differ.
+
+~~~powershell
+python cli.py full-image `
+  --images E:\data\images `
+  --classes E:\data\classes.txt `
+  --output E:\data\vllm_full_p2 `
+  --prompt-version p2 `
+  --yolo-converter p2 `
+  --p2-confidence 1.0 `
+  --base-url http://127.0.0.1:18001/v1 `
+  --model qwen3-vl-4b-full
+~~~
+
+~~~powershell
+python cli.py crop-refine `
+  --images E:\data\images `
+  --pred-labels E:\data\yolo_preds `
+  --classes E:\data\classes.txt `
+  --output E:\data\vllm_refined_p2 `
+  --prompt-version p2 `
+  --yolo-converter p2 `
+  --p2-confidence 1.0 `
+  --mode classification `
+  --base-url http://127.0.0.1:18001/v1 `
+  --model qwen3-vl-4b-crop
+~~~
+
+P2 training answers do not contain confidence. For full-image p2, every generated label uses --p2-confidence (default 1.0). For crop p2, an existing source YOLO confidence is preserved; otherwise --p2-confidence is used. P2 crop does not support --mode detect because it produces no box coordinates.

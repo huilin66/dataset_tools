@@ -18,6 +18,15 @@ class ParsedDetection:
     keep: bool = True
 
 
+@dataclass
+class ParsedP2GroundingDetection:
+    """p2 detection in Qwen3-VL normalized-1000 xyxy coordinates."""
+
+    class_name: str
+    bbox_norm_1000: tuple[float, float, float, float]
+    confidence: float | None
+
+
 def extract_json(text: str) -> Any:
     text = str(text or "").strip()
     if not text:
@@ -113,3 +122,66 @@ def parse_detections(response_text: str, image_width: int, image_height: int, re
             continue
         detections.append(ParsedDetection(class_name=class_name, xyxy=xyxy, confidence=confidence, keep=keep))
     return detections
+
+
+def _p2_norm_1000_bbox(raw: Any) -> tuple[float, float, float, float] | None:
+    if not isinstance(raw, (list, tuple)) or len(raw) != 4:
+        return None
+    try:
+        x1, y1, x2, y2 = [float(value) for value in raw]
+    except (TypeError, ValueError):
+        return None
+    x1 = min(max(x1, 0.0), 1000.0)
+    y1 = min(max(y1, 0.0), 1000.0)
+    x2 = min(max(x2, 0.0), 1000.0)
+    y2 = min(max(y2, 0.0), 1000.0)
+    if x2 <= x1 or y2 <= y1:
+        return None
+    return x1, y1, x2, y2
+
+
+def parse_p2_full_detections(
+    response_text: str,
+    confidence: float | None,
+) -> list[ParsedP2GroundingDetection]:
+    """Parse p2: [{"bbox_2d": [x1, y1, x2, y2], "label": "..."}]."""
+    payload = extract_json(response_text)
+    if not isinstance(payload, list):
+        raise ValueError("p2 full-image response must be a JSON array")
+
+    detections: list[ParsedP2GroundingDetection] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        class_name = str(item.get("label") or "").strip()
+        bbox_norm_1000 = _p2_norm_1000_bbox(item.get("bbox_2d"))
+        if not class_name or bbox_norm_1000 is None:
+            continue
+        detections.append(
+            ParsedP2GroundingDetection(
+                class_name=class_name,
+                bbox_norm_1000=bbox_norm_1000,
+                confidence=confidence,
+            )
+        )
+    return detections
+
+
+def parse_p2_crop_classification(response_text: str, classes: list[str]) -> str | None:
+    """Return one allowed p2 crop label; invalid or explanatory output is rejected."""
+    text = str(response_text or "").strip().replace(chr(96), "")
+    try:
+        decoded = json.loads(text)
+    except json.JSONDecodeError:
+        decoded = text
+
+    if isinstance(decoded, str):
+        candidate = decoded.strip()
+    elif isinstance(decoded, dict):
+        candidate = str(decoded.get("label") or decoded.get("class_name") or "").strip()
+    else:
+        candidate = ""
+
+    candidate = candidate.strip().strip('"').strip("'").strip()
+    labels = {name.casefold(): name for name in classes}
+    return labels.get(candidate.casefold())
