@@ -1,12 +1,11 @@
 import os
-import shutil
 from pathlib import Path
 
 import cv2
 import numpy as np
 import pandas as pd
 import yaml
-from PIL import Image, ImageOps
+from PIL import Image
 from tqdm import tqdm
 
 red_color_bgr = (0, 0, 255)
@@ -175,7 +174,9 @@ def draw_yolo_box_label(img_vis, box, label="", color=(128, 128, 128), rotated=F
         )
     else:
         p1, p2 = (int(box[0]), int(box[1])), (int(box[2]), int(box[3]))
-        cv2.rectangle(img_vis, p1, p2, color, thickness=line_width, lineType=cv2.LINE_AA)
+        cv2.rectangle(
+            img_vis, p1, p2, color, thickness=line_width, lineType=cv2.LINE_AA
+        )
 
     text_params = None
     if label:
@@ -208,12 +209,12 @@ def draw_yolo_box_label(img_vis, box, label="", color=(128, 128, 128), rotated=F
             lineType=cv2.LINE_AA,
         )
         text_params = {
-            'label_p1': p1,
-            'text_h': text_h,
-            'outside': outside,
-            'font_scale': font_scale,
-            'font_thickness': font_thickness,
-            'txt_color': txt_color,
+            "label_p1": p1,
+            "text_h": text_h,
+            "outside": outside,
+            "font_scale": font_scale,
+            "font_thickness": font_thickness,
+            "txt_color": txt_color,
         }
     return text_params
 
@@ -327,9 +328,9 @@ def xywh2xyxy(
             2,
         )
 
-        text_size = cv2.getTextSize(
-            label_text, cv2.FONT_HERSHEY_SIMPLEX, sf - 0.1, tf
-        )[0]
+        text_size = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, sf - 0.1, tf)[
+            0
+        ]
 
         # Draw the background rectangle
         cv2.rectangle(
@@ -365,13 +366,13 @@ def xywh2xyxy(
 
     if attributes is not None:
         if yolo_vis and text_params is not None:
-            font_scale = text_params['font_scale']
-            font_thickness = text_params['font_thickness']
-            label_p1 = text_params['label_p1']
-            label_h = text_params['text_h']
+            font_scale = text_params["font_scale"]
+            font_thickness = text_params["font_thickness"]
+            label_p1 = text_params["label_p1"]
+            label_h = text_params["text_h"]
             line_h = int(label_h * 0.85)
             attr_x = label_p1[0]
-            if text_params['outside']:
+            if text_params["outside"]:
                 attr_start_y = label_p1[1] + max(line_h, 2)
             else:
                 attr_start_y = label_p1[1] + label_h + max(line_h, 2)
@@ -419,7 +420,10 @@ def xywh2xyxy(
             br_pos = [np.max(br_poss, axis=0)[0], br_poss[-1][1] + 2]
             box = tl_pos + br_pos
             p1 = (max(int(box[0]), 0), max(int(box[1]), 0))
-            p2 = (min(int(box[2]) + 3, img_vis.shape[1]), min(int(box[3] + 3), img_vis.shape[0]))
+            p2 = (
+                min(int(box[2]) + 3, img_vis.shape[1]),
+                min(int(box[3] + 3), img_vis.shape[0]),
+            )
             cv2.rectangle(img_vis, p1, p2, (255, 255, 255))
             overlay = img_vis.copy()
             cv2.rectangle(overlay, p1, p2, (255, 255, 255), -1)
@@ -514,11 +518,13 @@ def xywh2poly(
 
     text_params = None
     if yolo_vis:
-        text_params = draw_yolo_box_label(img_vis, polys, label_text, poly_color, rotated=True)
+        text_params = draw_yolo_box_label(
+            img_vis, polys, label_text, poly_color, rotated=True
+        )
     else:
-        text_size = cv2.getTextSize(
-            label_text, cv2.FONT_HERSHEY_SIMPLEX, sf - 0.1, tf
-        )[0]
+        text_size = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, sf - 0.1, tf)[
+            0
+        ]
         cv2.rectangle(
             img_vis,
             (int(top_left_x), int(top_left_y) + 10),
@@ -541,13 +547,13 @@ def xywh2poly(
 
     if attributes is not None:
         if yolo_vis and text_params is not None:
-            font_scale = text_params['font_scale']
-            font_thickness = text_params['font_thickness']
-            label_p1 = text_params['label_p1']
-            label_h = text_params['text_h']
+            font_scale = text_params["font_scale"]
+            font_thickness = text_params["font_thickness"]
+            label_p1 = text_params["label_p1"]
+            label_h = text_params["text_h"]
             line_h = int(label_h * 0.85)
             attr_x = label_p1[0]
-            if text_params['outside']:
+            if text_params["outside"]:
                 attr_start_y = label_p1[1] + max(line_h, 2)
             else:
                 attr_start_y = label_p1[1] + label_h + max(line_h, 2)
@@ -593,7 +599,10 @@ def xywh2poly(
             br_pos = [np.max(br_poss, axis=0)[0], br_poss[-1][1] + 2]
             box = tl_pos + br_pos
             p1 = (max(int(box[0]), 0), max(int(box[1]), 0))
-            p2 = (min(int(box[2]) + 3, img_vis.shape[1]), min(int(box[3] + 3), img_vis.shape[0]))
+            p2 = (
+                min(int(box[2]) + 3, img_vis.shape[1]),
+                min(int(box[3] + 3), img_vis.shape[0]),
+            )
             cv2.rectangle(img_vis, p1, p2, (255, 255, 255))
             overlay = img_vis.copy()
             cv2.rectangle(overlay, p1, p2, (255, 255, 255), -1)
@@ -693,9 +702,7 @@ def yolo_data_vis(
                     if len(x) <= 5:
                         continue
                     if crop_dir is None:
-                        img_vis, _, _ = xywh2poly(
-                            x, w, h, img, img_vis, cats=cats
-                        )
+                        img_vis, _, _ = xywh2poly(x, w, h, img, img_vis, cats=cats)
                     else:
                         img_vis, img_crop, _ = xywh2poly(
                             x, w, h, img, img_vis, cats=cats, crop=True
@@ -781,7 +788,9 @@ def yolo_mdet_vis(
                 if attribute_dict is not None:
                     attribute_len = int(x[1])
                     gt_attribute = x[2 : 2 + attribute_len]
-                    attribute = get_attribute(attribute_dict, gt_attribute, att_score_vis)
+                    attribute = get_attribute(
+                        attribute_dict, gt_attribute, att_score_vis
+                    )
                     x = np.concatenate([x[:1], x[2 + attribute_len :]])
                 else:
                     attribute = None
@@ -911,7 +920,8 @@ if __name__ == "__main__":
     # root_dir = r'E:\data\tp\sar_det'
     # root_dir = r'E:\data\0111_testdata\data_new\yolo_src'
     # root_dir = r'E:\cp_dir\data'
-    root_dir = r"\\158.132.186.40\isds\huilin\isds\back up\demo_data\0612"
+    # root_dir = r"\\158.132.186.40\isds\huilin\isds\back up\demo_data\0612"
+    root_dir = r"\\158.132.186.40\isds\huilin\traffic_sign\demo_data\demo_0617"
     # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\bd1-9hgll-94afa\train'
     # root_dir = r'E:\data\20241113_road_veg\dataset'
     # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\crack-bpxku-hcu46\train'
@@ -975,5 +985,5 @@ if __name__ == "__main__":
         seg_crop=True,
         yolo_vis=True,
         conf_threshold=None,  # 设为 0.5 等值可过滤低置信度结果
-        show_conf=True,      # 设为 True 可在标签中显示置信度
+        show_conf=True,  # 设为 True 可在标签中显示置信度
     )
