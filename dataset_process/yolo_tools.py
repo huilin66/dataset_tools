@@ -300,6 +300,40 @@ def copy_dataset(input_dir, output_dir):
         output_label_path = os.path.join(output_label_dir, label_name)
         shutil.copy(input_image_path, output_image_path)
         shutil.copy(input_label_path, output_label_path)
+def random_select(data_dir, save_dir=None, train_ratio=0.9, random_seed=1010, full_path=True, suffix=''):
+    image_dir = os.path.join(data_dir, 'images')
+    label_dir = os.path.join(data_dir, 'labels')
+    file_list = os.listdir(image_dir)
+    if label_dir is not None:
+        label_list = os.listdir(label_dir)
+        label_list = [Path(label_name).stem for label_name in label_list]
+        file_list_check = []
+        for img_name in tqdm(file_list, desc='img check', total=len(file_list)):
+            name = Path(img_name).stem
+            if name in label_list:
+                file_list_check.append(img_name)
+        file_list = file_list_check
+    if save_dir is None:
+        save_dir = os.path.dirname(image_dir)
+    if full_path:
+        file_list = [os.path.join(image_dir, filename) for filename in file_list]
+    np.random.seed(random_seed)
+    np.random.shuffle(file_list)
+    train_num = int(len(file_list)*train_ratio)
+
+
+    train_list = file_list[:train_num]
+    val_list = file_list[train_num:]
+
+    df_train = pd.DataFrame({'filename': train_list})
+    df_val = pd.DataFrame({'filename': val_list})
+    df_all = pd.DataFrame({'filename': train_list+val_list})
+    df_train.to_csv(os.path.join(save_dir, f'train{suffix}.txt'), header=None, index=None)
+    df_val.to_csv(os.path.join(save_dir, f'val{suffix}.txt'), header=None, index=None)
+    df_all.to_csv(os.path.join(save_dir, 'all.txt'), header=None, index=None)
+    print('%d save to %s,\n%d save to %s!'%(len(train_list), os.path.join(save_dir, f'train{suffix}.txt'),
+                                           len(val_list), os.path.join(save_dir, f'val{suffix}.txt')))
+
 
 
 if __name__ == '__main__':
@@ -395,5 +429,7 @@ if __name__ == '__main__':
     #                      )
     # copy_dataset(r'/data/huilin/data/isds/bd_data/data389_c6', r'/data/huilin/data/isds/bd_data/pseudo_data')
 
-    mseg2seg(input_dir=r'/data/huilin/data/isds/bd_data/data389_c6',
-             output_dir=r'/data/huilin/data/isds/bd_data/data389_c6_seg', cp_img=True)
+    # mseg2seg(input_dir=r'/data/huilin/data/isds/bd_data/data389_c6',
+    #          output_dir=r'/data/huilin/data/isds/bd_data/data389_c6_seg', cp_img=True)
+    
+    random_select(r'/localnvme/data/bdd/HMT0211/rgb_yolo')

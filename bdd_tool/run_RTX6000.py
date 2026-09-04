@@ -28,7 +28,7 @@ if __name__ == '__main__':
     # labels_dir = os.path.join(data_dir, 'labels')
     # labels_sta_dir = os.path.join(data_dir, 'labels_sta')
     # class_file = os.path.join(data_dir, 'class.txt')
-    # # random_select(data_dir)
+    random_select(r'/localnvme/data/bdd/HMT0211/rgb_yolo')
     # train_v1_path = r'/localnvme/data/bdd/DReality_data/yolo_filter_v2/train_v2.txt'
     # train_v2_path = r'/localnvme/data/bdd/DReality_data/yolo_filter_v2/train_v3.txt'
     # add_image_dir = r'/localnvme/data/bdd/DReality_data/yolo_clip_v2/images_rename'

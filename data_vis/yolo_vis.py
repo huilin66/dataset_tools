@@ -920,8 +920,7 @@ if __name__ == "__main__":
     # root_dir = r'E:\data\tp\sar_det'
     # root_dir = r'E:\data\0111_testdata\data_new\yolo_src'
     # root_dir = r'E:\cp_dir\data'
-    # root_dir = r"\\158.132.186.40\isds\huilin\isds\back up\demo_data\0612"
-    root_dir = r"\\158.132.186.40\isds\huilin\traffic_sign\demo_data\demo_0617"
+    root_dir = r'/localnvme/data/bdd/HMT0211/t_yolo'
     # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\bd1-9hgll-94afa\train'
     # root_dir = r'E:\data\20241113_road_veg\dataset'
     # root_dir = r'E:\data\2024_defect\2024_defect_pure_yolo_final\crack-bpxku-hcu46\train'
@@ -956,34 +955,13 @@ if __name__ == "__main__":
     # crop_folder = os.path.join(root_dir, 'img_crop_merge')
     attribute_file = os.path.join(root_dir, "attribute.yaml")
     # attribute_file = os.path.join(root_dir, 'attribute_v4.yaml')
-    class_file = os.path.join(root_dir, "class.txt")
+    class_file = os.path.join(root_dir, 'classes.txt')
     # class_file = os.path.join(root_dir, 'class_update.txt')
 
     # shutil.rmtree(output_folder, ignore_errors=True)
     # shutil.rmtree(crop_folder, ignore_errors=True)
 
-    # yolo_data_vis(
-    #     img_folder,
-    #     label_folder,
-    #     output_folder,
-    #     class_file,
-    #     crop_dir=crop_folder,
-    #     seg=True,
-    # )
+    yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=False)
     # yolo_data_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=True)
     # yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=crop_folder, seg=False, attribute_file=attribute_file, filter_no=True, crop_keep_shape=True, det_crop=True)
-    yolo_mdet_vis(
-        img_folder,
-        label_folder,
-        output_folder,
-        class_file,
-        crop_dir=None,
-        seg=True,
-        attribute_file=attribute_file,
-        filter_no=True,
-        crop_keep_shape=False,
-        seg_crop=True,
-        yolo_vis=True,
-        conf_threshold=None,  # 设为 0.5 等值可过滤低置信度结果
-        show_conf=True,  # 设为 True 可在标签中显示置信度
-    )
+    # yolo_mdet_vis(img_folder, label_folder, output_folder, class_file, crop_dir=None, seg=True, attribute_file=attribute_file, filter_no=True, crop_keep_shape=False, seg_crop=False)
